@@ -24,6 +24,7 @@ fn accepts_positive_fixtures() {
         "valid/assignment.nv",
         "valid/definite-assignment.nv",
         "valid/while-loop.nv",
+        "valid/records.nv",
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
@@ -38,7 +39,11 @@ fn accepts_positive_fixtures() {
 
 #[test]
 fn run_command_executes_checked_program() {
-    for (relative, expected) in [("valid/basic.nv", "42\n"), ("valid/while-loop.nv", "5\n")] {
+    for (relative, expected) in [
+        ("valid/basic.nv", "42\n"),
+        ("valid/while-loop.nv", "5\n"),
+        ("valid/records.nv", "42\n"),
+    ] {
         let path = fixture(relative);
         let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
 
@@ -121,6 +126,7 @@ fn rejects_negative_fixtures_with_stable_codes() {
         ("invalid/immutable-assignment.nv", "N3008"),
         ("invalid/uninitialized-read.nv", "N3009"),
         ("invalid/loop-definite-assignment.nv", "N3009"),
+        ("invalid/missing-record-field.nv", "N3012"),
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
