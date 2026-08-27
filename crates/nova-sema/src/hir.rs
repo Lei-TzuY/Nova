@@ -146,7 +146,7 @@ pub struct Binding {
 /// A typed lexical block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Block {
-    /// Semicolon-terminated statements.
+    /// Statements before the optional tail expression.
     pub statements: Vec<Statement>,
     /// Optional final value expression.
     pub tail: Option<Box<Expression>>,
@@ -183,6 +183,13 @@ pub enum StatementKind {
         target: Option<BindingId>,
         /// Typed replacement value.
         value: Expression,
+    },
+    /// Pre-test loop with a checked Boolean condition.
+    While {
+        /// Typed condition evaluated before every iteration.
+        condition: Expression,
+        /// Typed loop body.
+        body: Block,
     },
     /// Explicit function return.
     Return(Expression),
