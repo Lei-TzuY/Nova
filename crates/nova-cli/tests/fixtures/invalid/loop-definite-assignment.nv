@@ -1,0 +1,7 @@
+fn main(flag: Bool) -> Int {
+    var value: Int;
+    while flag {
+        value = 1;
+    }
+    value
+}

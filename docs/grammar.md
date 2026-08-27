@@ -18,8 +18,8 @@ identifier      = (letter | "_") , { letter | digit | "_" } ;
 integer         = digit , { [ "_" ] , digit } ;
 ```
 
-Keywords are `fn`, `let`, `var`, `if`, `else`, `return`, `true`, and `false`.
-A keyword cannot be used as an identifier.
+Keywords are `fn`, `let`, `var`, `if`, `else`, `while`, `return`, `true`, and
+`false`. A keyword cannot be used as an identifier.
 
 Integer separators cannot lead, trail, or repeat. The frontend checks decimal
 conversion and rejects magnitudes above `9223372036854775807`; it never wraps or
@@ -44,12 +44,14 @@ block               = "{" , { statement } , [ expression ] , "}" ;
 statement           = binding_statement
                     | uninitialized_var_statement
                     | assignment_statement
+                    | while_statement
                     | return_statement
                     | expression_statement ;
 binding_statement   = ("let" | "var") , identifier ,
                       [ ":" , type_name ] , "=" , expression , ";" ;
 uninitialized_var_statement = "var" , identifier , ":" , type_name , ";" ;
 assignment_statement = identifier , "=" , expression , ";" ;
+while_statement     = "while" , expression , block ;
 return_statement    = "return" , expression , ";" ;
 expression_statement = expression , ";" ;
 
@@ -76,7 +78,8 @@ if_expression       = "if" , expression , block , "else" ,
 
 A block may end in one expression without a semicolon; that expression is its
 tail value. Any earlier expression must end in `;`. Bindings, assignments, and
-returns always end in `;`. Top-level statements are not accepted.
+returns always end in `;`. A `while` statement ends with its body block and does
+not take a trailing semicolon. Top-level statements are not accepted.
 
 `var name: Type;` declares a mutable binding whose first value is supplied by a
 later assignment. The explicit type is mandatory, while uninitialized `let`
@@ -89,6 +92,13 @@ plain identifier, so chained assignment and assignment inside larger
 expressions are not accepted by this grammar. Semantic checking further
 requires the target to resolve to a mutable `var` binding and the assigned value
 to match that binding's type.
+
+A `while` condition must have type `Bool` and is evaluated before every
+iteration. Because the first condition test always occurs but the body may run
+zero times, definite-assignment facts created while evaluating the condition may
+flow after the loop, while facts established only inside the body do not.
+The body block's value, if any, is discarded. `break`, `continue`, and `for` are
+not implemented in this subset.
 
 An `if` is an expression and therefore always has an `else` branch in this
 subset. `else if` is represented by the recursive `if_expression` production.
@@ -118,6 +128,7 @@ limit, not a promise that deeply nested source will remain portable unchanged.
 ## Deliberate limitations
 
 The implemented grammar has no strings, floating-point literals, arrays,
-records, enums, pattern matching, loops, methods, modules, imports, generics,
-traits, effects, async syntax, ownership syntax, unsafe blocks, or attributes.
-Encountering such syntax is an error, not an approximation.
+records, enums, pattern matching, `break`, `continue`, `for`, methods, modules,
+imports, generics, traits, effects, async syntax, ownership syntax, unsafe
+blocks, or attributes. Encountering such syntax is an error, not an
+approximation.

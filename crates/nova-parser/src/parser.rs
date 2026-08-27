@@ -196,6 +196,8 @@ impl<'source> Parser<'source> {
             let before = self.position;
             let statement = if self.at(TokenKind::Let) || self.at(TokenKind::Var) {
                 self.parse_binding_statement()
+            } else if self.at(TokenKind::While) {
+                self.parse_while_statement()
             } else if self.at(TokenKind::Return) {
                 self.parse_return_statement()
             } else if self.at(TokenKind::Identifier) && self.at_offset(1, TokenKind::Equal) {
@@ -304,6 +306,16 @@ impl<'source> Parser<'source> {
         Some(Statement {
             span: self.cover(target.span, semicolon.span),
             kind: StatementKind::Assignment { target, value },
+        })
+    }
+
+    fn parse_while_statement(&mut self) -> Option<Statement> {
+        let keyword = self.expect(TokenKind::While, "to start a while statement")?;
+        let condition = self.parse_expression()?;
+        let body = self.parse_block()?;
+        Some(Statement {
+            span: self.cover(keyword.span, body.span),
+            kind: StatementKind::While { condition, body },
         })
     }
 
@@ -760,6 +772,21 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
             &parsed.program.functions[0].body.statements[0].kind,
             StatementKind::UninitializedBinding { name, annotation }
                 if name.text == "value" && annotation.name.text == "Int"
+        ));
+    }
+
+    #[test]
+    fn parses_while_statement_without_trailing_semicolon() {
+        let (_, parsed) = parse_text(
+            "fn f() -> Int { var value = 0; while value < 3 { value = value + 1; } value }",
+        );
+        assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
+        let statement = &parsed.program.functions[0].body.statements[1];
+        assert!(matches!(
+            &statement.kind,
+            StatementKind::While { condition, body }
+                if matches!(condition.kind, ExpressionKind::Binary { operator: BinaryOperator::Less, .. })
+                    && body.statements.len() == 1
         ));
     }
 

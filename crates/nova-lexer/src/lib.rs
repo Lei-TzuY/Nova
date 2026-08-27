@@ -21,6 +21,8 @@ pub enum TokenKind {
     If,
     /// `else`.
     Else,
+    /// `while`.
+    While,
     /// `return`.
     Return,
     /// `true`.
@@ -89,6 +91,7 @@ impl TokenKind {
             Self::Var => "`var`",
             Self::If => "`if`",
             Self::Else => "`else`",
+            Self::While => "`while`",
             Self::Return => "`return`",
             Self::True => "`true`",
             Self::False => "`false`",
@@ -314,6 +317,7 @@ impl<'source> Lexer<'source> {
             "var" => TokenKind::Var,
             "if" => TokenKind::If,
             "else" => TokenKind::Else,
+            "while" => TokenKind::While,
             "return" => TokenKind::Return,
             "true" => TokenKind::True,
             "false" => TokenKind::False,
@@ -412,7 +416,8 @@ mod tests {
 
     #[test]
     fn lexes_keywords_operators_and_exact_spans() {
-        let source = source("fn yes(x: Int) -> Bool { x >= 1 && true }");
+        let source =
+            source("fn yes(x: Int) -> Bool { while x >= 1 && true { return false; } true }");
         let output = lex(&source);
         let kinds = output
             .tokens
@@ -423,9 +428,10 @@ mod tests {
         assert!(output.diagnostics.is_empty());
         assert_eq!(kinds[0], TokenKind::Fn);
         assert_eq!(kinds[1], TokenKind::Identifier);
-        assert_eq!(kinds[10], TokenKind::Identifier);
+        assert!(kinds.contains(&TokenKind::While));
         assert!(kinds.contains(&TokenKind::GreaterEqual));
         assert!(kinds.contains(&TokenKind::AndAnd));
+        assert!(kinds.contains(&TokenKind::Return));
         assert_eq!(kinds.last(), Some(&TokenKind::Eof));
         assert_eq!(source.slice(output.tokens[1].span), Some("yes"));
     }

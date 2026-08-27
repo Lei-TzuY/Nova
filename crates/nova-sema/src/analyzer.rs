@@ -340,6 +340,24 @@ impl Analyzer {
                     diverges,
                 )
             }
+            ast::StatementKind::While { condition, body } => {
+                let condition = self.lower_expression(condition, return_type);
+                self.require_type(
+                    &condition.ty,
+                    &Type::Bool,
+                    condition.span,
+                    "while condition",
+                );
+
+                // The pre-test condition executes before the loop can exit, so facts
+                // established by evaluating it survive. The body may execute zero
+                // times, therefore body-only initialization facts cannot escape.
+                let post_condition_scopes = self.scopes.clone();
+                let body = self.lower_block(body, return_type, true);
+                self.scopes = post_condition_scopes;
+                let diverges = condition.ty.is_never();
+                (StatementKind::While { condition, body }, diverges)
+            }
             ast::StatementKind::Return(expression) => {
                 let expression = self.lower_expression(expression, return_type);
                 self.require_type(
@@ -954,6 +972,36 @@ mod tests {
                  value\n\
              }",
         );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+    }
+
+    #[test]
+    fn checks_while_condition_and_mutation() {
+        let output = analyze_text(
+            "fn f() -> Int { var value = 0; while value < 3 { value = value + 1; } value }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        assert!(matches!(
+            &output.program.functions[0].body.statements[1].kind,
+            StatementKind::While { .. }
+        ));
+
+        let output = analyze_text("fn f() -> Int { while 1 {} 0 }");
+        assert_eq!(codes(&output), vec!["N3004"]);
+    }
+
+    #[test]
+    fn loop_body_initialization_does_not_escape_zero_iteration_path() {
+        let output = analyze_text(
+            "fn f(flag: Bool) -> Int { var value: Int; while flag { value = 1; } value }",
+        );
+        assert_eq!(codes(&output), vec!["N3009"]);
+    }
+
+    #[test]
+    fn loop_condition_initialization_survives_the_pretest() {
+        let output =
+            analyze_text("fn f() -> Int { var value: Int; while { value = 1; false } {} value }");
         assert!(output.is_success(), "{:?}", output.diagnostics);
     }
 

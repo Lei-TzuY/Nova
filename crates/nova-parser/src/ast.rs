@@ -58,7 +58,7 @@ pub struct TypeRef {
 /// A value-producing lexical block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Block {
-    /// Semicolon-terminated statements.
+    /// Statements before the optional tail expression.
     pub statements: Vec<Statement>,
     /// Optional final expression without a semicolon.
     pub tail: Option<Box<Expression>>,
@@ -66,12 +66,12 @@ pub struct Block {
     pub span: Span,
 }
 
-/// A semicolon-terminated statement.
+/// A statement in a lexical block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Statement {
     /// Statement form.
     pub kind: StatementKind,
-    /// Range including the terminating semicolon.
+    /// Complete range occupied by the statement.
     pub span: Span,
 }
 
@@ -102,6 +102,13 @@ pub enum StatementKind {
         target: Name,
         /// New value expression.
         value: Expression,
+    },
+    /// Pre-test loop whose body may execute zero or more times.
+    While {
+        /// Boolean loop condition.
+        condition: Expression,
+        /// Loop body.
+        body: Block,
     },
     /// Explicit function return.
     Return(Expression),
