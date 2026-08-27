@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: three vertical slices implemented; broader type-system work remains.**
+**Status: four vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -82,6 +82,22 @@ Implemented in the third Phase 2 slice:
   path's initialization requirement; and
 - no runtime default value or silent initialization inserted by the compiler.
 
+Implemented in the fourth Phase 2 slice:
+
+- top-level nominal `record` declarations with stable source-order `RecordId`
+  identities rather than structural type equivalence;
+- two-pass record collection so declared record names are available to field and
+  function type resolution before function bodies are lowered;
+- explicit `new Record { field: expression, ... }` construction and postfix
+  `value.field` projection;
+- deterministic diagnostics for duplicate record/type definitions, duplicate
+  declared fields, unknown/duplicate/missing constructor fields, projection of
+  unknown fields, and field initializer type mismatches;
+- typed HIR record construction that resolves each named field to its
+  declaration-order slot while preserving written source evaluation order; and
+- record types integrated with function signatures, local inference,
+  annotations, assignment type preservation, returns, and branch type joining.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
@@ -89,20 +105,21 @@ prematurely. In particular:
   implementation evidence accumulates;
 - define language-level numeric types, defaulting, conversions, and overflow
   behavior beyond the provisional interpreter contract;
-- add user-defined records and enums only with resolved type identity and
-  deterministic diagnostics;
+- add enums only with stable nominal identity and deterministic diagnostics;
 - introduce exhaustive pattern checking after algebraic data types exist;
+- specify aggregate mutation/ownership and layout semantics before field mutation
+  or ABI claims are added;
 - define a versioned semantic-introspection schema rather than exposing debug
   HIR as a tooling protocol; and
 - expand negative and adversarial tests as each rule becomes implemented.
 
-Phase 2 is not complete until its implemented type, name, mutation, and dataflow
-semantics are sufficiently specified for the executable subset and no roadmap
-item is being silently approximated.
+Phase 2 is not complete until its implemented type, name, mutation, aggregate,
+and dataflow semantics are sufficiently specified for the executable subset and
+no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: two vertical slices implemented; execution surface remains small.**
+**Status: three vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -134,20 +151,38 @@ Implemented in the second Phase 3 slice:
 - parser, semantic, interpreter, CLI, positive, negative, and nontermination
   fixtures kept in sync with the grammar and language documentation.
 
+Implemented in the third Phase 3 slice:
+
+- executable nominal record values carrying `RecordId` identity plus
+  declaration-order field slots inside the bootstrap interpreter;
+- source-order evaluation of named record initializers even when their written
+  order differs from declaration order;
+- record values passed through ordinary function parameters and returns under
+  the same semantic type checks as primitive values;
+- resolved field projection without runtime string lookup;
+- interpreter invariants that fail closed if malformed HIR supplies an invalid
+  record identity, duplicate destination slot, missing slot, or mismatched field
+  projection; and
+- CLI end-to-end fixtures for record checking/execution plus negative missing-
+  field diagnostics.
+
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
 
 - introduce richer control flow such as `break`/`continue` only with an explicit
   CFG/dataflow story rather than ad-hoc interpreter behavior;
-- define records and enums only after their Phase 2 resolved type model exists;
-- execute exhaustive pattern matching after semantic exhaustiveness checking;
+- execute enums and exhaustive pattern matching only after their semantic model
+  and exhaustiveness checking exist;
+- decide whether aggregate update/mutation requires a dedicated semantic model
+  rather than extending the current identifier-only assignment form;
 - introduce a small explicit execution IR if interpreter complexity begins to
   leak backend concerns into HIR; and
 - keep runtime diagnostics source-qualified and reproducible.
 
-Native code generation is not implied by the bootstrap interpreter. Backend
-work remains a later phase and must consume verified shared IR rather than
-reimplement source semantics independently.
+Record runtime slots are interpreter implementation evidence, not source-level
+layout or ABI guarantees. Native code generation is not implied by the bootstrap
+interpreter. Backend work remains a later phase and must consume verified shared
+IR rather than reimplement source semantics independently.
 
 ## Phase 4 — Typed errors and effects
 

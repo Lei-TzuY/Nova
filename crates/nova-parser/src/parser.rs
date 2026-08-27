@@ -1,6 +1,6 @@
 use crate::ast::{
-    BinaryOperator, Block, Expression, ExpressionKind, Function, Name, Parameter, Program,
-    Statement, StatementKind, TypeRef, UnaryOperator,
+    BinaryOperator, Block, Expression, ExpressionKind, Function, Name, Parameter, Program, Record,
+    RecordField, RecordLiteralField, Statement, StatementKind, TypeRef, UnaryOperator,
 };
 use nova_diagnostics::Diagnostic;
 use nova_lexer::{Token, TokenKind};
@@ -14,12 +14,12 @@ const COMPARISON_BINDING_POWER: (u8, u8) = (7, 8);
 const ADDITIVE_BINDING_POWER: (u8, u8) = (9, 10);
 const MULTIPLICATIVE_BINDING_POWER: (u8, u8) = (11, 12);
 const PREFIX_BINDING_POWER: u8 = 13;
-const CALL_BINDING_POWER: u8 = 15;
+const POSTFIX_BINDING_POWER: u8 = 15;
 
 /// Complete deterministic result of parsing one token stream.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ParseOutput {
-    /// Parsed functions, including successfully recovered later declarations.
+    /// Parsed declarations, including successfully recovered later declarations.
     pub program: Program,
     /// Syntax diagnostics in source order.
     pub diagnostics: Vec<Diagnostic>,
@@ -86,11 +86,18 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_program(&mut self) -> Program {
+        let mut records = Vec::new();
         let mut functions = Vec::new();
 
         while !self.at(TokenKind::Eof) {
             let before = self.position;
-            if self.at(TokenKind::Fn) {
+            if self.at(TokenKind::Record) {
+                if let Some(record) = self.parse_record() {
+                    records.push(record);
+                } else {
+                    self.recover_top_level();
+                }
+            } else if self.at(TokenKind::Fn) {
                 if let Some(function) = self.parse_function() {
                     functions.push(function);
                 } else {
@@ -99,14 +106,13 @@ impl<'source> Parser<'source> {
             } else {
                 let token = self.current();
                 self.diagnostics.push(
-                    Diagnostic::error("N2003", "expected a top-level function declaration")
-                        .with_primary(
-                            token.span,
-                            format!(
-                                "found {}; top-level statements are not supported",
-                                token.kind
-                            ),
+                    Diagnostic::error("N2003", "expected a top-level declaration").with_primary(
+                        token.span,
+                        format!(
+                            "found {}; only `record` and `fn` declarations are supported",
+                            token.kind
                         ),
+                    ),
                 );
                 self.recover_top_level();
             }
@@ -117,12 +123,50 @@ impl<'source> Parser<'source> {
         }
 
         Program {
+            records,
             functions,
             span: self
                 .source
                 .span(0, self.source.len())
                 .unwrap_or(self.source.eof_span()),
         }
+    }
+
+    fn parse_record(&mut self) -> Option<Record> {
+        let start = self
+            .expect(TokenKind::Record, "to start a record declaration")?
+            .span;
+        let name = self.parse_name("after `record`")?;
+        self.expect(TokenKind::LeftBrace, "after the record name")?;
+        let mut fields = Vec::new();
+
+        if !self.at(TokenKind::RightBrace) {
+            loop {
+                let field_name = self.parse_name("as a record field name")?;
+                self.expect(TokenKind::Colon, "after the record field name")?;
+                let ty = self.parse_type_ref("after `:` in the record field")?;
+                let span = self.cover(field_name.span, ty.span);
+                fields.push(RecordField {
+                    name: field_name,
+                    ty,
+                    span,
+                });
+
+                if self.consume(TokenKind::Comma).is_none() {
+                    break;
+                }
+                if self.at(TokenKind::RightBrace) {
+                    break;
+                }
+            }
+        }
+
+        let closing = self.expect(TokenKind::RightBrace, "to close the record declaration")?;
+        Some(Record {
+            name,
+            fields,
+            span: self.cover(start, closing.span),
+        })
     }
 
     fn parse_function(&mut self) -> Option<Function> {
@@ -190,7 +234,7 @@ impl<'source> Parser<'source> {
         let mut tail = None;
 
         while !self.at(TokenKind::RightBrace) && !self.at(TokenKind::Eof) {
-            if self.at(TokenKind::Fn) {
+            if self.at(TokenKind::Fn) || self.at(TokenKind::Record) {
                 break;
             }
             let before = self.position;
@@ -243,6 +287,7 @@ impl<'source> Parser<'source> {
                 && !self.at(TokenKind::RightBrace)
                 && !self.at(TokenKind::Eof)
                 && !self.at(TokenKind::Fn)
+                && !self.at(TokenKind::Record)
             {
                 self.bump();
             }
@@ -367,10 +412,17 @@ impl<'source> Parser<'source> {
 
         loop {
             if self.at(TokenKind::LeftParen) {
-                if CALL_BINDING_POWER < minimum {
+                if POSTFIX_BINDING_POWER < minimum {
                     break;
                 }
                 left = self.parse_call_expression(left)?;
+                continue;
+            }
+            if self.at(TokenKind::Dot) {
+                if POSTFIX_BINDING_POWER < minimum {
+                    break;
+                }
+                left = self.parse_field_access_expression(left)?;
                 continue;
             }
 
@@ -424,6 +476,7 @@ impl<'source> Parser<'source> {
                     span: token.span,
                 })
             }
+            TokenKind::New => self.parse_record_literal_expression(),
             TokenKind::Minus | TokenKind::Bang => {
                 self.bump();
                 let operator = if matches!(token.kind, TokenKind::Minus) {
@@ -464,6 +517,40 @@ impl<'source> Parser<'source> {
         }
     }
 
+    fn parse_record_literal_expression(&mut self) -> Option<Expression> {
+        let keyword = self.expect(TokenKind::New, "to start a record construction")?;
+        let name = self.parse_name("after `new`")?;
+        self.expect(TokenKind::LeftBrace, "after the record type name")?;
+        let mut fields = Vec::new();
+
+        if !self.at(TokenKind::RightBrace) {
+            loop {
+                let field_name = self.parse_name("as a record initializer field")?;
+                self.expect(TokenKind::Colon, "after the record initializer field")?;
+                let value = self.parse_expression()?;
+                let span = self.cover(field_name.span, value.span);
+                fields.push(RecordLiteralField {
+                    name: field_name,
+                    value,
+                    span,
+                });
+
+                if self.consume(TokenKind::Comma).is_none() {
+                    break;
+                }
+                if self.at(TokenKind::RightBrace) {
+                    break;
+                }
+            }
+        }
+
+        let closing = self.expect(TokenKind::RightBrace, "to close the record construction")?;
+        Some(Expression {
+            span: self.cover(keyword.span, closing.span),
+            kind: ExpressionKind::RecordLiteral { name, fields },
+        })
+    }
+
     fn parse_call_expression(&mut self, callee: Expression) -> Option<Expression> {
         self.expect(TokenKind::LeftParen, "to start the argument list")?;
         let mut arguments = Vec::new();
@@ -495,6 +582,18 @@ impl<'source> Parser<'source> {
             kind: ExpressionKind::Call {
                 callee: Box::new(callee),
                 arguments,
+            },
+        })
+    }
+
+    fn parse_field_access_expression(&mut self, base: Expression) -> Option<Expression> {
+        self.expect(TokenKind::Dot, "before the field name")?;
+        let field = self.parse_name("after `.`")?;
+        Some(Expression {
+            span: self.cover(base.span, field.span),
+            kind: ExpressionKind::FieldAccess {
+                base: Box::new(base),
+                field,
             },
         })
     }
@@ -584,7 +683,7 @@ impl<'source> Parser<'source> {
     }
 
     fn recover_top_level(&mut self) {
-        while !self.at(TokenKind::Fn) && !self.at(TokenKind::Eof) {
+        while !self.at(TokenKind::Fn) && !self.at(TokenKind::Record) && !self.at(TokenKind::Eof) {
             self.bump();
         }
     }
@@ -593,6 +692,7 @@ impl<'source> Parser<'source> {
         while !self.at(TokenKind::Semicolon)
             && !self.at(TokenKind::RightBrace)
             && !self.at(TokenKind::Fn)
+            && !self.at(TokenKind::Record)
             && !self.at(TokenKind::Eof)
         {
             self.bump();
@@ -765,6 +865,36 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
     }
 
     #[test]
+    fn parses_record_declaration_construction_and_projection() {
+        let text = r#"
+record Pair { left: Int, right: Bool, }
+fn f() -> Int {
+    let pair = new Pair { right: true, left: 7, };
+    pair.left
+}
+"#;
+        let (_, parsed) = parse_text(text);
+        assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
+        assert_eq!(parsed.program.records.len(), 1);
+        assert_eq!(parsed.program.records[0].name.text, "Pair");
+        assert_eq!(parsed.program.records[0].fields.len(), 2);
+
+        let function = &parsed.program.functions[0];
+        let StatementKind::Binding { initializer, .. } = &function.body.statements[0].kind else {
+            panic!("expected record binding");
+        };
+        assert!(matches!(
+            &initializer.kind,
+            ExpressionKind::RecordLiteral { name, fields }
+                if name.text == "Pair" && fields.len() == 2
+        ));
+        assert!(matches!(
+            &function.body.tail.as_deref().expect("tail").kind,
+            ExpressionKind::FieldAccess { field, .. } if field.text == "left"
+        ));
+    }
+
+    #[test]
     fn parses_typed_uninitialized_var() {
         let (_, parsed) = parse_text("fn f() -> Int { var value: Int; value = 1; value }");
         assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
@@ -877,6 +1007,27 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
     }
 
     #[test]
+    fn field_access_binds_as_postfix_before_binary_operators() {
+        let (_, parsed) =
+            parse_text("record Pair { left: Int } fn f(pair: Pair) -> Int { pair.left + 1 }");
+        assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
+        let tail = parsed.program.functions[0]
+            .body
+            .tail
+            .as_deref()
+            .expect("tail");
+        let ExpressionKind::Binary {
+            operator: BinaryOperator::Add,
+            left,
+            ..
+        } = &tail.kind
+        else {
+            panic!("expected addition");
+        };
+        assert!(matches!(left.kind, ExpressionKind::FieldAccess { .. }));
+    }
+
+    #[test]
     fn preserves_token_and_construct_spans_including_parentheses() {
         let text = "fn id(value: Int) -> Int { (value) }";
         let (source, parsed) = parse_text(text);
@@ -893,10 +1044,13 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
     }
 
     #[test]
-    fn recovers_to_a_later_top_level_function() {
-        let (_, parsed) = parse_text("fn broken() { 1 } fn good() -> Int { 2 }");
+    fn recovers_to_later_top_level_declarations() {
+        let (_, parsed) =
+            parse_text("fn broken() { 1 } record Good { value: Int } fn good() -> Int { 2 }");
 
         assert!(!parsed.diagnostics.is_empty());
+        assert_eq!(parsed.program.records.len(), 1);
+        assert_eq!(parsed.program.records[0].name.text, "Good");
         assert_eq!(parsed.program.functions.len(), 1);
         assert_eq!(parsed.program.functions[0].name.text, "good");
     }

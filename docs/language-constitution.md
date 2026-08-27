@@ -73,12 +73,26 @@ reference-like type. Algebraic data types and exhaustive pattern matching are
 core language directions, not library conventions.
 
 **Provisional bootstrap decisions.** The current semantic core recognizes the
-surface type names `Int` and `Bool`, resolves explicitly typed function
-signatures, infers initialized local binding types, and checks the implemented
-operators, calls, branches, loops, returns, assignments, and definite
-initialization. Accepted integer literal magnitude is currently `0..=2^63-1`;
-unary `-` is a separate expression, so the most-negative signed 64-bit value
-has no literal spelling in this subset.
+surface types `Int`, `Bool`, and declared nominal record types. Record identity
+comes from the declaration rather than field shape: separately declared records
+remain different types even when their fields have identical names and types.
+The checker resolves explicitly typed function signatures, infers initialized
+local binding types, and checks the implemented operators, calls, branches,
+loops, returns, assignments, record construction/projection, and definite
+initialization.
+
+A bootstrap record declares explicitly typed, uniquely named fields.
+`new Record { field: expression, ... }` must initialize every declared field
+exactly once with a compatible value. Named initializers may appear in any
+order, but their expressions retain written left-to-right evaluation order.
+`value.field` resolves against the base value's nominal record identity. Record
+equality and field mutation are not part of this slice. HIR carries stable
+record identities and resolved field slots, but that is semantic identity—not a
+promise about memory layout, padding, calling convention, or ABI.
+
+Accepted integer literal magnitude is currently `0..=2^63-1`; unary `-` is a
+separate expression, so the most-negative signed 64-bit value has no literal
+spelling in this subset.
 
 The bootstrap interpreter provisionally executes `Int` as signed 64-bit values
 with checked arithmetic. Arithmetic overflow, division by zero, and remainder
@@ -91,7 +105,8 @@ defaulting, conversions, or overflow policy for future backends.
 
 - the primitive numeric set and defaulting rules;
 - whether value restriction or another rule is needed for inference;
-- layout guarantees for user-defined types; and
+- layout, representation, padding, and ABI guarantees for user-defined types;
+- the algebraic data-type and pattern-matching model beyond records; and
 - the boundary between language, standard library, and target-specific types.
 
 ## 5. Bindings and mutability
@@ -112,11 +127,13 @@ rejected. No runtime default value is manufactured.
 Assignment remains deliberately narrow: `identifier = expression;` is a
 statement rather than an expression, its target must resolve to a lexical
 `var`, and the replacement value must preserve the binding's established type.
-Function parameters and `let` bindings are immutable. Definite-initialization
-state is propagated through lexical blocks and merged across `if` branches. If
-both branches can continue, a binding is definitely initialized afterward only
-when both continuing paths initialize it; a branch that cannot continue because
-it returns does not constrain the surviving path.
+Function parameters and `let` bindings are immutable. Record field projection
+is read-only in the bootstrap subset; `record.field = value` is not an accepted
+assignment form. Definite-initialization state is propagated through lexical
+blocks and merged across `if` branches. If both branches can continue, a
+binding is definitely initialized afterward only when both continuing paths
+initialize it; a branch that cannot continue because it returns does not
+constrain the surviving path.
 
 The bootstrap `while` form is a pre-test statement. Its condition executes
 before the loop can exit, while its body may execute zero times. Therefore
@@ -125,13 +142,13 @@ the loop, but facts established only in the body cannot by themselves prove a
 binding initialized after the loop. This conservative rule prevents a zero-run
 loop from manufacturing definite-assignment evidence.
 
-Chained assignment, arbitrary lvalues, fields, indexing, and general
+Chained assignment, arbitrary lvalues, field mutation, indexing, and general
 uninitialized storage remain unsupported.
 
 **Research.** Broader flow-sensitive facts, `break`, `continue`, labelled loops,
-pattern bindings, partial aggregate initialization, ownership interactions, and
-diagnostics for more complex control-flow graphs require implementation evidence
-before their rules are frozen.
+pattern bindings, partial aggregate initialization, mutable aggregate views,
+ownership interactions, and diagnostics for more complex control-flow graphs
+require implementation evidence before their rules are frozen.
 
 ## 6. Names, modules, and packages
 
@@ -139,6 +156,13 @@ before their rules are frozen.
 filesystem enumeration order, and separate from type inference. Imports must
 make dependency edges inspectable. Packages and modules must have stable
 identity rules that work in reproducible builds.
+
+**Provisional bootstrap decisions.** Top-level record type identities and
+function signatures are collected before function bodies are lowered. This
+supports deterministic forward references to declared record types and forward
+function calls without consulting filesystem or declaration traversal order for
+semantic meaning. Built-in `Int` and `Bool` type names cannot be redefined as
+records.
 
 **Research.** File-to-module mapping, visibility defaults, namespace separation,
 cyclic module handling, package manifests, lockfiles, and registry trust policy
@@ -167,8 +191,10 @@ language invariants require explicit unsafe authority.
 regions for ordinary values, deterministic ownership for resources, and
 optional managed regions for graph-shaped shared data—is not solved. Open work
 includes aliasing, destruction order, region inference, cycles, pinning, FFI
-roots, real-time constraints, and the cost model. Until a checked model exists,
-Nova must not claim memory safety or zero-cost ownership.
+roots, real-time constraints, aggregate representation, and the cost model.
+The interpreter's current record storage is not evidence of a final allocation
+or ownership strategy. Until a checked model exists, Nova must not claim memory
+safety or zero-cost ownership.
 
 ## 9. Concurrency
 
@@ -194,7 +220,8 @@ layout, ownership, error, and unwind boundaries. It is not permission to make C
 semantics the default Nova semantics.
 
 **Research.** Capability composition, trusted intrinsics, provenance, variadic
-calls, callbacks, unwinding, and bindgen policy require dedicated design work.
+calls, callbacks, unwinding, bindgen policy, and record layout interoperability
+require dedicated design work.
 
 ## 11. Compilation and execution model
 
@@ -215,19 +242,25 @@ semantics.
 **Provisional bootstrap decisions.** `nova run` executes only after lexical,
 syntactic, name-resolution, type, and definite-assignment validation succeeds.
 The interpreter consumes typed HIR directly and supports the implemented
-function, call, block, `if`, `while`, return, binding, assignment, Boolean, and
-integer subset. Evaluation order is left-to-right; `&&` and `||` short-circuit.
-The entry point is a zero-argument top-level `main` returning `Int` or `Bool`.
-Runtime failures use structured diagnostics. Recursive execution is guarded by
-a finite call-depth limit, and all statement/expression evaluation shares a
-finite step budget so nonterminating loops fail closed rather than intentionally
-hanging the host. These choices provide an executable oracle for the current
-subset; HIR interpretation is not the intended final backend ABI.
+function, call, record construction/projection, block, `if`, `while`, return,
+binding, assignment, Boolean, and integer subset. Evaluation order is
+left-to-right; named record initializers do not reorder their expressions when
+resolved to declaration slots. `&&` and `||` short-circuit. The entry point is a
+zero-argument top-level `main` returning `Int` or `Bool`.
+
+Runtime record values carry nominal identity and declaration-order field slots
+inside the interpreter. That representation is an executable semantic oracle,
+not a stable layout, serialization format, or backend ABI. Runtime failures use
+structured diagnostics. Recursive execution is guarded by a finite call-depth
+limit, and all statement/expression evaluation shares a finite step budget so
+nonterminating loops fail closed rather than intentionally hanging the host.
+These choices provide an executable oracle for the current subset; HIR
+interpretation is not the intended final backend ABI.
 
 **Research.** HIR and MIR forms, verification rules, optimization contracts,
 debug information, incremental compilation, monomorphization, backend
-selection, stable entry-point conventions, richer loop-control semantics, and
-cross-backend execution conformance remain open.
+selection, stable entry-point conventions, richer loop-control semantics,
+aggregate lowering/layout, and cross-backend execution conformance remain open.
 
 ## 12. Diagnostics and tooling contracts
 
@@ -238,12 +271,15 @@ diagnostics must be deterministic for identical input and compiler version.
 
 **Provisional bootstrap decisions.** The current toolchain uses half-open UTF-8
 byte spans and exposes human and JSON Lines rendering across lexical, syntactic,
-semantic, and runtime diagnostics. Diagnostic code meaning is documented by
-tests but codes are not yet covered by the language compatibility promise.
+semantic, and runtime diagnostics. Record diagnostics distinguish duplicate,
+unknown, missing, and mistyped fields while preserving source-qualified labels.
+Diagnostic code meaning is documented by tests but codes are not yet covered by
+the language compatibility promise.
 
 Semantic introspection for editors and AI systems must ultimately expose
-resolved symbols, types, effects, ownership facts, and transformations through
-versioned schemas. Compiler debug text is not that eventual protocol.
+resolved symbols, types, effects, ownership facts, nominal type identities, and
+transformations through versioned schemas. Compiler debug text is not that
+eventual protocol.
 
 ## 13. Compatibility and versioning
 
@@ -269,16 +305,20 @@ Every compiler and execution stage must uphold these constraints:
 6. Nesting, call-depth, and execution-step limits fail with diagnostics before
    uncontrolled recursion or nonterminating bootstrap execution can consume the
    host indefinitely.
-7. Iteration order that affects output is explicit and deterministic.
+7. Iteration and expression-evaluation order that affects output is explicit and
+   deterministic; named record fields must not reorder initializer evaluation.
 8. An implemented grammar, semantic, or execution rule has positive and
    negative tests.
 9. A local read cannot observe an uninitialized binding; delayed initialization
    must be proven on every reachable continuing path before the read.
 10. Pre-test loop analysis must not treat body-only effects as facts that hold
     after a loop which may execute zero times.
-11. Optimization must preserve specified behavior and later operate on verified
+11. Nominal type identity must not silently collapse to structural field shape.
+12. Resolved field slots must preserve source semantics and must not be mistaken
+    for a stabilized memory-layout or ABI guarantee.
+13. Optimization must preserve specified behavior and later operate on verified
     IR rather than repair invalid earlier output.
-12. Roadmap documents distinguish implemented, provisional, and researched
+14. Roadmap documents distinguish implemented, provisional, and researched
     properties; benchmarks and safety claims require reproducible evidence.
 
 ## 15. Current unresolved research register
@@ -287,6 +327,7 @@ The highest-impact unresolved questions are:
 
 - inference boundaries and public type annotation policy;
 - primitive numeric semantics across all execution backends;
+- algebraic data types, exhaustive patterns, and aggregate layout guarantees;
 - typed error and effect representation;
 - the hybrid ownership/region/managed-memory model;
 - data-race freedom and cancellation in structured concurrency;

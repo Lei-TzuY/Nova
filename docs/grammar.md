@@ -18,8 +18,8 @@ identifier      = (letter | "_") , { letter | digit | "_" } ;
 integer         = digit , { [ "_" ] , digit } ;
 ```
 
-Keywords are `fn`, `let`, `var`, `if`, `else`, `while`, `return`, `true`, and
-`false`. A keyword cannot be used as an identifier.
+Keywords are `fn`, `record`, `new`, `let`, `var`, `if`, `else`, `while`,
+`return`, `true`, and `false`. A keyword cannot be used as an identifier.
 
 Integer separators cannot lead, trail, or repeat. The frontend checks decimal
 conversion and rejects magnitudes above `9223372036854775807`; it never wraps or
@@ -32,7 +32,12 @@ nested block comment. An unterminated block comment is an error.
 ## Grammar
 
 ```ebnf
-program             = { function } , end_of_file ;
+program             = { declaration } , end_of_file ;
+declaration         = record_declaration | function ;
+
+record_declaration  = "record" , identifier , "{" , [ record_fields ] , "}" ;
+record_fields       = record_field , { "," , record_field } , [ "," ] ;
+record_field        = identifier , ":" , type_name ;
 
 function            = "fn" , identifier , "(" , [ parameters ] , ")" ,
                       "->" , type_name , block ;
@@ -62,16 +67,22 @@ equality            = comparison , { ("==" | "!=") , comparison } ;
 comparison          = additive , { ("<" | "<=" | ">" | ">=") , additive } ;
 additive            = multiplicative , { ("+" | "-") , multiplicative } ;
 multiplicative      = unary , { ("*" | "/" | "%") , unary } ;
-unary               = ("!" | "-") , unary | call ;
-call                = primary , { "(" , [ arguments ] , ")" } ;
+unary               = ("!" | "-") , unary | postfix ;
+postfix             = primary , { call_suffix | field_suffix } ;
+call_suffix         = "(" , [ arguments ] , ")" ;
+field_suffix        = "." , identifier ;
 arguments           = expression , { "," , expression } , [ "," ] ;
 primary             = integer
                     | "true"
                     | "false"
                     | identifier
+                    | record_literal
                     | "(" , expression , ")"
                     | block
                     | if_expression ;
+record_literal      = "new" , identifier , "{" , [ record_initializers ] , "}" ;
+record_initializers = record_initializer , { "," , record_initializer } , [ "," ] ;
+record_initializer  = identifier , ":" , expression ;
 if_expression       = "if" , expression , block , "else" ,
                       (block | if_expression) ;
 ```
@@ -80,6 +91,21 @@ A block may end in one expression without a semicolon; that expression is its
 tail value. Any earlier expression must end in `;`. Bindings, assignments, and
 returns always end in `;`. A `while` statement ends with its body block and does
 not take a trailing semicolon. Top-level statements are not accepted.
+
+Records are nominal top-level types. Each field has an explicit type and field
+names must be unique within a record. `new Type { ... }` constructs a record by
+naming every declared field exactly once. Initializers may appear in any order;
+they are evaluated left to right in the written source order. Semantic analysis
+rejects unknown, duplicate, missing, or mistyped fields. `value.field` projects
+a field from a value of the matching nominal record type. Projection is
+read-only in this slice: assignment targets remain plain local identifiers, not
+field accesses. Record equality is not implemented.
+
+The explicit `new` keyword is intentional. A bare `Type { ... }` constructor
+would be syntactically ambiguous with the block that follows conditions such as
+`if value { ... }` and `while value { ... }`; the bootstrap grammar keeps that
+boundary deterministic rather than relying on capitalization or semantic
+feedback during parsing.
 
 `var name: Type;` declares a mutable binding whose first value is supplied by a
 later assignment. The explicit type is mandatory, while uninitialized `let`
@@ -112,7 +138,7 @@ From tightest to loosest:
 
 | Level | Forms | Associativity |
 |---|---|---|
-| 1 | call `f(...)` | left/postfix |
+| 1 | call `f(...)`, field access `value.field` | left/postfix |
 | 2 | prefix `!`, `-` | right |
 | 3 | `*`, `/`, `%` | left |
 | 4 | `+`, `-` | left |
@@ -127,8 +153,8 @@ limit, not a promise that deeply nested source will remain portable unchanged.
 
 ## Deliberate limitations
 
-The implemented grammar has no strings, floating-point literals, arrays,
-records, enums, pattern matching, `break`, `continue`, `for`, methods, modules,
-imports, generics, traits, effects, async syntax, ownership syntax, unsafe
-blocks, or attributes. Encountering such syntax is an error, not an
+The implemented grammar has no strings, floating-point literals, arrays, enums,
+pattern matching, field assignment, `break`, `continue`, `for`, methods,
+modules, imports, generics, traits, effects, async syntax, ownership syntax,
+unsafe blocks, or attributes. Encountering such syntax is an error, not an
 approximation.

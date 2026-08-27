@@ -1,4 +1,7 @@
-use crate::hir::{self, BindingId, ExpressionKind, FunctionId, FunctionType, StatementKind, Type};
+use crate::hir::{
+    self, BindingId, ExpressionKind, FunctionId, FunctionType, RecordFieldValue, RecordId,
+    RecordType, StatementKind, Type,
+};
 use nova_diagnostics::{Diagnostic, LabelStyle};
 use nova_parser::ast::{self, BinaryOperator, UnaryOperator};
 use nova_source::Span;
@@ -25,8 +28,14 @@ impl AnalysisOutput {
 #[must_use]
 pub fn analyze(program: &ast::Program) -> AnalysisOutput {
     let mut analyzer = Analyzer::new();
+    analyzer.collect_record_definitions(program);
     analyzer.collect_function_signatures(program);
 
+    let records = analyzer
+        .record_definitions
+        .iter()
+        .map(RecordDefinition::to_hir)
+        .collect();
     let functions = program
         .functions
         .iter()
@@ -37,6 +46,7 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
     analyzer.diagnostics.sort_by_key(diagnostic_sort_key);
     AnalysisOutput {
         program: hir::Program {
+            records,
             functions,
             span: program.span,
         },
@@ -54,6 +64,32 @@ fn diagnostic_sort_key(diagnostic: &Diagnostic) -> (u32, usize, usize) {
     match span {
         Some(span) => (span.source().raw(), span.start(), span.end()),
         None => (u32::MAX, usize::MAX, usize::MAX),
+    }
+}
+
+#[derive(Clone, Debug)]
+struct RecordDefinition {
+    id: RecordId,
+    name: String,
+    fields: Vec<hir::RecordField>,
+    span: Span,
+}
+
+impl RecordDefinition {
+    fn record_type(&self) -> RecordType {
+        RecordType {
+            id: self.id,
+            name: self.name.clone(),
+        }
+    }
+
+    fn to_hir(&self) -> hir::Record {
+        hir::Record {
+            id: self.id,
+            name: self.name.clone(),
+            fields: self.fields.clone(),
+            span: self.span,
+        }
     }
 }
 
@@ -90,6 +126,8 @@ struct LocalSymbol {
 
 struct Analyzer {
     diagnostics: Vec<Diagnostic>,
+    record_definitions: Vec<RecordDefinition>,
+    records: BTreeMap<String, RecordId>,
     signatures: Vec<SignatureRecord>,
     functions: BTreeMap<String, FunctionSymbol>,
     scopes: Vec<BTreeMap<String, LocalSymbol>>,
@@ -100,10 +138,78 @@ impl Analyzer {
     fn new() -> Self {
         Self {
             diagnostics: Vec::new(),
+            record_definitions: Vec::new(),
+            records: BTreeMap::new(),
             signatures: Vec::new(),
             functions: BTreeMap::new(),
             scopes: Vec::new(),
             next_binding: 0,
+        }
+    }
+
+    fn collect_record_definitions(&mut self, program: &ast::Program) {
+        self.record_definitions = program
+            .records
+            .iter()
+            .enumerate()
+            .map(|(index, record)| RecordDefinition {
+                id: RecordId::new(index),
+                name: record.name.text.clone(),
+                fields: Vec::new(),
+                span: record.span,
+            })
+            .collect();
+
+        for (index, record) in program.records.iter().enumerate() {
+            let id = RecordId::new(index);
+            if matches!(record.name.text.as_str(), "Int" | "Bool") {
+                self.diagnostics.push(
+                    Diagnostic::error("N3002", "duplicate type definition").with_primary(
+                        record.name.span,
+                        format!("`{}` is a built-in type name", record.name.text),
+                    ),
+                );
+                continue;
+            }
+            if let Some(previous_id) = self.records.get(&record.name.text).copied() {
+                let previous = &self.record_definitions[previous_id.index()];
+                self.diagnostics.push(
+                    Diagnostic::error("N3002", "duplicate type definition")
+                        .with_primary(
+                            record.name.span,
+                            format!("record `{}` is defined more than once", record.name.text),
+                        )
+                        .with_secondary(previous.span, "first record definition is here"),
+                );
+            } else {
+                self.records.insert(record.name.text.clone(), id);
+            }
+        }
+
+        for (index, record) in program.records.iter().enumerate() {
+            let mut seen_fields = BTreeMap::<String, Span>::new();
+            let mut fields = Vec::with_capacity(record.fields.len());
+            for field in &record.fields {
+                let ty = self.resolve_type_ref(&field.ty);
+                if let Some(previous) = seen_fields.get(&field.name.text).copied() {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3010", "duplicate record field")
+                            .with_primary(
+                                field.name.span,
+                                format!("field `{}` is declared more than once", field.name.text),
+                            )
+                            .with_secondary(previous, "first field declaration is here"),
+                    );
+                } else {
+                    seen_fields.insert(field.name.text.clone(), field.name.span);
+                }
+                fields.push(hir::RecordField {
+                    name: field.name.text.clone(),
+                    ty,
+                    span: field.span,
+                });
+            }
+            self.record_definitions[index].fields = fields;
         }
     }
 
@@ -149,11 +255,17 @@ impl Analyzer {
             "Int" => Type::Int,
             "Bool" => Type::Bool,
             unknown => {
+                if let Some(id) = self.records.get(unknown).copied() {
+                    return Type::Record(RecordType {
+                        id,
+                        name: unknown.to_owned(),
+                    });
+                }
                 self.diagnostics.push(
                     Diagnostic::error("N3001", "unknown type")
                         .with_primary(reference.span, format!("unknown type `{unknown}`"))
                         .with_note(
-                            "the Phase 2 bootstrap semantic core currently defines Int and Bool",
+                            "the bootstrap semantic core recognizes Int, Bool, and declared record names",
                         ),
                 );
                 Type::Error
@@ -349,9 +461,6 @@ impl Analyzer {
                     "while condition",
                 );
 
-                // The pre-test condition executes before the loop can exit, so facts
-                // established by evaluating it survive. The body may execute zero
-                // times, therefore body-only initialization facts cannot escape.
                 let post_condition_scopes = self.scopes.clone();
                 let body = self.lower_block(body, return_type, true);
                 self.scopes = post_condition_scopes;
@@ -393,6 +502,12 @@ impl Analyzer {
             ast::ExpressionKind::Integer(value) => (ExpressionKind::Integer(*value), Type::Int),
             ast::ExpressionKind::Boolean(value) => (ExpressionKind::Boolean(*value), Type::Bool),
             ast::ExpressionKind::Name(name) => self.lower_name(name),
+            ast::ExpressionKind::RecordLiteral { name, fields } => {
+                self.lower_record_literal(name, fields, return_type, expression.span)
+            }
+            ast::ExpressionKind::FieldAccess { base, field } => {
+                self.lower_field_access(base, field, return_type)
+            }
             ast::ExpressionKind::Unary { operator, operand } => {
                 let operand = self.lower_expression(operand, return_type);
                 let ty = self.check_unary(*operator, &operand, expression.span);
@@ -491,6 +606,160 @@ impl Analyzer {
             ty,
             span: expression.span,
         }
+    }
+
+    fn lower_record_literal(
+        &mut self,
+        name: &ast::Name,
+        fields: &[ast::RecordLiteralField],
+        return_type: &Type,
+        _span: Span,
+    ) -> (ExpressionKind, Type) {
+        let Some(record_id) = self.records.get(&name.text).copied() else {
+            for field in fields {
+                self.lower_expression(&field.value, return_type);
+            }
+            self.diagnostics.push(
+                Diagnostic::error("N3001", "unknown type")
+                    .with_primary(name.span, format!("unknown record type `{}`", name.text)),
+            );
+            return (ExpressionKind::Error, Type::Error);
+        };
+        let definition = self.record_definitions[record_id.index()].clone();
+        let mut seen = BTreeMap::<String, Span>::new();
+        let mut resolved = Vec::with_capacity(fields.len());
+        let mut structural_error = false;
+        let mut contains_error = false;
+        let mut contains_never = false;
+
+        for field in fields {
+            let value = self.lower_expression(&field.value, return_type);
+            contains_error |= value.ty.is_error();
+            contains_never |= value.ty.is_never();
+
+            let Some(field_index) = definition
+                .fields
+                .iter()
+                .position(|declared| declared.name == field.name.text)
+            else {
+                self.diagnostics.push(
+                    Diagnostic::error("N3011", "unknown record field")
+                        .with_primary(
+                            field.name.span,
+                            format!(
+                                "record `{}` has no field named `{}`",
+                                definition.name, field.name.text
+                            ),
+                        )
+                        .with_secondary(definition.span, "record declared here"),
+                );
+                structural_error = true;
+                continue;
+            };
+
+            if let Some(previous) = seen.get(&field.name.text).copied() {
+                self.diagnostics.push(
+                    Diagnostic::error("N3010", "duplicate record field")
+                        .with_primary(
+                            field.name.span,
+                            format!("field `{}` is initialized more than once", field.name.text),
+                        )
+                        .with_secondary(previous, "first initializer is here"),
+                );
+                structural_error = true;
+                continue;
+            }
+            seen.insert(field.name.text.clone(), field.name.span);
+
+            let expected = &definition.fields[field_index].ty;
+            self.require_type(&value.ty, expected, value.span, "record field initializer");
+            resolved.push(RecordFieldValue { field_index, value });
+        }
+
+        for declared in &definition.fields {
+            if !seen.contains_key(&declared.name) {
+                self.diagnostics.push(
+                    Diagnostic::error("N3012", "missing record field")
+                        .with_primary(
+                            name.span,
+                            format!(
+                                "construction of `{}` is missing field `{}`",
+                                definition.name, declared.name
+                            ),
+                        )
+                        .with_secondary(declared.span, "field declared here"),
+                );
+                structural_error = true;
+            }
+        }
+
+        let ty = if contains_never {
+            Type::Never
+        } else if structural_error || contains_error {
+            Type::Error
+        } else {
+            Type::Record(definition.record_type())
+        };
+        if structural_error {
+            (ExpressionKind::Error, ty)
+        } else {
+            (
+                ExpressionKind::RecordLiteral {
+                    record: record_id,
+                    fields: resolved,
+                },
+                ty,
+            )
+        }
+    }
+
+    fn lower_field_access(
+        &mut self,
+        base: &ast::Expression,
+        field: &ast::Name,
+        return_type: &Type,
+    ) -> (ExpressionKind, Type) {
+        let base = self.lower_expression(base, return_type);
+        let Type::Record(record_type) = base.ty.clone() else {
+            if base.ty.is_error() {
+                return (ExpressionKind::Error, Type::Error);
+            }
+            self.diagnostics
+                .push(Diagnostic::error("N3004", "type mismatch").with_primary(
+                    field.span,
+                    format!("field access requires a record value, found {}", base.ty),
+                ));
+            return (ExpressionKind::Error, Type::Error);
+        };
+
+        let definition = self.record_definitions[record_type.id.index()].clone();
+        let Some(field_index) = definition
+            .fields
+            .iter()
+            .position(|declared| declared.name == field.text)
+        else {
+            self.diagnostics.push(
+                Diagnostic::error("N3011", "unknown record field")
+                    .with_primary(
+                        field.span,
+                        format!(
+                            "record `{}` has no field named `{}`",
+                            definition.name, field.text
+                        ),
+                    )
+                    .with_secondary(definition.span, "record declared here"),
+            );
+            return (ExpressionKind::Error, Type::Error);
+        };
+        let ty = definition.fields[field_index].ty.clone();
+        (
+            ExpressionKind::FieldAccess {
+                base: Box::new(base),
+                record: record_type.id,
+                field_index,
+            },
+            ty,
+        )
     }
 
     fn lower_name(&mut self, name: &ast::Name) -> (ExpressionKind, Type) {
@@ -878,6 +1147,77 @@ mod tests {
             .iter()
             .map(|diagnostic| diagnostic.code.as_str())
             .collect()
+    }
+
+    #[test]
+    fn resolves_records_construction_projection_and_signatures() {
+        let output = analyze_text(
+            "record Pair { left: Int, right: Bool }\n\
+             fn project(pair: Pair) -> Int { pair.left }\n\
+             fn make() -> Pair { new Pair { right: true, left: 7 } }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        assert_eq!(output.program.records.len(), 1);
+        assert_eq!(output.program.records[0].fields.len(), 2);
+        assert!(matches!(
+            output.program.functions[0].parameters[0].ty,
+            Type::Record(_)
+        ));
+
+        let tail = output.program.functions[1]
+            .body
+            .tail
+            .as_deref()
+            .expect("tail");
+        let ExpressionKind::RecordLiteral { record, fields } = &tail.kind else {
+            panic!("expected record literal: {tail:?}");
+        };
+        assert_eq!(record.index(), 0);
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].field_index, 1);
+        assert_eq!(fields[1].field_index, 0);
+    }
+
+    #[test]
+    fn rejects_invalid_record_shapes_and_fields() {
+        let output = analyze_text(
+            "record Pair { left: Int, right: Bool }\n\
+             fn f() -> Int {\n\
+                 let a = new Pair { left: 1, left: 2, extra: 3 };\n\
+                 a.missing\n\
+             }",
+        );
+        assert!(codes(&output).contains(&"N3010"));
+        assert!(codes(&output).contains(&"N3011"));
+        assert!(codes(&output).contains(&"N3012"));
+    }
+
+    #[test]
+    fn rejects_duplicate_record_declarations_fields_and_builtin_names() {
+        let output = analyze_text(
+            "record Pair { x: Int, x: Int }\n\
+             record Pair { y: Int }\n\
+             record Int { value: Int }\n\
+             fn f() -> Int { 0 }",
+        );
+        assert_eq!(codes(&output), vec!["N3010", "N3002", "N3002"]);
+    }
+
+    #[test]
+    fn checks_record_field_initializer_types_and_nominal_identity() {
+        let output = analyze_text(
+            "record A { value: Int }\n\
+             record B { value: Int }\n\
+             fn f() -> A { new A { value: true } }\n\
+             fn g(flag: Bool) -> A { if flag { new A { value: 1 } } else { new B { value: 1 } } }",
+        );
+        assert_eq!(codes(&output), vec!["N3004", "N3004"]);
+    }
+
+    #[test]
+    fn rejects_projection_from_non_record() {
+        let output = analyze_text("fn f() -> Int { 1.value }");
+        assert_eq!(codes(&output), vec!["N3004"]);
     }
 
     #[test]
