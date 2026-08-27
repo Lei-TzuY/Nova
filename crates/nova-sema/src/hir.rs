@@ -175,10 +175,10 @@ pub enum StatementKind {
         /// Typed initializer.
         initializer: Expression,
     },
-    /// Assignment to a resolved mutable local binding.
+    /// Assignment to a named binding.
     Assignment {
-        /// Resolved assignment target.
-        target: BindingId,
+        /// Resolved assignment target, or `None` for an already-diagnosed target.
+        target: Option<BindingId>,
         /// Typed replacement value.
         value: Expression,
     },
