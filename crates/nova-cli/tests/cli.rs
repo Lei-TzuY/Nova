@@ -44,6 +44,17 @@ fn ast_command_prints_a_span_preserving_tree() {
 }
 
 #[test]
+fn ast_command_can_inspect_a_semantically_invalid_program() {
+    let path = fixture("invalid/unknown-name.nv");
+    let output = nova(&["ast", path.to_str().expect("fixture path is UTF-8")]);
+    let stdout = String::from_utf8(output.stdout).expect("AST output is UTF-8");
+
+    assert!(output.status.success());
+    assert!(stdout.contains("text: \"missing\""));
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
 fn rejects_negative_fixtures_with_stable_codes() {
     for (relative, code) in [
         ("invalid/missing-return-type.nv", "N2001"),
@@ -51,6 +62,8 @@ fn rejects_negative_fixtures_with_stable_codes() {
         ("invalid/unterminated-comment.nv", "N1003"),
         ("invalid/integer-overflow.nv", "N1004"),
         ("invalid/missing-else.nv", "N2006"),
+        ("invalid/unknown-name.nv", "N3003"),
+        ("invalid/type-mismatch.nv", "N3004"),
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
@@ -79,6 +92,22 @@ fn emits_one_json_object_per_diagnostic() {
         assert!(line.ends_with('}'), "{line}");
         assert!(line.contains("\"span\":{"), "{line}");
     }
+}
+
+#[test]
+fn emits_semantic_diagnostics_as_json() {
+    let path = fixture("invalid/unknown-name.nv");
+    let output = nova(&[
+        "check",
+        path.to_str().expect("fixture path is UTF-8"),
+        "--message-format=json",
+    ]);
+    let stderr = String::from_utf8(output.stderr).expect("diagnostics are UTF-8");
+
+    assert!(!output.status.success());
+    assert_eq!(stderr.lines().count(), 1);
+    assert!(stderr.contains("\"code\":\"N3003\""));
+    assert!(stderr.contains("\"message\":\"unknown name\""));
 }
 
 #[test]
