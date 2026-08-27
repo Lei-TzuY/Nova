@@ -133,7 +133,9 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_record(&mut self) -> Option<Record> {
-        let start = self.expect(TokenKind::Record, "to start a record declaration")?.span;
+        let start = self
+            .expect(TokenKind::Record, "to start a record declaration")?
+            .span;
         let name = self.parse_name("after `record`")?;
         self.expect(TokenKind::LeftBrace, "after the record name")?;
         let mut fields = Vec::new();
@@ -1006,11 +1008,14 @@ fn f() -> Int {
 
     #[test]
     fn field_access_binds_as_postfix_before_binary_operators() {
-        let (_, parsed) = parse_text(
-            "record Pair { left: Int } fn f(pair: Pair) -> Int { pair.left + 1 }",
-        );
+        let (_, parsed) =
+            parse_text("record Pair { left: Int } fn f(pair: Pair) -> Int { pair.left + 1 }");
         assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
-        let tail = parsed.program.functions[0].body.tail.as_deref().expect("tail");
+        let tail = parsed.program.functions[0]
+            .body
+            .tail
+            .as_deref()
+            .expect("tail");
         let ExpressionKind::Binary {
             operator: BinaryOperator::Add,
             left,
@@ -1040,9 +1045,8 @@ fn f() -> Int {
 
     #[test]
     fn recovers_to_later_top_level_declarations() {
-        let (_, parsed) = parse_text(
-            "fn broken() { 1 } record Good { value: Int } fn good() -> Int { 2 }",
-        );
+        let (_, parsed) =
+            parse_text("fn broken() { 1 } record Good { value: Int } fn good() -> Int { 2 }");
 
         assert!(!parsed.diagnostics.is_empty());
         assert_eq!(parsed.program.records.len(), 1);
