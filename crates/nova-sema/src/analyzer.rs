@@ -1,6 +1,4 @@
-use crate::hir::{
-    self, BindingId, ExpressionKind, FunctionId, FunctionType, StatementKind, Type,
-};
+use crate::hir::{self, BindingId, ExpressionKind, FunctionId, FunctionType, StatementKind, Type};
 use nova_diagnostics::{Diagnostic, LabelStyle};
 use nova_parser::ast::{self, BinaryOperator, UnaryOperator};
 use nova_source::Span;
@@ -457,45 +455,24 @@ impl Analyzer {
         right: &hir::Expression,
         span: Span,
     ) -> Type {
-        if left.ty.is_never() || right.ty.is_never() {
-            return Type::Never;
-        }
         match operator {
             BinaryOperator::Add
             | BinaryOperator::Subtract
             | BinaryOperator::Multiply
             | BinaryOperator::Divide
             | BinaryOperator::Remainder => {
-                self.require_binary_operands(
-                    left,
-                    right,
-                    &Type::Int,
-                    span,
-                    "arithmetic operator",
-                );
+                self.require_binary_operands(left, right, &Type::Int, span, "arithmetic operator");
                 binary_result_type(left, right, Type::Int)
             }
             BinaryOperator::Less
             | BinaryOperator::LessEqual
             | BinaryOperator::Greater
             | BinaryOperator::GreaterEqual => {
-                self.require_binary_operands(
-                    left,
-                    right,
-                    &Type::Int,
-                    span,
-                    "comparison operator",
-                );
+                self.require_binary_operands(left, right, &Type::Int, span, "comparison operator");
                 binary_result_type(left, right, Type::Bool)
             }
             BinaryOperator::And | BinaryOperator::Or => {
-                self.require_binary_operands(
-                    left,
-                    right,
-                    &Type::Bool,
-                    span,
-                    "boolean operator",
-                );
+                self.require_binary_operands(left, right, &Type::Bool, span, "boolean operator");
                 binary_result_type(left, right, Type::Bool)
             }
             BinaryOperator::Equal | BinaryOperator::NotEqual => {
@@ -516,15 +493,14 @@ impl Analyzer {
             return;
         }
         if !types_compatible(&left.ty, expected) || !types_compatible(&right.ty, expected) {
-            self.diagnostics.push(
-                Diagnostic::error("N3004", "type mismatch").with_primary(
+            self.diagnostics
+                .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
                         "{context} requires {expected} operands, found {} and {}",
                         left.ty, right.ty
                     ),
-                ),
-            );
+                ));
         }
     }
 
@@ -537,19 +513,38 @@ impl Analyzer {
         if left.ty.is_error() || right.ty.is_error() {
             return Type::Error;
         }
+        if left.ty.is_never() || right.ty.is_never() {
+            let other = if left.ty.is_never() {
+                &right.ty
+            } else {
+                &left.ty
+            };
+            if other.is_never() || matches!(other, Type::Int | Type::Bool) {
+                return Type::Never;
+            }
+            self.diagnostics
+                .push(Diagnostic::error("N3004", "type mismatch").with_primary(
+                    span,
+                    format!(
+                        "equality requires Int or Bool operands, found {} and {}",
+                        left.ty, right.ty
+                    ),
+                ));
+            return Type::Error;
+        }
+
         let primitive = matches!(left.ty, Type::Int | Type::Bool);
         if primitive && left.ty == right.ty {
             Type::Bool
         } else {
-            self.diagnostics.push(
-                Diagnostic::error("N3004", "type mismatch").with_primary(
+            self.diagnostics
+                .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
                         "equality requires matching Int or Bool operands, found {} and {}",
                         left.ty, right.ty
                     ),
-                ),
-            );
+                ));
             Type::Error
         }
     }
@@ -560,7 +555,7 @@ impl Analyzer {
         arguments: &[hir::Expression],
         span: Span,
     ) -> Type {
-        if callee.ty.is_never() || arguments.iter().any(|argument| argument.ty.is_never()) {
+        if callee.ty.is_never() {
             return Type::Never;
         }
         let Type::Function(signature) = callee.ty.clone() else {
@@ -568,8 +563,10 @@ impl Analyzer {
                 return Type::Error;
             }
             self.diagnostics.push(
-                Diagnostic::error("N3005", "expression is not callable")
-                    .with_primary(callee.span, format!("found {} instead of a function", callee.ty)),
+                Diagnostic::error("N3005", "expression is not callable").with_primary(
+                    callee.span,
+                    format!("found {} instead of a function", callee.ty),
+                ),
             );
             return Type::Error;
         };
@@ -598,7 +595,11 @@ impl Analyzer {
                 &format!("argument {}", index + 1),
             );
         }
-        *signature.return_type
+        if arguments.iter().any(|argument| argument.ty.is_never()) {
+            Type::Never
+        } else {
+            *signature.return_type
+        }
     }
 
     fn join_branch_types(
@@ -639,12 +640,11 @@ impl Analyzer {
         if types_compatible(actual, expected) {
             return;
         }
-        self.diagnostics.push(
-            Diagnostic::error("N3004", "type mismatch").with_primary(
+        self.diagnostics
+            .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                 span,
                 format!("{context}: expected {expected}, found {actual}"),
-            ),
-        );
+            ));
     }
 
     fn new_binding(&mut self, name: &ast::Name, ty: Type, mutable: bool) -> hir::Binding {
@@ -691,7 +691,9 @@ fn types_compatible(actual: &Type, expected: &Type) -> bool {
 }
 
 fn binary_result_type(left: &hir::Expression, right: &hir::Expression, success: Type) -> Type {
-    if left.ty.is_error() || right.ty.is_error() {
+    if left.ty.is_never() || right.ty.is_never() {
+        Type::Never
+    } else if left.ty.is_error() || right.ty.is_error() {
         Type::Error
     } else {
         success
@@ -751,9 +753,8 @@ mod tests {
 
     #[test]
     fn infers_bindings_and_allows_nested_shadowing() {
-        let output = analyze_text(
-            "fn f(x: Int) -> Int { let y = x + 1; { let y: Bool = true; y; }; y }",
-        );
+        let output =
+            analyze_text("fn f(x: Int) -> Int { let y = x + 1; { let y: Bool = true; y; }; y }");
         assert!(output.is_success(), "{:?}", output.diagnostics);
 
         let function = &output.program.functions[0];
@@ -765,13 +766,9 @@ mod tests {
 
     #[test]
     fn rejects_unknown_types_names_and_same_scope_duplicates() {
-        let output = analyze_text(
-            "fn f(x: Number, x: Int) -> Int { let y = missing; let y = 2; y }",
-        );
-        assert_eq!(
-            codes(&output),
-            vec!["N3001", "N3002", "N3003", "N3002"]
-        );
+        let output =
+            analyze_text("fn f(x: Number, x: Int) -> Int { let y = missing; let y = 2; y }");
+        assert_eq!(codes(&output), vec!["N3001", "N3002", "N3003", "N3002"]);
     }
 
     #[test]
@@ -813,5 +810,18 @@ mod tests {
              fn h() -> Bool { f == g }",
         );
         assert_eq!(codes(&output), vec!["N3004"]);
+    }
+
+    #[test]
+    fn never_does_not_hide_static_operator_or_callee_errors() {
+        let output = analyze_text(
+            "fn bad_op(flag: Bool) -> Int {\n\
+                 flag + if true { return 1; } else { return 2; }\n\
+             }\n\
+             fn bad_call() -> Int {\n\
+                 1(if true { return 1; } else { return 2; })\n\
+             }",
+        );
+        assert_eq!(codes(&output), vec!["N3004", "N3005"]);
     }
 }
