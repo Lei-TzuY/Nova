@@ -7,6 +7,7 @@ name = "nova-cli"
 version = "0.1.0"
 dependencies = [
  "nova-diagnostics",
+ "nova-interpreter",
  "nova-lexer",
  "nova-parser",
  "nova-sema",
@@ -17,6 +18,17 @@ dependencies = [
 name = "nova-diagnostics"
 version = "0.1.0"
 dependencies = [
+ "nova-source",
+]
+
+[[package]]
+name = "nova-interpreter"
+version = "0.1.0"
+dependencies = [
+ "nova-diagnostics",
+ "nova-lexer",
+ "nova-parser",
+ "nova-sema",
  "nova-source",
 ]
 
