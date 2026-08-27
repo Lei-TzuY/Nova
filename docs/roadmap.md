@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: first vertical slice implemented; broader type-system work remains.**
+**Status: two vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -48,20 +48,33 @@ Implemented in the first Phase 2 slice:
   shadowing as an explicit bootstrap policy;
 - primitive `Int` and `Bool` type-name resolution;
 - function signatures, local initializer inference, optional local annotations,
-  binding mutability metadata, calls, operators, block tails, and `if` typing;
+  calls, operators, block tails, and `if` typing;
 - explicit-return checking plus rejection of value-returning functions that can
   fall through;
 - semantic diagnostics in the existing human and JSON Lines formats; and
 - `nova check` upgraded from syntax validation to semantic validation while
   `nova ast` remains a parser-inspection command.
 
+Implemented in the second Phase 2 slice:
+
+- narrow assignment syntax as the statement `identifier = expression;`;
+- assignment kept outside expression precedence, so chaining and embedded
+  assignment are rejected by construction;
+- `let` bindings and function parameters treated as immutable, while `var`
+  bindings are assignable;
+- assignment targets resolved lexically to stable binding identities;
+- assignment RHS values checked against each binding's established type;
+- unknown, function, and immutable assignment targets rejected deterministically
+  with semantic diagnostics; and
+- parser, semantic, CLI, fixture, example, grammar, constitution, and README
+  coverage kept in sync.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
 - split and stabilize HIR/resolution/type-analysis contracts as implementation
   evidence accumulates;
-- specify shadowing and definite-assignment rules beyond the current initialized
-  binding subset;
+- specify definite-assignment rules before introducing uninitialized bindings;
 - define numeric types, defaulting, conversions, and overflow behavior;
 - add user-defined records and enums only with resolved type identity and
   deterministic diagnostics;
