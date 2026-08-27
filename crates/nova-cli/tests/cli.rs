@@ -22,6 +22,7 @@ fn accepts_positive_fixtures() {
         "valid/basic.nv",
         "valid/precedence.nv",
         "valid/assignment.nv",
+        "valid/definite-assignment.nv",
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
@@ -70,6 +71,7 @@ fn rejects_negative_fixtures_with_stable_codes() {
         ("invalid/type-mismatch.nv", "N3004"),
         ("invalid/assignment-type-mismatch.nv", "N3004"),
         ("invalid/immutable-assignment.nv", "N3008"),
+        ("invalid/uninitialized-read.nv", "N3009"),
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);

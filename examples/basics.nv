@@ -1,15 +1,18 @@
 fn choose(flag: Bool, left: Int, right: Int) -> Int {
-    let selected = if flag {
-        left
+    var selected: Int;
+    if flag {
+        selected = left;
+        0
     } else {
-        right
+        selected = right;
+        0
     };
 
     selected + 1
 }
 
 fn main() -> Int {
-    var seed: Int = 40;
-    seed = seed + 1;
+    var seed: Int;
+    seed = 41;
     choose(seed > 0 && true, seed, 0)
 }

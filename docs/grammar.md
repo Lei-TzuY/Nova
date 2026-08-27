@@ -42,11 +42,13 @@ type_name           = identifier ;
 
 block               = "{" , { statement } , [ expression ] , "}" ;
 statement           = binding_statement
+                    | uninitialized_var_statement
                     | assignment_statement
                     | return_statement
                     | expression_statement ;
 binding_statement   = ("let" | "var") , identifier ,
                       [ ":" , type_name ] , "=" , expression , ";" ;
+uninitialized_var_statement = "var" , identifier , ":" , type_name , ";" ;
 assignment_statement = identifier , "=" , expression , ";" ;
 return_statement    = "return" , expression , ";" ;
 expression_statement = expression , ";" ;
@@ -76,6 +78,12 @@ A block may end in one expression without a semicolon; that expression is its
 tail value. Any earlier expression must end in `;`. Bindings, assignments, and
 returns always end in `;`. Top-level statements are not accepted.
 
+`var name: Type;` declares a mutable binding whose first value is supplied by a
+later assignment. The explicit type is mandatory, while uninitialized `let`
+bindings and untyped `var name;` declarations are rejected. Semantic analysis
+rejects every read that is not definitely preceded by a type-correct assignment
+on every control-flow path that can reach that read.
+
 Assignment is intentionally a statement, not an expression. Its target is one
 plain identifier, so chained assignment and assignment inside larger
 expressions are not accepted by this grammar. Semantic checking further
@@ -84,6 +92,9 @@ to match that binding's type.
 
 An `if` is an expression and therefore always has an `else` branch in this
 subset. `else if` is represented by the recursive `if_expression` production.
+Definite-assignment state is merged across both branches; a branch that cannot
+continue because it returns does not constrain initialization on the surviving
+path.
 
 ## Precedence and associativity
 

@@ -264,18 +264,36 @@ impl<'source> Parser<'source> {
         } else {
             None
         };
+
+        if self.consume(TokenKind::Equal).is_some() {
+            let initializer = self.parse_expression()?;
+            let semicolon = self.expect(TokenKind::Semicolon, "after the binding initializer")?;
+            return Some(Statement {
+                span: self.cover(keyword.span, semicolon.span),
+                kind: StatementKind::Binding {
+                    mutable,
+                    name,
+                    annotation,
+                    initializer,
+                },
+            });
+        }
+
+        if mutable {
+            if let Some(annotation) = annotation {
+                let semicolon = self.expect(
+                    TokenKind::Semicolon,
+                    "after the uninitialized mutable binding",
+                )?;
+                return Some(Statement {
+                    span: self.cover(keyword.span, semicolon.span),
+                    kind: StatementKind::UninitializedBinding { name, annotation },
+                });
+            }
+        }
+
         self.expect(TokenKind::Equal, "before the binding initializer")?;
-        let initializer = self.parse_expression()?;
-        let semicolon = self.expect(TokenKind::Semicolon, "after the binding initializer")?;
-        Some(Statement {
-            span: self.cover(keyword.span, semicolon.span),
-            kind: StatementKind::Binding {
-                mutable,
-                name,
-                annotation,
-                initializer,
-            },
-        })
+        None
     }
 
     fn parse_assignment_statement(&mut self) -> Option<Statement> {
@@ -732,6 +750,36 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
             &function.body.statements[3].kind,
             StatementKind::Return(_)
         ));
+    }
+
+    #[test]
+    fn parses_typed_uninitialized_var() {
+        let (_, parsed) = parse_text("fn f() -> Int { var value: Int; value = 1; value }");
+        assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
+        assert!(matches!(
+            &parsed.program.functions[0].body.statements[0].kind,
+            StatementKind::UninitializedBinding { name, annotation }
+                if name.text == "value" && annotation.name.text == "Int"
+        ));
+    }
+
+    #[test]
+    fn rejects_uninitialized_let_and_untyped_var() {
+        for text in [
+            "fn f() -> Int { let value: Int; 0 }",
+            "fn f() -> Int { var value; 0 }",
+        ] {
+            let (_, parsed) = parse_text(text);
+            assert!(!parsed.is_success(), "{text}");
+            assert!(
+                parsed
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == "N2001"),
+                "{:?}",
+                parsed.diagnostics
+            );
+        }
     }
 
     #[test]

@@ -19,30 +19,32 @@ written in Rust and can:
 
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
-- parse functions, bindings, narrow assignments, expressions, blocks, calls,
-  and `if` expressions;
+- parse functions, initialized bindings, typed delayed `var` initialization,
+  narrow assignments, expressions, blocks, calls, and `if` expressions;
 - lower accepted syntax into a resolved, typed HIR;
 - resolve top-level functions, parameters, and lexical local bindings;
 - check bootstrap `Int`/`Bool` function signatures, local inference and
-  annotations, calls, operators, block tails, `if` branches, returns, and
-  assignment mutability/type constraints;
+  annotations, calls, operators, block tails, `if` branches, returns,
+  assignment mutability/type constraints, and definite initialization; 
 - emit structured, coded diagnostics rendered as human text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
 
-`nova check` performs lexical, syntactic, name-resolution, and bootstrap type
-validation. This is intentionally narrower than a complete Nova type system:
-numeric semantics, user-defined types, effects, ownership, modules, generics,
-and execution remain future work.
+`nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
+definite-assignment validation. This is intentionally narrower than a complete
+Nova type system: numeric semantics, user-defined types, effects, ownership,
+modules, generics, and execution remain future work.
 
 The implemented syntax is intentionally small:
 
 ```nova
 fn choose(flag: Bool, left: Int, right: Int) -> Int {
-    var selected = left;
-    selected = if flag {
-        left
+    var selected: Int;
+    if flag {
+        selected = left;
+        0
     } else {
-        right
+        selected = right;
+        0
     };
 
     selected + 1
@@ -68,6 +70,14 @@ resolve to a lexical `var`; functions, unknown names, `let` bindings, and
 parameters are rejected as assignment targets. The replacement value must keep
 the binding's established type. Assignment is not an expression and therefore
 cannot be chained or embedded in another expression.
+
+A mutable local may also be declared as `var name: Type;` and initialized by a
+later assignment. The explicit type is required. Reading such a binding before
+it is definitely initialized is diagnostic `N3009`. For `if` expressions,
+analysis evaluates the two branch states independently and keeps a binding
+initialized afterward only when every branch that can continue has initialized
+it. A branch that returns does not constrain the surviving path. This is
+compile-time dataflow; Nova does not insert a runtime default value.
 
 Only `Int` and `Bool` are recognized surface types today. Arithmetic and ordered
 comparisons require `Int`; boolean operators require `Bool`; equality accepts
@@ -118,7 +128,7 @@ source bytes
   -> nova-source        source identity, UTF-8 text, spans, locations
   -> nova-lexer         tokens and lexical diagnostics
   -> nova-parser        AST and syntactic diagnostics
-  -> nova-sema          typed HIR, lexical resolution, bootstrap type checking
+  -> nova-sema          typed HIR, resolution, typing, definite assignment
   -> nova-cli           check/ast commands and diagnostic presentation
 
 nova-diagnostics        shared structured diagnostic model and renderers

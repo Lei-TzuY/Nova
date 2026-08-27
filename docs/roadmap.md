@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: two vertical slices implemented; broader type-system work remains.**
+**Status: three vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -69,12 +69,24 @@ Implemented in the second Phase 2 slice:
 - parser, semantic, CLI, fixture, example, grammar, constitution, and README
   coverage kept in sync.
 
+Implemented in the third Phase 2 slice:
+
+- typed delayed initialization with `var identifier: Type;`, while `let` and
+  untyped `var identifier;` declarations remain rejected;
+- per-binding definite-initialization state tracked through semantic analysis;
+- diagnostic `N3009` for reads that can observe an uninitialized local;
+- successful, type-correct assignment transitions a delayed `var` to initialized;
+- `if` branches analyzed from the same entry state and merged by intersection
+  across paths that can continue;
+- noncontinuing branches such as explicit returns excluded from the surviving
+  path's initialization requirement; and
+- no runtime default value or silent initialization inserted by the compiler.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
-- split and stabilize HIR/resolution/type-analysis contracts as implementation
-  evidence accumulates;
-- specify definite-assignment rules before introducing uninitialized bindings;
+- split and stabilize HIR/resolution/type-analysis/dataflow contracts as
+  implementation evidence accumulates;
 - define numeric types, defaulting, conversions, and overflow behavior;
 - add user-defined records and enums only with resolved type identity and
   deterministic diagnostics;
@@ -83,9 +95,9 @@ prematurely. In particular:
   HIR as a tooling protocol; and
 - expand negative and adversarial tests as each rule becomes implemented.
 
-Phase 2 is not complete until its implemented type and name semantics are
-sufficiently specified for the executable subset and no roadmap item is being
-silently approximated.
+Phase 2 is not complete until its implemented type, name, mutation, and dataflow
+semantics are sufficiently specified for the executable subset and no roadmap
+item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
