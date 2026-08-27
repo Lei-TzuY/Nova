@@ -11,10 +11,10 @@ repository.workspace = true
 nova-diagnostics = { path = "../nova-diagnostics" }
 nova-parser = { path = "../nova-parser" }
 nova-sema = { path = "../nova-sema" }
+nova-source = { path = "../nova-source" }
 
 [dev-dependencies]
 nova-lexer = { path = "../nova-lexer" }
-nova-source = { path = "../nova-source" }
 
 [lints]
 workspace = true
