@@ -59,7 +59,10 @@ fn run_command_reports_runtime_failures() {
         let path = fixture(relative);
         let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(!output.status.success(), "fixture {relative} unexpectedly passed");
+        assert!(
+            !output.status.success(),
+            "fixture {relative} unexpectedly passed"
+        );
         assert!(stderr.contains(code), "fixture {relative}: {stderr}");
         assert!(output.stdout.is_empty());
     }
