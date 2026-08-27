@@ -75,11 +75,12 @@ core language directions, not library conventions.
 **Provisional bootstrap decisions.** The current semantic core recognizes the
 surface type names `Int` and `Bool`, resolves explicitly typed function
 signatures, infers initialized local binding types, and checks the implemented
-operators, calls, branches, returns, and assignments. Accepted integer literal
-magnitude is currently `0..=2^63-1`; unary `-` is a separate expression, so the
-most-negative signed 64-bit value has no literal spelling in this subset.
-Numeric widths, inference defaults beyond the implemented local cases,
-conversions, and overflow behavior are not yet language semantics.
+operators, calls, branches, returns, assignments, and definite initialization.
+Accepted integer literal magnitude is currently `0..=2^63-1`; unary `-` is a
+separate expression, so the most-negative signed 64-bit value has no literal
+spelling in this subset. Numeric widths, inference defaults beyond the
+implemented local cases, conversions, and overflow behavior are not yet
+language semantics.
 
 **Research.** The project must decide, with implementation evidence:
 
@@ -92,17 +93,31 @@ conversions, and overflow behavior are not yet language semantics.
 
 **Decided.** `let` introduces an immutable binding and `var` introduces a
 mutable binding. Mutability belongs to a binding or explicitly mutable view; it
-must not spread invisibly through an object graph. Shadowing and definite
-assignment rules will be specified before semantic checking is declared
-complete.
+must not spread invisibly through an object graph. Reads must not observe an
+uninitialized local value; accepted programs require compile-time evidence that
+a delayed mutable binding has been initialized on every control-flow path that
+can reach the read.
 
-**Provisional bootstrap decisions.** Every `let` or `var` currently requires an
-initializer and may include a type annotation. The implemented assignment form
-is deliberately narrow: `identifier = expression;` is a statement rather than
-an expression, its target must resolve to a lexical `var`, and the replacement
-value must preserve the binding's established type. Function parameters and
-`let` bindings are immutable. Chained assignment, arbitrary lvalues, fields,
-indexing, and uninitialized declarations remain unsupported.
+**Provisional bootstrap decisions.** `let` always requires an initializer.
+`var` may either be initialized immediately, with an optional type annotation,
+or declared as `var identifier: Type;` for later initialization. A delayed
+`var` therefore requires an explicit type; untyped `var identifier;` is
+rejected. No runtime default value is manufactured.
+
+Assignment remains deliberately narrow: `identifier = expression;` is a
+statement rather than an expression, its target must resolve to a lexical
+`var`, and the replacement value must preserve the binding's established type.
+Function parameters and `let` bindings are immutable. Definite-initialization
+state is propagated through lexical blocks and merged across `if` branches. If
+both branches can continue, a binding is definitely initialized afterward only
+when both continuing paths initialize it; a branch that cannot continue because
+it returns does not constrain the surviving path. Chained assignment, arbitrary
+lvalues, fields, indexing, and general uninitialized storage remain unsupported.
+
+**Research.** Broader flow-sensitive facts, loops, pattern bindings, partial
+aggregate initialization, ownership interactions, and diagnostics for more
+complex control-flow graphs require implementation evidence before their rules
+are frozen.
 
 ## 6. Names, modules, and packages
 
@@ -225,9 +240,11 @@ Every compiler stage must uphold these constraints:
 6. Nesting limits fail with diagnostics before uncontrolled recursion.
 7. Iteration order that affects output is explicit and deterministic.
 8. An implemented grammar or semantic rule has positive and negative tests.
-9. Optimization must preserve specified behavior and later operate on verified
-   IR rather than repair invalid earlier output.
-10. Roadmap documents distinguish implemented, provisional, and researched
+9. A local read cannot observe an uninitialized binding; delayed initialization
+   must be proven on every reachable continuing path before the read.
+10. Optimization must preserve specified behavior and later operate on verified
+    IR rather than repair invalid earlier output.
+11. Roadmap documents distinguish implemented, provisional, and researched
     properties; benchmarks and safety claims require reproducible evidence.
 
 ## 15. Current unresolved research register
