@@ -31,20 +31,48 @@ Completion of the initial document does not freeze unfinished semantics.
 - Rust 1.85 MSRV checking plus current-stable formatting, Clippy, test, build,
   and rustdoc CI.
 
-Next Phase 1 refinements should be driven by the needs of name resolution, not
-by adding unrelated syntax.
+Next Phase 1 refinements should be driven by the needs of later semantic work,
+not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: planned.**
+**Status: first vertical slice implemented; broader type-system work remains.**
 
-- lower AST to a purpose-built HIR;
-- lexical scopes and deterministic name resolution;
-- primitive `Int` and `Bool` types;
-- function signatures, local inference, binding mutability, calls, operators,
-  block tails, and `if` branch typing;
-- duplicate, unknown-name, and type-mismatch diagnostics; and
-- `nova check` upgraded from syntax validation to semantic validation.
+Implemented in the first Phase 2 slice:
+
+- a purpose-built resolved, typed HIR in `nova-sema`;
+- deterministic source-order function identities and analysis-order binding
+  identities;
+- lexical scopes with function predeclaration for forward calls and recursion;
+- same-scope duplicate rejection, unknown-name diagnostics, and nested-block
+  shadowing as an explicit bootstrap policy;
+- primitive `Int` and `Bool` type-name resolution;
+- function signatures, local initializer inference, optional local annotations,
+  binding mutability metadata, calls, operators, block tails, and `if` typing;
+- explicit-return checking plus rejection of value-returning functions that can
+  fall through;
+- semantic diagnostics in the existing human and JSON Lines formats; and
+- `nova check` upgraded from syntax validation to semantic validation while
+  `nova ast` remains a parser-inspection command.
+
+The next Phase 2 slices should address semantic depth rather than widen syntax
+prematurely. In particular:
+
+- split and stabilize HIR/resolution/type-analysis contracts as implementation
+  evidence accumulates;
+- specify shadowing and definite-assignment rules beyond the current initialized
+  binding subset;
+- define numeric types, defaulting, conversions, and overflow behavior;
+- add user-defined records and enums only with resolved type identity and
+  deterministic diagnostics;
+- introduce exhaustive pattern checking after algebraic data types exist;
+- define a versioned semantic-introspection schema rather than exposing debug
+  HIR as a tooling protocol; and
+- expand negative and adversarial tests as each rule becomes implemented.
+
+Phase 2 is not complete until its implemented type and name semantics are
+sufficiently specified for the executable subset and no roadmap item is being
+silently approximated.
 
 ## Phase 3 — Executable language subset
 
