@@ -9,6 +9,7 @@ dependencies = [
  "nova-diagnostics",
  "nova-lexer",
  "nova-parser",
+ "nova-sema",
  "nova-source",
 ]
 
@@ -33,6 +34,16 @@ version = "0.1.0"
 dependencies = [
  "nova-diagnostics",
  "nova-lexer",
+ "nova-source",
+]
+
+[[package]]
+name = "nova-sema"
+version = "0.1.0"
+dependencies = [
+ "nova-diagnostics",
+ "nova-lexer",
+ "nova-parser",
  "nova-source",
 ]
 

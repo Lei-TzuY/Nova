@@ -4,6 +4,7 @@ members = [
     "crates/nova-diagnostics",
     "crates/nova-lexer",
     "crates/nova-parser",
+    "crates/nova-sema",
     "crates/nova-source",
 ]
 resolver = "2"

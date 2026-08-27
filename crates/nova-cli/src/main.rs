@@ -1,6 +1,7 @@
 use nova_diagnostics::{Diagnostic, render_human_all, render_json_lines};
 use nova_lexer::lex;
 use nova_parser::{format_ast, parse};
+use nova_sema::analyze;
 use nova_source::{SourceFile, SourceId};
 use std::env;
 use std::ffi::OsString;
@@ -9,15 +10,15 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-const USAGE: &str = "Nova bootstrap frontend
+const USAGE: &str = "Nova bootstrap compiler
 
 Usage:
   nova check <file> [--message-format human|json]
   nova ast <file> [--message-format human|json]
   nova --help
 
-`check` validates UTF-8, tokens, and syntax in this Phase 1 build.
-It does not yet perform name resolution or type checking.";
+`check` validates UTF-8, tokens, syntax, lexical names, and bootstrap types.
+`ast` prints the parsed syntax tree after lexical and syntactic validation.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {
@@ -119,8 +120,22 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
         return Ok(1);
     }
 
-    if matches!(options.command, Command::Ast) {
-        writeln!(stdout, "{}", format_ast(&parsed.program))?;
+    match options.command {
+        Command::Check => {
+            let analyzed = analyze(&parsed.program);
+            if !analyzed.is_success() {
+                emit_diagnostics(
+                    &analyzed.diagnostics,
+                    &source,
+                    options.message_format,
+                    stderr,
+                )?;
+                return Ok(1);
+            }
+        }
+        Command::Ast => {
+            writeln!(stdout, "{}", format_ast(&parsed.program))?;
+        }
     }
     Ok(0)
 }

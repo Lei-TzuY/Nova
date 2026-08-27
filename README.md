@@ -8,22 +8,29 @@ algebraic data types, typed errors and effects, structured concurrency, and
 low-level control through narrowly classified `unsafe` capabilities.
 
 Those are design goals, not current claims. Nova is not production ready, does
-not yet execute programs, and does not yet implement type checking, ownership,
-effects, concurrency, native code generation, or memory-safety analysis.
+not yet execute programs, and does not yet implement ownership, effects,
+concurrency, native code generation, or memory-safety analysis.
 
 ## Current status
 
-The repository contains the Phase 0 constitution and the first executable
-Phase 1 frontend slice. The bootstrap toolchain is written in Rust and can:
+The repository contains the Phase 0 constitution, the executable Phase 1
+frontend, and the first Phase 2 semantic-core slice. The bootstrap toolchain is
+written in Rust and can:
 
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
 - parse functions, bindings, expressions, blocks, calls, and `if` expressions;
+- lower accepted syntax into a resolved, typed HIR;
+- resolve top-level functions, parameters, and lexical local bindings;
+- check bootstrap `Int`/`Bool` function signatures, local inference and
+  annotations, calls, operators, block tails, `if` branches, and returns;
 - emit structured, coded diagnostics rendered as human text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
 
-`nova check` currently means **lexical and syntactic validation only**. It does
-not imply that names resolve or that a program is well typed.
+`nova check` now performs lexical, syntactic, name-resolution, and bootstrap
+type validation. This is intentionally narrower than a complete Nova type
+system: numeric semantics, user-defined types, assignment, effects, ownership,
+modules, generics, and execution remain future work.
 
 The implemented syntax is intentionally small:
 
@@ -42,6 +49,27 @@ fn choose(flag: Bool, left: Int, right: Int) -> Int {
 See [the implemented grammar](docs/grammar.md) for the normative frontend
 subset and [the language constitution](docs/language-constitution.md) for
 decisions that extend beyond it.
+
+## Current semantic rules
+
+The Phase 2 bootstrap checker predeclares function signatures, so forward calls
+and recursion resolve deterministically. A local initializer is checked before
+its new binding enters scope, preventing accidental self-reference. Duplicate
+names in the same lexical scope are rejected; nested lexical blocks may shadow
+outer bindings in this slice. Function parameters and a function body's
+outermost bindings share one scope.
+
+Only `Int` and `Bool` are recognized surface types today. Arithmetic and ordered
+comparisons require `Int`; boolean operators require `Bool`; equality accepts
+matching `Int` or matching `Bool`; calls require a function value with matching
+arity and argument types. `if` conditions require `Bool`, its two branches must
+have compatible value types, explicit `return` expressions are checked against
+the function signature, and a function cannot fall through without a value.
+Internal HIR uses `()` and `!` only to model value-less and non-continuing
+control flow; neither is a surface type in the current grammar.
+
+These rules are bootstrap semantics, not a promise that Nova's broader type and
+shadowing policies are frozen.
 
 ## Build and use
 
@@ -68,8 +96,10 @@ nova check <file> [--message-format human|json]
 nova ast <file> [--message-format human|json]
 ```
 
-Exit status `0` means the requested frontend operation succeeded, `1` means
-the source or program was rejected, and `2` means the command line was invalid.
+Exit status `0` means the requested operation succeeded, `1` means the source
+or program was rejected, and `2` means the command line was invalid. `nova ast`
+intentionally stops after parsing, so it can inspect a syntactically valid AST
+even when `nova check` would reject that program semantically.
 
 ## Bootstrap architecture
 
@@ -78,18 +108,19 @@ source bytes
   -> nova-source        source identity, UTF-8 text, spans, locations
   -> nova-lexer         tokens and lexical diagnostics
   -> nova-parser        AST and syntactic diagnostics
+  -> nova-sema          typed HIR, lexical resolution, bootstrap type checking
   -> nova-cli           check/ast commands and diagnostic presentation
 
 nova-diagnostics        shared structured diagnostic model and renderers
 ```
 
 Crate boundaries follow semantic responsibilities rather than intended future
-compiler passes. Later work can add HIR, resolution, typing, effects, MIR, and
+compiler passes. Later work can deepen HIR, inference, effects, MIR, and
 backends without making the AST or CLI the owner of language semantics.
 
 ## Engineering policy
 
-- Unsupported constructs are errors; the frontend does not approximate them.
+- Unsupported constructs are errors; the compiler does not approximate them.
 - Every implemented semantic or syntactic rule requires deterministic tests.
 - Source positions are UTF-8 byte ranges internally and one-based line/column
   locations when rendered.
