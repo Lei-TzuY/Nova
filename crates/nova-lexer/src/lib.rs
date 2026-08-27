@@ -347,14 +347,12 @@ impl<'source> Lexer<'source> {
             return;
         }
 
-        let value = text.bytes().filter(|byte| *byte != b'_').try_fold(
-            0_i64,
-            |value, byte| {
-                value
-                    .checked_mul(10)?
-                    .checked_add(i64::from(byte - b'0'))
-            },
-        );
+        let value = text
+            .bytes()
+            .filter(|byte| *byte != b'_')
+            .try_fold(0_i64, |value, byte| {
+                value.checked_mul(10)?.checked_add(i64::from(byte - b'0'))
+            });
 
         if let Some(value) = value {
             self.tokens.push(Token {
@@ -368,7 +366,9 @@ impl<'source> Lexer<'source> {
                         self.span(start, self.offset),
                         "the current frontend accepts magnitudes up to 9223372036854775807",
                     )
-                    .with_note("integer widths and overflow semantics are provisional in Nova v0.1"),
+                    .with_note(
+                        "integer widths and overflow semantics are provisional in Nova v0.1",
+                    ),
             );
         }
     }
@@ -459,7 +459,10 @@ mod tests {
 
         assert_eq!(output.diagnostics.len(), 1);
         assert_eq!(output.diagnostics[0].code, "N1003");
-        assert_eq!(source.slice(output.diagnostics[0].labels[0].span), Some("/*"));
+        assert_eq!(
+            source.slice(output.diagnostics[0].labels[0].span),
+            Some("/*")
+        );
     }
 
     #[test]
@@ -475,10 +478,13 @@ mod tests {
 
         let overflow = lex(&source("9223372036854775808"));
         assert_eq!(overflow.diagnostics[0].code, "N1004");
-        assert_eq!(overflow.tokens, vec![super::Token {
-            kind: TokenKind::Eof,
-            span: source("9223372036854775808").eof_span(),
-        }]);
+        assert_eq!(
+            overflow.tokens,
+            vec![super::Token {
+                kind: TokenKind::Eof,
+                span: source("9223372036854775808").eof_span(),
+            }]
+        );
     }
 
     #[test]
@@ -487,14 +493,20 @@ mod tests {
         let output = lex(&source);
 
         assert_eq!(output.diagnostics[0].code, "N1001");
-        assert_eq!(source.slice(output.diagnostics[0].labels[0].span), Some("β"));
+        assert_eq!(
+            source.slice(output.diagnostics[0].labels[0].span),
+            Some("β")
+        );
     }
 
     #[test]
     fn handles_arbitrary_valid_utf8_without_panicking_or_losing_eof() {
         for text in ["", "\0", "🦀", "/*/**/*/", "&&&|||", "9__x", "}\n{;"] {
             let output = lex(&source(text));
-            assert_eq!(output.tokens.last().map(|token| token.kind), Some(TokenKind::Eof));
+            assert_eq!(
+                output.tokens.last().map(|token| token.kind),
+                Some(TokenKind::Eof)
+            );
         }
     }
 }

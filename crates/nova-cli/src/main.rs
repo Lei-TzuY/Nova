@@ -57,11 +57,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(
-    arguments: &[OsString],
-    stdout: &mut dyn Write,
-    stderr: &mut dyn Write,
-) -> io::Result<u8> {
+fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -> io::Result<u8> {
     let options = match parse_arguments(arguments) {
         Ok(ParsedArguments::Run(options)) => options,
         Ok(ParsedArguments::Help) => {
@@ -113,23 +109,13 @@ fn run(
     let source = SourceFile::new(SourceId::new(0), display_name, text);
     let lexed = lex(&source);
     if !lexed.is_success() {
-        emit_diagnostics(
-            &lexed.diagnostics,
-            &source,
-            options.message_format,
-            stderr,
-        )?;
+        emit_diagnostics(&lexed.diagnostics, &source, options.message_format, stderr)?;
         return Ok(1);
     }
 
     let parsed = parse(&source, &lexed.tokens);
     if !parsed.is_success() {
-        emit_diagnostics(
-            &parsed.diagnostics,
-            &source,
-            options.message_format,
-            stderr,
-        )?;
+        emit_diagnostics(&parsed.diagnostics, &source, options.message_format, stderr)?;
         return Ok(1);
     }
 
@@ -168,14 +154,10 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
                 return Err("`--message-format` requires `human` or `json`".to_owned());
             };
             message_format = parse_message_format(value)?;
-        } else if let Some(value) = text.and_then(|value| value.strip_prefix("--message-format="))
-        {
+        } else if let Some(value) = text.and_then(|value| value.strip_prefix("--message-format=")) {
             message_format = parse_message_format(value)?;
         } else if text.is_some_and(|value| value.starts_with('-')) {
-            return Err(format!(
-                "unknown option `{}`",
-                argument.to_string_lossy()
-            ));
+            return Err(format!("unknown option `{}`", argument.to_string_lossy()));
         } else if path.replace(PathBuf::from(argument)).is_some() {
             return Err("expected exactly one source file".to_owned());
         }
@@ -237,12 +219,8 @@ mod tests {
             "json",
         ]))
         .expect("valid arguments");
-        let joined = parse_arguments(&arguments(&[
-            "ast",
-            "--message-format=human",
-            "sample.nv",
-        ]))
-        .expect("valid arguments");
+        let joined = parse_arguments(&arguments(&["ast", "--message-format=human", "sample.nv"]))
+            .expect("valid arguments");
 
         assert!(matches!(
             spaced,

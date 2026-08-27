@@ -65,7 +65,10 @@ impl<'source> Parser<'source> {
                 break;
             }
         }
-        if !matches!(normalized.last().map(|token| token.kind), Some(TokenKind::Eof)) {
+        if !matches!(
+            normalized.last().map(|token| token.kind),
+            Some(TokenKind::Eof)
+        ) {
             normalized.push(Token {
                 kind: TokenKind::Eof,
                 span: source.eof_span(),
@@ -99,7 +102,10 @@ impl<'source> Parser<'source> {
                     Diagnostic::error("N2003", "expected a top-level function declaration")
                         .with_primary(
                             token.span,
-                            format!("found {}; top-level statements are not supported", token.kind),
+                            format!(
+                                "found {}; top-level statements are not supported",
+                                token.kind
+                            ),
                         ),
                 );
                 self.recover_top_level();
@@ -179,9 +185,7 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_block(&mut self) -> Option<Block> {
-        let opening = self
-            .expect(TokenKind::LeftBrace, "to start a block")?
-            .span;
+        let opening = self.expect(TokenKind::LeftBrace, "to start a block")?.span;
         let mut statements = Vec::new();
         let mut tail = None;
 
@@ -209,14 +213,14 @@ impl<'source> Parser<'source> {
                         } else {
                             let token = self.current();
                             self.diagnostics.push(
-                                Diagnostic::error(
-                                    "N2004",
-                                    "expected `;` or `}` after expression",
-                                )
-                                .with_primary(
-                                    token.span,
-                                    format!("found {} immediately after this expression", token.kind),
-                                ),
+                                Diagnostic::error("N2004", "expected `;` or `}` after expression")
+                                    .with_primary(
+                                        token.span,
+                                        format!(
+                                            "found {} immediately after this expression",
+                                            token.kind
+                                        ),
+                                    ),
                             );
                             None
                         }
@@ -499,8 +503,10 @@ impl<'source> Parser<'source> {
             if !self.depth_diagnostic_emitted {
                 let token = self.current();
                 self.diagnostics.push(
-                    Diagnostic::error("N2008", "expression nesting limit exceeded")
-                        .with_primary(token.span, "nested `else if` chain exceeds the parser budget"),
+                    Diagnostic::error("N2008", "expression nesting limit exceeded").with_primary(
+                        token.span,
+                        "nested `else if` chain exceeds the parser budget",
+                    ),
                 );
                 self.depth_diagnostic_emitted = true;
             }
@@ -523,9 +529,7 @@ impl<'source> Parser<'source> {
             TokenKind::Less => (BinaryOperator::Less, COMPARISON_BINDING_POWER),
             TokenKind::LessEqual => (BinaryOperator::LessEqual, COMPARISON_BINDING_POWER),
             TokenKind::Greater => (BinaryOperator::Greater, COMPARISON_BINDING_POWER),
-            TokenKind::GreaterEqual => {
-                (BinaryOperator::GreaterEqual, COMPARISON_BINDING_POWER)
-            }
+            TokenKind::GreaterEqual => (BinaryOperator::GreaterEqual, COMPARISON_BINDING_POWER),
             TokenKind::Plus => (BinaryOperator::Add, ADDITIVE_BINDING_POWER),
             TokenKind::Minus => (BinaryOperator::Subtract, ADDITIVE_BINDING_POWER),
             TokenKind::Star => (BinaryOperator::Multiply, MULTIPLICATIVE_BINDING_POWER),
@@ -703,9 +707,7 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
 
     #[test]
     fn applies_documented_precedence_and_left_associativity() {
-        let (_, parsed) = parse_text(
-            "fn f() -> Bool { 1 + 2 * 3 == 7 || false && true }",
-        );
+        let (_, parsed) = parse_text("fn f() -> Bool { 1 + 2 * 3 == 7 || false && true }");
         let tail = parsed.program.functions[0]
             .body
             .tail
@@ -755,16 +757,17 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
         let tail = function.body.tail.as_deref().expect("tail expression");
 
         assert_eq!(source.slice(function.name.span), Some("id"));
-        assert_eq!(source.slice(function.parameters[0].span), Some("value: Int"));
+        assert_eq!(
+            source.slice(function.parameters[0].span),
+            Some("value: Int")
+        );
         assert_eq!(source.slice(tail.span), Some("(value)"));
         assert_eq!(source.slice(function.span), Some(text));
     }
 
     #[test]
     fn recovers_to_a_later_top_level_function() {
-        let (_, parsed) = parse_text(
-            "fn broken() { 1 } fn good() -> Int { 2 }",
-        );
+        let (_, parsed) = parse_text("fn broken() { 1 } fn good() -> Int { 2 }");
 
         assert!(!parsed.diagnostics.is_empty());
         assert_eq!(parsed.program.functions.len(), 1);
@@ -775,7 +778,12 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
     fn requires_else_for_every_if_expression() {
         let (_, parsed) = parse_text("fn f() -> Int { if true { 1 } }");
 
-        assert!(parsed.diagnostics.iter().any(|diagnostic| diagnostic.code == "N2006"));
+        assert!(
+            parsed
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "N2006")
+        );
     }
 
     #[test]
@@ -787,8 +795,17 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
         );
         let (_, parsed) = parse_text(&nested);
 
-        assert!(parsed.diagnostics.iter().any(|diagnostic| diagnostic.code == "N2008"));
-        assert!(parsed.diagnostics.len() < 20, "recovery diagnostic cascade: {:?}", parsed.diagnostics);
+        assert!(
+            parsed
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "N2008")
+        );
+        assert!(
+            parsed.diagnostics.len() < 20,
+            "recovery diagnostic cascade: {:?}",
+            parsed.diagnostics
+        );
     }
 
     #[test]

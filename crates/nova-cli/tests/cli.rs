@@ -55,7 +55,10 @@ fn rejects_negative_fixtures_with_stable_codes() {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(!output.status.success(), "fixture {relative} unexpectedly passed");
+        assert!(
+            !output.status.success(),
+            "fixture {relative} unexpectedly passed"
+        );
         assert!(stderr.contains(code), "fixture {relative}: {stderr}");
     }
 }

@@ -163,13 +163,13 @@ impl SourceFile {
 
     /// Returns the source length in UTF-8 bytes.
     #[must_use]
-    pub const fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.text.len()
     }
 
     /// Reports whether this source is empty.
     #[must_use]
-    pub const fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.text.is_empty()
     }
 
@@ -276,7 +276,10 @@ mod tests {
         let right = Span::new(SourceId::new(1), 1, 4).expect("ordered span");
         let foreign = Span::empty(SourceId::new(2), 0);
 
-        assert_eq!(left.covering(right).map(|span| (span.start(), span.end())), Some((1, 5)));
+        assert_eq!(
+            left.covering(right).map(|span| (span.start(), span.end())),
+            Some((1, 5))
+        );
         assert_eq!(left.covering(foreign), None);
     }
 }

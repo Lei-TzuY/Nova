@@ -207,10 +207,7 @@ fn render_primary_human(output: &mut String, label: &Label, source: &SourceFile)
     output.push('\n');
     output.push_str(&" ".repeat(gutter_width));
     output.push_str(" | ");
-    if let Some(prefix) = source
-        .text()
-        .get(location.line_start..label.span.start())
-    {
+    if let Some(prefix) = source.text().get(location.line_start..label.span.start()) {
         for character in prefix.chars() {
             output.push(if character == '\t' { '\t' } else { ' ' });
         }
@@ -344,8 +341,7 @@ mod tests {
     fn json_output_escapes_user_control_characters() {
         let source = SourceFile::new(SourceId::new(0), "sample.nv", "x");
         let span = source.span(0, 1).expect("valid span");
-        let diagnostic =
-            Diagnostic::error("N\"1", "line\nnext").with_primary(span, "\\quoted\"");
+        let diagnostic = Diagnostic::error("N\"1", "line\nnext").with_primary(span, "\\quoted\"");
         let rendered = render_json(&diagnostic, &source);
 
         assert!(rendered.starts_with("{\"severity\":\"error\""));
