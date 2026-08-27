@@ -1,0 +1,5 @@
+fn main() -> Int {
+    var value = 1;
+    value = true;
+    value
+}
