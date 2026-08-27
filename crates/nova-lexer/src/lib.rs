@@ -416,7 +416,8 @@ mod tests {
 
     #[test]
     fn lexes_keywords_operators_and_exact_spans() {
-        let source = source("fn yes(x: Int) -> Bool { while x >= 1 && true { return false; } true }");
+        let source =
+            source("fn yes(x: Int) -> Bool { while x >= 1 && true { return false; } true }");
         let output = lex(&source);
         let kinds = output
             .tokens
