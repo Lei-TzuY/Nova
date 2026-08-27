@@ -89,6 +89,13 @@ pub enum StatementKind {
         /// Required initializer.
         initializer: Expression,
     },
+    /// Mutable binding declared with a type but initialized later.
+    UninitializedBinding {
+        /// Bound name.
+        name: Name,
+        /// Required explicit type annotation.
+        annotation: TypeRef,
+    },
     /// Assignment to a named binding.
     Assignment {
         /// Name selected as the assignment target.
