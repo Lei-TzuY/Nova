@@ -1,0 +1,9 @@
+record Pair {
+    left: Int,
+    right: Int,
+}
+
+fn main() -> Int {
+    let pair = new Pair { left: 40 };
+    pair.left
+}
