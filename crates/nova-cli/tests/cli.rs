@@ -23,6 +23,7 @@ fn accepts_positive_fixtures() {
         "valid/precedence.nv",
         "valid/assignment.nv",
         "valid/definite-assignment.nv",
+        "valid/while-loop.nv",
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
@@ -37,16 +38,18 @@ fn accepts_positive_fixtures() {
 
 #[test]
 fn run_command_executes_checked_program() {
-    let path = fixture("valid/basic.nv");
-    let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
+    for (relative, expected) in [("valid/basic.nv", "42\n"), ("valid/while-loop.nv", "5\n")] {
+        let path = fixture(relative);
+        let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
 
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "42\n");
-    assert!(output.stderr.is_empty());
+        assert!(
+            output.status.success(),
+            "fixture {relative}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+        assert!(output.stderr.is_empty());
+    }
 }
 
 #[test]
@@ -55,6 +58,7 @@ fn run_command_reports_runtime_failures() {
         ("runtime/overflow.nv", "N4002"),
         ("runtime/divide-by-zero.nv", "N4003"),
         ("runtime/invalid-main.nv", "N4001"),
+        ("runtime/nonterminating-loop.nv", "N4006"),
     ] {
         let path = fixture(relative);
         let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
@@ -116,6 +120,7 @@ fn rejects_negative_fixtures_with_stable_codes() {
         ("invalid/assignment-type-mismatch.nv", "N3004"),
         ("invalid/immutable-assignment.nv", "N3008"),
         ("invalid/uninitialized-read.nv", "N3009"),
+        ("invalid/loop-definite-assignment.nv", "N3009"),
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
