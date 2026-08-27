@@ -75,10 +75,10 @@ core language directions, not library conventions.
 **Provisional bootstrap decisions.** The current semantic core recognizes the
 surface type names `Int` and `Bool`, resolves explicitly typed function
 signatures, infers initialized local binding types, and checks the implemented
-operators, calls, branches, returns, assignments, and definite initialization.
-Accepted integer literal magnitude is currently `0..=2^63-1`; unary `-` is a
-separate expression, so the most-negative signed 64-bit value has no literal
-spelling in this subset.
+operators, calls, branches, loops, returns, assignments, and definite
+initialization. Accepted integer literal magnitude is currently `0..=2^63-1`;
+unary `-` is a separate expression, so the most-negative signed 64-bit value
+has no literal spelling in this subset.
 
 The bootstrap interpreter provisionally executes `Int` as signed 64-bit values
 with checked arithmetic. Arithmetic overflow, division by zero, and remainder
@@ -116,13 +116,22 @@ Function parameters and `let` bindings are immutable. Definite-initialization
 state is propagated through lexical blocks and merged across `if` branches. If
 both branches can continue, a binding is definitely initialized afterward only
 when both continuing paths initialize it; a branch that cannot continue because
-it returns does not constrain the surviving path. Chained assignment, arbitrary
-lvalues, fields, indexing, and general uninitialized storage remain unsupported.
+it returns does not constrain the surviving path.
 
-**Research.** Broader flow-sensitive facts, loops, pattern bindings, partial
-aggregate initialization, ownership interactions, and diagnostics for more
-complex control-flow graphs require implementation evidence before their rules
-are frozen.
+The bootstrap `while` form is a pre-test statement. Its condition executes
+before the loop can exit, while its body may execute zero times. Therefore
+initialization facts established while evaluating the condition may flow after
+the loop, but facts established only in the body cannot by themselves prove a
+binding initialized after the loop. This conservative rule prevents a zero-run
+loop from manufacturing definite-assignment evidence.
+
+Chained assignment, arbitrary lvalues, fields, indexing, and general
+uninitialized storage remain unsupported.
+
+**Research.** Broader flow-sensitive facts, `break`, `continue`, labelled loops,
+pattern bindings, partial aggregate initialization, ownership interactions, and
+diagnostics for more complex control-flow graphs require implementation evidence
+before their rules are frozen.
 
 ## 6. Names, modules, and packages
 
@@ -205,18 +214,20 @@ semantics.
 
 **Provisional bootstrap decisions.** `nova run` executes only after lexical,
 syntactic, name-resolution, type, and definite-assignment validation succeeds.
-The first interpreter consumes typed HIR directly and supports the implemented
-function, call, block, `if`, return, binding, assignment, Boolean, and integer
-subset. Evaluation order is left-to-right; `&&` and `||` short-circuit. The
-entry point is a zero-argument top-level `main` returning `Int` or `Bool`.
-Runtime failures use structured diagnostics and recursive execution is guarded
-by a finite call-depth limit. These choices provide an executable oracle for
-the current subset; HIR interpretation is not the intended final backend ABI.
+The interpreter consumes typed HIR directly and supports the implemented
+function, call, block, `if`, `while`, return, binding, assignment, Boolean, and
+integer subset. Evaluation order is left-to-right; `&&` and `||` short-circuit.
+The entry point is a zero-argument top-level `main` returning `Int` or `Bool`.
+Runtime failures use structured diagnostics. Recursive execution is guarded by
+a finite call-depth limit, and all statement/expression evaluation shares a
+finite step budget so nonterminating loops fail closed rather than intentionally
+hanging the host. These choices provide an executable oracle for the current
+subset; HIR interpretation is not the intended final backend ABI.
 
 **Research.** HIR and MIR forms, verification rules, optimization contracts,
 debug information, incremental compilation, monomorphization, backend
-selection, stable entry-point conventions, and cross-backend execution
-conformance remain open.
+selection, stable entry-point conventions, richer loop-control semantics, and
+cross-backend execution conformance remain open.
 
 ## 12. Diagnostics and tooling contracts
 
@@ -255,16 +266,19 @@ Every compiler and execution stage must uphold these constraints:
 4. No parser recovery loop may repeat without consuming input or terminating.
 5. Literal conversion is checked; bootstrap integer execution never wraps or
    truncates because of host build-profile behavior.
-6. Nesting and execution-depth limits fail with diagnostics before uncontrolled
-   recursion.
+6. Nesting, call-depth, and execution-step limits fail with diagnostics before
+   uncontrolled recursion or nonterminating bootstrap execution can consume the
+   host indefinitely.
 7. Iteration order that affects output is explicit and deterministic.
 8. An implemented grammar, semantic, or execution rule has positive and
    negative tests.
 9. A local read cannot observe an uninitialized binding; delayed initialization
    must be proven on every reachable continuing path before the read.
-10. Optimization must preserve specified behavior and later operate on verified
+10. Pre-test loop analysis must not treat body-only effects as facts that hold
+    after a loop which may execute zero times.
+11. Optimization must preserve specified behavior and later operate on verified
     IR rather than repair invalid earlier output.
-11. Roadmap documents distinguish implemented, provisional, and researched
+12. Roadmap documents distinguish implemented, provisional, and researched
     properties; benchmarks and safety claims require reproducible evidence.
 
 ## 15. Current unresolved research register
