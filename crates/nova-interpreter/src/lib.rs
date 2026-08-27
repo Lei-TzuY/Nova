@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 const MAX_CALL_DEPTH: usize = 256;
+const MAX_EXECUTION_STEPS: usize = 100_000;
 
 /// Runtime value produced by the bootstrap interpreter.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -39,7 +40,8 @@ impl fmt::Display for Value {
 ///
 /// Runtime failures are returned through the same structured diagnostic model used by
 /// earlier compiler phases. The bootstrap interpreter uses checked signed-64-bit
-/// integer arithmetic and never relies on build-profile overflow behavior.
+/// integer arithmetic and bounded execution, never relying on host build-profile
+/// overflow behavior or intentionally unbounded loops.
 pub fn execute(program: &Program) -> Result<Value, Diagnostic> {
     Interpreter::new(program).execute_main()
 }
@@ -54,6 +56,7 @@ enum Flow {
 struct Interpreter<'program> {
     program: &'program Program,
     call_depth: usize,
+    steps: usize,
 }
 
 impl<'program> Interpreter<'program> {
@@ -61,6 +64,7 @@ impl<'program> Interpreter<'program> {
         Self {
             program,
             call_depth: 0,
+            steps: 0,
         }
     }
 
@@ -173,6 +177,7 @@ impl<'program> Interpreter<'program> {
         statement: &Statement,
         frame: &mut Frame,
     ) -> Result<Option<Value>, Diagnostic> {
+        self.step(statement.span)?;
         match &statement.kind {
             StatementKind::Binding {
                 binding,
@@ -212,6 +217,25 @@ impl<'program> Interpreter<'program> {
                     Flow::Return(value) => Ok(Some(value)),
                 }
             }
+            StatementKind::While { condition, body } => loop {
+                let condition = match self.eval_expression(condition, frame)? {
+                    Flow::Value(value) => value,
+                    Flow::Return(value) => return Ok(Some(value)),
+                };
+                match condition {
+                    Value::Bool(false) => return Ok(None),
+                    Value::Bool(true) => match self.eval_block(body, frame)? {
+                        Flow::Value(_) => {}
+                        Flow::Return(value) => return Ok(Some(value)),
+                    },
+                    _ => {
+                        return Err(self.invariant(
+                            statement.span,
+                            "semantically accepted `while` condition was not Bool",
+                        ));
+                    }
+                }
+            },
             StatementKind::Return(expression) => match self.eval_expression(expression, frame)? {
                 Flow::Value(value) | Flow::Return(value) => Ok(Some(value)),
             },
@@ -229,6 +253,7 @@ impl<'program> Interpreter<'program> {
         expression: &Expression,
         frame: &mut Frame,
     ) -> Result<Flow, Diagnostic> {
+        self.step(expression.span)?;
         match &expression.kind {
             ExpressionKind::Integer(value) => Ok(Flow::Value(Value::Int(*value))),
             ExpressionKind::Boolean(value) => Ok(Flow::Value(Value::Bool(*value))),
@@ -433,6 +458,23 @@ impl<'program> Interpreter<'program> {
         }
     }
 
+    fn step(&mut self, span: nova_source::Span) -> Result<(), Diagnostic> {
+        if self.steps >= MAX_EXECUTION_STEPS {
+            return Err(
+                Diagnostic::error("N4006", "execution step limit exceeded")
+                    .with_primary(
+                        span,
+                        format!(
+                            "the bootstrap interpreter allows at most {MAX_EXECUTION_STEPS} evaluation steps"
+                        ),
+                    )
+                    .with_note("this guard stops nonterminating loops and runaway execution"),
+            );
+        }
+        self.steps += 1;
+        Ok(())
+    }
+
     fn overflow(&self, expression: &Expression) -> Diagnostic {
         Diagnostic::error("N4002", "integer arithmetic overflow").with_primary(
             expression.span,
@@ -484,6 +526,29 @@ mod tests {
         )
         .expect("program executes");
         assert_eq!(value, Value::Int(42));
+    }
+
+    #[test]
+    fn executes_while_loop_and_mutation() {
+        let value = execute_text(
+            "fn main() -> Int { var value = 0; while value < 5 { value = value + 1; } value }",
+        )
+        .expect("program executes");
+        assert_eq!(value, Value::Int(5));
+    }
+
+    #[test]
+    fn return_propagates_out_of_while_body() {
+        let value = execute_text("fn main() -> Int { while true { return 7; } 0 }")
+            .expect("program executes");
+        assert_eq!(value, Value::Int(7));
+    }
+
+    #[test]
+    fn bounds_nonterminating_loops() {
+        let error = execute_text("fn main() -> Int { while true {} 0 }")
+            .expect_err("nonterminating loop must fail closed");
+        assert_eq!(error.code, "N4006");
     }
 
     #[test]
