@@ -356,10 +356,7 @@ impl Analyzer {
                 let body = self.lower_block(body, return_type, true);
                 self.scopes = post_condition_scopes;
                 let diverges = condition.ty.is_never();
-                (
-                    StatementKind::While { condition, body },
-                    diverges,
-                )
+                (StatementKind::While { condition, body }, diverges)
             }
             ast::StatementKind::Return(expression) => {
                 let expression = self.lower_expression(expression, return_type);
@@ -1003,9 +1000,8 @@ mod tests {
 
     #[test]
     fn loop_condition_initialization_survives_the_pretest() {
-        let output = analyze_text(
-            "fn f() -> Int { var value: Int; while { value = 1; false } {} value }",
-        );
+        let output =
+            analyze_text("fn f() -> Int { var value: Int; while { value = 1; false } {} value }");
         assert!(output.is_success(), "{:?}", output.diagnostics);
     }
 
