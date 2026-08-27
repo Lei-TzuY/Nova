@@ -253,6 +253,15 @@ pub enum StatementKind {
     Expression(Expression),
 }
 
+/// One resolved record initializer, preserving source evaluation order.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordFieldValue {
+    /// Zero-based destination slot in the record's declaration order.
+    pub field_index: usize,
+    /// Typed initializer expression, evaluated in source order.
+    pub value: Expression,
+}
+
 /// A typed, resolved expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Expression {
@@ -275,12 +284,12 @@ pub enum ExpressionKind {
     Binding(BindingId),
     /// Reference to a top-level function.
     Function(FunctionId),
-    /// Nominal record construction. Fields are normalized to declaration order.
+    /// Nominal record construction with resolved destination slots.
     RecordLiteral {
         /// Resolved nominal record identity.
         record: RecordId,
-        /// Typed field values in declaration order.
-        fields: Vec<Expression>,
+        /// Typed field initializers in source evaluation order.
+        fields: Vec<RecordFieldValue>,
     },
     /// Resolved record field projection.
     FieldAccess {
