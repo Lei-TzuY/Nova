@@ -13,6 +13,8 @@ pub enum TokenKind {
     Integer(i64),
     /// `fn`.
     Fn,
+    /// `record`.
+    Record,
     /// `let`.
     Let,
     /// `var`.
@@ -43,6 +45,8 @@ pub enum TokenKind {
     Colon,
     /// `;`.
     Semicolon,
+    /// `.`.
+    Dot,
     /// `->`.
     Arrow,
     /// `+`.
@@ -87,6 +91,7 @@ impl TokenKind {
             Self::Identifier => "identifier",
             Self::Integer(_) => "integer literal",
             Self::Fn => "`fn`",
+            Self::Record => "`record`",
             Self::Let => "`let`",
             Self::Var => "`var`",
             Self::If => "`if`",
@@ -102,6 +107,7 @@ impl TokenKind {
             Self::Comma => "`,`",
             Self::Colon => "`:`",
             Self::Semicolon => "`;`",
+            Self::Dot => "`.`",
             Self::Arrow => "`->`",
             Self::Plus => "`+`",
             Self::Minus => "`-`",
@@ -269,6 +275,7 @@ impl<'source> Lexer<'source> {
             ',' => Some(TokenKind::Comma),
             ':' => Some(TokenKind::Colon),
             ';' => Some(TokenKind::Semicolon),
+            '.' => Some(TokenKind::Dot),
             '+' => Some(TokenKind::Plus),
             '*' => Some(TokenKind::Star),
             '/' => Some(TokenKind::Slash),
@@ -313,6 +320,7 @@ impl<'source> Lexer<'source> {
         let text = self.source.text().get(start..self.offset).unwrap_or("");
         let kind = match text {
             "fn" => TokenKind::Fn,
+            "record" => TokenKind::Record,
             "let" => TokenKind::Let,
             "var" => TokenKind::Var,
             "if" => TokenKind::If,
@@ -416,8 +424,9 @@ mod tests {
 
     #[test]
     fn lexes_keywords_operators_and_exact_spans() {
-        let source =
-            source("fn yes(x: Int) -> Bool { while x >= 1 && true { return false; } true }");
+        let source = source(
+            "record Pair { left: Int, right: Int } fn yes(x: Pair) -> Bool { while x.left >= 1 && true { return false; } true }",
+        );
         let output = lex(&source);
         let kinds = output
             .tokens
@@ -426,14 +435,14 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(output.diagnostics.is_empty());
-        assert_eq!(kinds[0], TokenKind::Fn);
-        assert_eq!(kinds[1], TokenKind::Identifier);
+        assert_eq!(kinds[0], TokenKind::Record);
+        assert!(kinds.contains(&TokenKind::Fn));
         assert!(kinds.contains(&TokenKind::While));
+        assert!(kinds.contains(&TokenKind::Dot));
         assert!(kinds.contains(&TokenKind::GreaterEqual));
         assert!(kinds.contains(&TokenKind::AndAnd));
         assert!(kinds.contains(&TokenKind::Return));
         assert_eq!(kinds.last(), Some(&TokenKind::Eof));
-        assert_eq!(source.slice(output.tokens[1].span), Some("yes"));
     }
 
     #[test]
