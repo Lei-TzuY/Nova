@@ -198,6 +198,8 @@ impl<'source> Parser<'source> {
                 self.parse_binding_statement()
             } else if self.at(TokenKind::Return) {
                 self.parse_return_statement()
+            } else if self.at(TokenKind::Identifier) && self.at_offset(1, TokenKind::Equal) {
+                self.parse_assignment_statement()
             } else {
                 match self.parse_expression() {
                     Some(expression) => {
@@ -273,6 +275,17 @@ impl<'source> Parser<'source> {
                 annotation,
                 initializer,
             },
+        })
+    }
+
+    fn parse_assignment_statement(&mut self) -> Option<Statement> {
+        let target = self.parse_name("as the assignment target")?;
+        self.expect(TokenKind::Equal, "after the assignment target")?;
+        let value = self.parse_expression()?;
+        let semicolon = self.expect(TokenKind::Semicolon, "after the assigned value")?;
+        Some(Statement {
+            span: self.cover(target.span, semicolon.span),
+            kind: StatementKind::Assignment { target, value },
         })
     }
 
@@ -614,7 +627,18 @@ impl<'source> Parser<'source> {
     }
 
     fn at(&self, expected: TokenKind) -> bool {
-        let actual = self.current().kind;
+        Self::token_kind_matches(self.current().kind, expected)
+    }
+
+    fn at_offset(&self, offset: usize, expected: TokenKind) -> bool {
+        let actual = self
+            .tokens
+            .get(self.position.saturating_add(offset))
+            .map_or(TokenKind::Eof, |token| token.kind);
+        Self::token_kind_matches(actual, expected)
+    }
+
+    fn token_kind_matches(actual: TokenKind, expected: TokenKind) -> bool {
         match (actual, expected) {
             (TokenKind::Integer(_), TokenKind::Integer(_)) => true,
             _ => actual == expected,
@@ -674,12 +698,13 @@ mod tests {
     }
 
     #[test]
-    fn parses_functions_bindings_calls_blocks_and_if_expressions() {
+    fn parses_functions_bindings_assignments_calls_blocks_and_if_expressions() {
         let text = r#"
 fn choose(flag: Bool, a: Int, b: Int) -> Int {
     var copy: Int = a;
     let selected = if flag { copy } else { b };
-    return selected + call(1, 2,);
+    copy = selected;
+    return copy + call(1, 2,);
 }
 "#;
         let (_, parsed) = parse_text(text);
@@ -690,7 +715,7 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
         assert_eq!(function.name.text, "choose");
         assert_eq!(function.parameters.len(), 3);
         assert_eq!(function.return_type.name.text, "Int");
-        assert_eq!(function.body.statements.len(), 3);
+        assert_eq!(function.body.statements.len(), 4);
         assert!(matches!(
             &function.body.statements[0].kind,
             StatementKind::Binding { mutable: true, .. }
@@ -701,6 +726,10 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
         ));
         assert!(matches!(
             &function.body.statements[2].kind,
+            StatementKind::Assignment { target, .. } if target.text == "copy"
+        ));
+        assert!(matches!(
+            &function.body.statements[3].kind,
             StatementKind::Return(_)
         ));
     }
