@@ -15,6 +15,8 @@ pub enum TokenKind {
     Fn,
     /// `record`.
     Record,
+    /// `new`.
+    New,
     /// `let`.
     Let,
     /// `var`.
@@ -92,6 +94,7 @@ impl TokenKind {
             Self::Integer(_) => "integer literal",
             Self::Fn => "`fn`",
             Self::Record => "`record`",
+            Self::New => "`new`",
             Self::Let => "`let`",
             Self::Var => "`var`",
             Self::If => "`if`",
@@ -321,6 +324,7 @@ impl<'source> Lexer<'source> {
         let kind = match text {
             "fn" => TokenKind::Fn,
             "record" => TokenKind::Record,
+            "new" => TokenKind::New,
             "let" => TokenKind::Let,
             "var" => TokenKind::Var,
             "if" => TokenKind::If,
@@ -425,7 +429,7 @@ mod tests {
     #[test]
     fn lexes_keywords_operators_and_exact_spans() {
         let source = source(
-            "record Pair { left: Int, right: Int } fn yes(x: Pair) -> Bool { while x.left >= 1 && true { return false; } true }",
+            "record Pair { left: Int, right: Int } fn yes(x: Pair) -> Bool { let p = new Pair { left: 1, right: 2 }; while p.left >= 1 && true { return false; } true }",
         );
         let output = lex(&source);
         let kinds = output
@@ -436,6 +440,7 @@ mod tests {
 
         assert!(output.diagnostics.is_empty());
         assert_eq!(kinds[0], TokenKind::Record);
+        assert!(kinds.contains(&TokenKind::New));
         assert!(kinds.contains(&TokenKind::Fn));
         assert!(kinds.contains(&TokenKind::While));
         assert!(kinds.contains(&TokenKind::Dot));
