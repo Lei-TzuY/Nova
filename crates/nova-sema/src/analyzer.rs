@@ -84,6 +84,7 @@ struct LocalSymbol {
     id: BindingId,
     ty: Type,
     mutable: bool,
+    initialized: bool,
     span: Span,
 }
 
@@ -168,7 +169,7 @@ impl Analyzer {
         let mut parameters = Vec::with_capacity(function.parameters.len());
         for (parameter, ty) in function.parameters.iter().zip(&signature.parameters) {
             let binding = self.new_binding(&parameter.name, ty.clone(), false);
-            self.insert_local(&binding);
+            self.insert_local(&binding, true);
             parameters.push(binding);
         }
 
@@ -276,7 +277,7 @@ impl Analyzer {
                 }
                 let binding_type = annotation_type.unwrap_or_else(|| initializer.ty.clone());
                 let binding = self.new_binding(name, binding_type, *mutable);
-                self.insert_local(&binding);
+                self.insert_local(&binding, true);
                 let diverges = initializer.ty.is_never();
                 (
                     StatementKind::Binding {
@@ -285,6 +286,12 @@ impl Analyzer {
                     },
                     diverges,
                 )
+            }
+            ast::StatementKind::UninitializedBinding { name, annotation } => {
+                let ty = self.resolve_type_ref(annotation);
+                let binding = self.new_binding(name, ty, true);
+                self.insert_local(&binding, false);
+                (StatementKind::UninitializedBinding(binding), false)
             }
             ast::StatementKind::Assignment { target, value } => {
                 let local = self.find_local(&target.text);
@@ -302,6 +309,13 @@ impl Analyzer {
                         );
                     }
                     self.require_type(&value.ty, &symbol.ty, value.span, "assigned value");
+                    if symbol.mutable
+                        && !value.ty.is_error()
+                        && !value.ty.is_never()
+                        && types_compatible(&value.ty, &symbol.ty)
+                    {
+                        self.mark_initialized(&target.text);
+                    }
                     Some(symbol.id)
                 } else if let Some(span) = function_span {
                     self.diagnostics.push(
@@ -416,11 +430,26 @@ impl Analyzer {
             } => {
                 let condition = self.lower_expression(condition, return_type);
                 self.require_type(&condition.ty, &Type::Bool, condition.span, "if condition");
+
+                let entry_scopes = self.scopes.clone();
                 let then_branch = self.lower_block(then_branch, return_type, true);
+                let then_scopes = self.scopes.clone();
+
+                self.scopes = entry_scopes.clone();
                 let else_branch = self.lower_expression(else_branch, return_type);
+                let else_scopes = self.scopes.clone();
+
                 let ty = if condition.ty.is_never() {
+                    self.scopes = entry_scopes;
                     Type::Never
                 } else {
+                    self.merge_branch_initialization(
+                        &entry_scopes,
+                        &then_scopes,
+                        then_branch.ty.is_never(),
+                        &else_scopes,
+                        else_branch.ty.is_never(),
+                    );
                     self.join_branch_types(
                         &then_branch.ty,
                         then_branch.span,
@@ -448,6 +477,17 @@ impl Analyzer {
 
     fn lower_name(&mut self, name: &ast::Name) -> (ExpressionKind, Type) {
         if let Some(symbol) = self.find_local(&name.text) {
+            if !symbol.initialized {
+                self.diagnostics.push(
+                    Diagnostic::error("N3009", "binding may be uninitialized")
+                        .with_primary(
+                            name.span,
+                            format!("`{}` is not definitely initialized on this path", name.text),
+                        )
+                        .with_secondary(symbol.span, "binding declared here"),
+                );
+                return (ExpressionKind::Binding(symbol.id), Type::Error);
+            }
             return (ExpressionKind::Binding(symbol.id), symbol.ty);
         }
         if let Some(symbol) = self.functions.get(&name.text) {
@@ -469,6 +509,47 @@ impl Analyzer {
             .iter()
             .rev()
             .find_map(|scope| scope.get(name).cloned())
+    }
+
+    fn mark_initialized(&mut self, name: &str) {
+        for scope in self.scopes.iter_mut().rev() {
+            if let Some(symbol) = scope.get_mut(name) {
+                symbol.initialized = true;
+                return;
+            }
+        }
+    }
+
+    fn merge_branch_initialization(
+        &mut self,
+        entry_scopes: &[BTreeMap<String, LocalSymbol>],
+        then_scopes: &[BTreeMap<String, LocalSymbol>],
+        then_never: bool,
+        else_scopes: &[BTreeMap<String, LocalSymbol>],
+        else_never: bool,
+    ) {
+        self.scopes = entry_scopes.to_vec();
+        for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
+            for (name, entry_symbol) in entry_scope {
+                let then_initialized = then_scopes
+                    .get(scope_index)
+                    .and_then(|scope| scope.get(name))
+                    .is_some_and(|symbol| symbol.initialized);
+                let else_initialized = else_scopes
+                    .get(scope_index)
+                    .and_then(|scope| scope.get(name))
+                    .is_some_and(|symbol| symbol.initialized);
+                let initialized = match (then_never, else_never) {
+                    (true, true) => entry_symbol.initialized,
+                    (true, false) => else_initialized,
+                    (false, true) => then_initialized,
+                    (false, false) => then_initialized && else_initialized,
+                };
+                if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
+                    symbol.initialized = initialized;
+                }
+            }
+        }
     }
 
     fn check_unary(
@@ -705,7 +786,7 @@ impl Analyzer {
         }
     }
 
-    fn insert_local(&mut self, binding: &hir::Binding) {
+    fn insert_local(&mut self, binding: &hir::Binding, initialized: bool) {
         let scope = self
             .scopes
             .last_mut()
@@ -727,6 +808,7 @@ impl Analyzer {
                 id: binding.id,
                 ty: binding.ty.clone(),
                 mutable: binding.mutable,
+                initialized,
                 span: binding.span,
             },
         );
@@ -824,6 +906,55 @@ mod tests {
             panic!("expected assignment statement");
         };
         assert_eq!(*target, Some(binding.id));
+    }
+
+    #[test]
+    fn permits_assignment_before_first_read() {
+        let output = analyze_text("fn f() -> Int { var value: Int; value = 3; value }");
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        assert!(matches!(
+            &output.program.functions[0].body.statements[0].kind,
+            StatementKind::UninitializedBinding(_)
+        ));
+    }
+
+    #[test]
+    fn rejects_read_before_definite_assignment() {
+        let output = analyze_text("fn f() -> Int { var value: Int; value }");
+        assert_eq!(codes(&output), vec!["N3009"]);
+    }
+
+    #[test]
+    fn merges_definite_assignment_across_if_branches() {
+        let output = analyze_text(
+            "fn f(flag: Bool) -> Int {\n\
+                 var value: Int;\n\
+                 if flag { value = 1; 0 } else { value = 2; 0 };\n\
+                 value\n\
+             }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+
+        let output = analyze_text(
+            "fn f(flag: Bool) -> Int {\n\
+                 var value: Int;\n\
+                 if flag { value = 1; 0 } else { 0 };\n\
+                 value\n\
+             }",
+        );
+        assert_eq!(codes(&output), vec!["N3009"]);
+    }
+
+    #[test]
+    fn ignores_noncontinuing_branch_when_merging_initialization() {
+        let output = analyze_text(
+            "fn f(flag: Bool) -> Int {\n\
+                 var value: Int;\n\
+                 if flag { return 1; } else { value = 2; 0 };\n\
+                 value\n\
+             }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
     }
 
     #[test]
