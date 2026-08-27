@@ -281,8 +281,10 @@ impl<'source> Parser<'source> {
 
         if mutable {
             if let Some(annotation) = annotation {
-                let semicolon =
-                    self.expect(TokenKind::Semicolon, "after the uninitialized mutable binding")?;
+                let semicolon = self.expect(
+                    TokenKind::Semicolon,
+                    "after the uninitialized mutable binding",
+                )?;
                 return Some(Statement {
                     span: self.cover(keyword.span, semicolon.span),
                     kind: StatementKind::UninitializedBinding { name, annotation },
