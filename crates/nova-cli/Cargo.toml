@@ -15,6 +15,7 @@ path = "src/main.rs"
 nova-diagnostics = { path = "../nova-diagnostics" }
 nova-lexer = { path = "../nova-lexer" }
 nova-parser = { path = "../nova-parser" }
+nova-sema = { path = "../nova-sema" }
 nova-source = { path = "../nova-source" }
 
 [lints]
