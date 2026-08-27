@@ -65,11 +65,15 @@ impl<'program> Interpreter<'program> {
     }
 
     fn execute_main(&mut self) -> Result<Value, Diagnostic> {
-        let Some(main) = self.program.functions.iter().find(|function| function.name == "main") else {
-            return Err(
-                Diagnostic::error("N4001", "missing entry point")
-                    .with_note("`nova run` requires a top-level `fn main() -> Int` or `fn main() -> Bool`"),
-            );
+        let Some(main) = self
+            .program
+            .functions
+            .iter()
+            .find(|function| function.name == "main")
+        else {
+            return Err(Diagnostic::error("N4001", "missing entry point").with_note(
+                "`nova run` requires a top-level `fn main() -> Int` or `fn main() -> Bool`",
+            ));
         };
         if !main.parameters.is_empty() {
             return Err(
@@ -83,7 +87,10 @@ impl<'program> Interpreter<'program> {
             return Err(
                 Diagnostic::error("N4001", "invalid entry point").with_primary(
                     main.span,
-                    format!("`main` cannot return {} in the bootstrap interpreter", main.return_type),
+                    format!(
+                        "`main` cannot return {} in the bootstrap interpreter",
+                        main.return_type
+                    ),
                 ),
             );
         }
@@ -98,7 +105,10 @@ impl<'program> Interpreter<'program> {
         let Some(function) = self.program.functions.get(function_id.index()).cloned() else {
             return Err(self.invariant(
                 self.program.span,
-                format!("resolved function id {} is outside the program", function_id.index()),
+                format!(
+                    "resolved function id {} is outside the program",
+                    function_id.index()
+                ),
             ));
         };
         if function.parameters.len() != arguments.len() {
@@ -135,7 +145,11 @@ impl<'program> Interpreter<'program> {
         result
     }
 
-    fn eval_function(&mut self, function: &Function, frame: &mut Frame) -> Result<Value, Diagnostic> {
+    fn eval_function(
+        &mut self,
+        function: &Function,
+        frame: &mut Frame,
+    ) -> Result<Value, Diagnostic> {
         match self.eval_block(&function.body, frame)? {
             Flow::Value(value) | Flow::Return(value) => Ok(value),
         }
@@ -186,7 +200,10 @@ impl<'program> Interpreter<'program> {
                         let Some(slot) = frame.get_mut(target) else {
                             return Err(self.invariant(
                                 statement.span,
-                                format!("assignment target {} is absent from the frame", target.index()),
+                                format!(
+                                    "assignment target {} is absent from the frame",
+                                    target.index()
+                                ),
                             ));
                         };
                         *slot = Some(value);
@@ -198,10 +215,12 @@ impl<'program> Interpreter<'program> {
             StatementKind::Return(expression) => match self.eval_expression(expression, frame)? {
                 Flow::Value(value) | Flow::Return(value) => Ok(Some(value)),
             },
-            StatementKind::Expression(expression) => match self.eval_expression(expression, frame)? {
-                Flow::Value(_) => Ok(None),
-                Flow::Return(value) => Ok(Some(value)),
-            },
+            StatementKind::Expression(expression) => {
+                match self.eval_expression(expression, frame)? {
+                    Flow::Value(_) => Ok(None),
+                    Flow::Return(value) => Ok(Some(value)),
+                }
+            }
         }
     }
 
@@ -217,13 +236,19 @@ impl<'program> Interpreter<'program> {
                 let Some(slot) = frame.get(binding) else {
                     return Err(self.invariant(
                         expression.span,
-                        format!("resolved binding {} is absent from the frame", binding.index()),
+                        format!(
+                            "resolved binding {} is absent from the frame",
+                            binding.index()
+                        ),
                     ));
                 };
                 let Some(value) = slot else {
                     return Err(self.invariant(
                         expression.span,
-                        format!("binding {} reached runtime before initialization", binding.index()),
+                        format!(
+                            "binding {} reached runtime before initialization",
+                            binding.index()
+                        ),
                     ));
                 };
                 Ok(Flow::Value(value.clone()))
@@ -359,10 +384,10 @@ impl<'program> Interpreter<'program> {
                 .map(Value::Int)
                 .ok_or_else(|| self.overflow(expression)),
             (BinaryOperator::Divide, Value::Int(_), Value::Int(0))
-            | (BinaryOperator::Remainder, Value::Int(_), Value::Int(0)) => Err(
-                Diagnostic::error("N4003", "division by zero")
-                    .with_primary(expression.span, "zero divisor is not executable"),
-            ),
+            | (BinaryOperator::Remainder, Value::Int(_), Value::Int(0)) => {
+                Err(Diagnostic::error("N4003", "division by zero")
+                    .with_primary(expression.span, "zero divisor is not executable"))
+            }
             (BinaryOperator::Divide, Value::Int(left), Value::Int(right)) => left
                 .checked_div(right)
                 .map(Value::Int)
@@ -463,8 +488,8 @@ mod tests {
 
     #[test]
     fn propagates_return_through_nested_expressions() {
-        let value = execute_text("fn main() -> Int { { return 7; }; 1 }")
-            .expect("program executes");
+        let value =
+            execute_text("fn main() -> Int { { return 7; }; 1 }").expect("program executes");
         assert_eq!(value, Value::Int(7));
     }
 
@@ -491,10 +516,7 @@ mod tests {
 
     #[test]
     fn rejects_zero_divisor() {
-        for text in [
-            "fn main() -> Int { 10 / 0 }",
-            "fn main() -> Int { 10 % 0 }",
-        ] {
+        for text in ["fn main() -> Int { 10 / 0 }", "fn main() -> Int { 10 % 0 }"] {
             let error = execute_text(text).expect_err("zero divisor must fail");
             assert_eq!(error.code, "N4003");
         }
