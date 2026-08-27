@@ -175,6 +175,13 @@ pub enum StatementKind {
         /// Typed initializer.
         initializer: Expression,
     },
+    /// Assignment to a resolved mutable local binding.
+    Assignment {
+        /// Resolved assignment target.
+        target: BindingId,
+        /// Typed replacement value.
+        value: Expression,
+    },
     /// Explicit function return.
     Return(Expression),
     /// Expression whose value is discarded.
