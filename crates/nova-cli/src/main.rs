@@ -1,4 +1,5 @@
 use nova_diagnostics::{Diagnostic, render_human_all, render_json_lines};
+use nova_interpreter::execute;
 use nova_lexer::lex;
 use nova_parser::{format_ast, parse};
 use nova_sema::analyze;
@@ -14,15 +15,18 @@ const USAGE: &str = "Nova bootstrap compiler
 
 Usage:
   nova check <file> [--message-format human|json]
+  nova run <file> [--message-format human|json]
   nova ast <file> [--message-format human|json]
   nova --help
 
-`check` validates UTF-8, tokens, syntax, lexical names, and bootstrap types.
+`check` validates UTF-8, tokens, syntax, names, types, and definite assignment.
+`run` performs the same checks and executes zero-argument `main` in the bootstrap interpreter.
 `ast` prints the parsed syntax tree after lexical and syntactic validation.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {
     Check,
+    Run,
     Ast,
 }
 
@@ -120,21 +124,34 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
         return Ok(1);
     }
 
-    match options.command {
-        Command::Check => {
-            let analyzed = analyze(&parsed.program);
-            if !analyzed.is_success() {
+    if matches!(options.command, Command::Ast) {
+        writeln!(stdout, "{}", format_ast(&parsed.program))?;
+        return Ok(0);
+    }
+
+    let analyzed = analyze(&parsed.program);
+    if !analyzed.is_success() {
+        emit_diagnostics(
+            &analyzed.diagnostics,
+            &source,
+            options.message_format,
+            stderr,
+        )?;
+        return Ok(1);
+    }
+
+    if matches!(options.command, Command::Run) {
+        match execute(&analyzed.program) {
+            Ok(value) => writeln!(stdout, "{value}")?,
+            Err(diagnostic) => {
                 emit_diagnostics(
-                    &analyzed.diagnostics,
+                    std::slice::from_ref(&diagnostic),
                     &source,
                     options.message_format,
                     stderr,
                 )?;
                 return Ok(1);
             }
-        }
-        Command::Ast => {
-            writeln!(stdout, "{}", format_ast(&parsed.program))?;
         }
     }
     Ok(0)
@@ -153,6 +170,7 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
 
     let command = match first {
         "check" => Command::Check,
+        "run" => Command::Run,
         "ast" => Command::Ast,
         unknown => return Err(format!("unknown command `{unknown}`")),
     };
@@ -226,9 +244,9 @@ mod tests {
     }
 
     #[test]
-    fn parses_both_message_format_spellings() {
+    fn parses_commands_and_both_message_format_spellings() {
         let spaced = parse_arguments(&arguments(&[
-            "check",
+            "run",
             "sample.nv",
             "--message-format",
             "json",
@@ -240,7 +258,7 @@ mod tests {
         assert!(matches!(
             spaced,
             ParsedArguments::Run(Options {
-                command: Command::Check,
+                command: Command::Run,
                 path,
                 message_format: MessageFormat::Json,
             }) if path.as_path() == Path::new("sample.nv")
@@ -260,7 +278,7 @@ mod tests {
         for values in [
             vec![],
             vec!["check"],
-            vec!["run", "x.nv"],
+            vec!["execute", "x.nv"],
             vec!["check", "a.nv", "b.nv"],
             vec!["check", "x.nv", "--message-format", "xml"],
         ] {
