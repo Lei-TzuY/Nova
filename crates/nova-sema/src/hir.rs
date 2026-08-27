@@ -175,6 +175,8 @@ pub enum StatementKind {
         /// Typed initializer.
         initializer: Expression,
     },
+    /// Mutable binding declared before its first assignment.
+    UninitializedBinding(Binding),
     /// Assignment to a named binding.
     Assignment {
         /// Resolved assignment target, or `None` for an already-diagnosed target.
