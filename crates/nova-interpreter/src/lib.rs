@@ -3,8 +3,8 @@
 use nova_diagnostics::Diagnostic;
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::hir::{
-    BindingId, Block, Expression, ExpressionKind, Function, FunctionId, Program, Statement,
-    StatementKind, Type,
+    BindingId, Block, Expression, ExpressionKind, Function, FunctionId, Program, RecordId,
+    Statement, StatementKind, Type,
 };
 use std::collections::BTreeMap;
 use std::fmt;
@@ -19,6 +19,13 @@ pub enum Value {
     Int(i64),
     /// Boolean value.
     Bool(bool),
+    /// Nominal record value stored in declaration-order slots.
+    Record {
+        /// Stable nominal record identity.
+        record: RecordId,
+        /// Field values in declaration order.
+        fields: Vec<Value>,
+    },
     /// First-class reference to a top-level function.
     Function(FunctionId),
     /// Internal value for a block with no tail expression.
@@ -30,6 +37,7 @@ impl fmt::Display for Value {
         match self {
             Self::Int(value) => write!(formatter, "{value}"),
             Self::Bool(value) => write!(formatter, "{value}"),
+            Self::Record { record, .. } => write!(formatter, "<record:{}>", record.index()),
             Self::Function(id) => write!(formatter, "<function:{}>", id.index()),
             Self::Unit => formatter.write_str("()"),
         }
@@ -279,6 +287,99 @@ impl<'program> Interpreter<'program> {
                 Ok(Flow::Value(value.clone()))
             }
             ExpressionKind::Function(function) => Ok(Flow::Value(Value::Function(*function))),
+            ExpressionKind::RecordLiteral { record, fields } => {
+                let Some(definition) = self.program.records.get(record.index()) else {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!("resolved record id {} is outside the program", record.index()),
+                    ));
+                };
+                if definition.id != *record {
+                    return Err(self.invariant(
+                        expression.span,
+                        "record declaration index does not match its resolved identity",
+                    ));
+                }
+
+                let mut slots = vec![None; definition.fields.len()];
+                for field in fields {
+                    let value = match self.eval_expression(&field.value, frame)? {
+                        Flow::Value(value) => value,
+                        Flow::Return(value) => return Ok(Flow::Return(value)),
+                    };
+                    let Some(slot) = slots.get_mut(field.field_index) else {
+                        return Err(self.invariant(
+                            expression.span,
+                            format!(
+                                "record initializer targets field slot {} outside record `{}`",
+                                field.field_index, definition.name
+                            ),
+                        ));
+                    };
+                    if slot.is_some() {
+                        return Err(self.invariant(
+                            expression.span,
+                            format!(
+                                "record initializer targets field slot {} more than once",
+                                field.field_index
+                            ),
+                        ));
+                    }
+                    *slot = Some(value);
+                }
+
+                let mut values = Vec::with_capacity(slots.len());
+                for (index, slot) in slots.into_iter().enumerate() {
+                    let Some(value) = slot else {
+                        return Err(self.invariant(
+                            expression.span,
+                            format!("record field slot {index} was not initialized"),
+                        ));
+                    };
+                    values.push(value);
+                }
+                Ok(Flow::Value(Value::Record {
+                    record: *record,
+                    fields: values,
+                }))
+            }
+            ExpressionKind::FieldAccess {
+                base,
+                record,
+                field_index,
+            } => {
+                let base = match self.eval_expression(base, frame)? {
+                    Flow::Value(value) => value,
+                    Flow::Return(value) => return Ok(Flow::Return(value)),
+                };
+                let Value::Record {
+                    record: actual,
+                    fields,
+                } = base
+                else {
+                    return Err(self.invariant(
+                        expression.span,
+                        "semantically accepted field access did not evaluate to a record",
+                    ));
+                };
+                if actual != *record {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!(
+                            "field access expected record {}, found record {}",
+                            record.index(),
+                            actual.index()
+                        ),
+                    ));
+                }
+                let Some(value) = fields.get(*field_index).cloned() else {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!("field slot {field_index} is outside the runtime record"),
+                    ));
+                };
+                Ok(Flow::Value(value))
+            }
             ExpressionKind::Unary { operator, operand } => {
                 let operand = match self.eval_expression(operand, frame)? {
                     Flow::Value(value) => value,
@@ -505,6 +606,35 @@ mod tests {
         let analyzed = analyze(&parsed.program);
         assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
         execute(&analyzed.program)
+    }
+
+    #[test]
+    fn executes_records_projection_and_function_passing() {
+        let value = execute_text(
+            "record Pair { left: Int, right: Int }\n\
+             fn sum(pair: Pair) -> Int { pair.left + pair.right }\n\
+             fn main() -> Int { sum(new Pair { right: 2, left: 40 }) }",
+        )
+        .expect("program executes");
+        assert_eq!(value, Value::Int(42));
+    }
+
+    #[test]
+    fn record_initializers_preserve_source_evaluation_order() {
+        let value = execute_text(
+            "record Pair { left: Int, right: Int }\n\
+             fn main() -> Int {\n\
+                 var state = 0;\n\
+                 let pair = new Pair {\n\
+                     right: { state = state * 10 + 2; state },\n\
+                     left: { state = state * 10 + 1; state },\n\
+                 };\n\
+                 pair.left;\n\
+                 state\n\
+             }",
+        )
+        .expect("program executes");
+        assert_eq!(value, Value::Int(21));
     }
 
     #[test]
