@@ -841,9 +841,7 @@ mod tests {
 
     #[test]
     fn rejects_unknown_and_function_assignment_targets() {
-        let output = analyze_text(
-            "fn f() -> Int { missing = 1; f = 2; 0 }",
-        );
+        let output = analyze_text("fn f() -> Int { missing = 1; f = 2; 0 }");
         assert_eq!(codes(&output), vec!["N3003", "N3008"]);
     }
 
