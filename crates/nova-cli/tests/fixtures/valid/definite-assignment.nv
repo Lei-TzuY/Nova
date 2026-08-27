@@ -1,0 +1,5 @@
+fn main(flag: Bool) -> Int {
+    var value: Int;
+    if flag { value = 1; 0 } else { value = 2; 0 };
+    value
+}
