@@ -5,9 +5,33 @@ use nova_source::Span;
 /// A complete source file.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Program {
-    /// Top-level functions in source order.
+    /// Top-level record declarations in source order among records.
+    pub records: Vec<Record>,
+    /// Top-level functions in source order among functions.
     pub functions: Vec<Function>,
     /// Range covering the complete source file.
+    pub span: Span,
+}
+
+/// A top-level nominal record declaration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Record {
+    /// Declared record name.
+    pub name: Name,
+    /// Fields in declaration order.
+    pub fields: Vec<RecordField>,
+    /// Range from `record` through the closing brace.
+    pub span: Span,
+}
+
+/// One record field declaration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordField {
+    /// Field name.
+    pub name: Name,
+    /// Explicit field type.
+    pub ty: TypeRef,
+    /// Range covering the field name, colon, and type.
     pub span: Span,
 }
 
@@ -116,6 +140,17 @@ pub enum StatementKind {
     Expression(Expression),
 }
 
+/// One named initializer in a record literal.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordLiteralField {
+    /// Field name written by the caller.
+    pub name: Name,
+    /// Initializer expression.
+    pub value: Expression,
+    /// Complete `name: expression` range.
+    pub span: Span,
+}
+
 /// A parsed expression and its complete source range.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Expression {
@@ -134,6 +169,20 @@ pub enum ExpressionKind {
     Boolean(bool),
     /// Unresolved name reference.
     Name(Name),
+    /// Nominal record construction with named fields.
+    RecordLiteral {
+        /// Record type name.
+        name: Name,
+        /// Written fields in source order.
+        fields: Vec<RecordLiteralField>,
+    },
+    /// Field projection from a record value.
+    FieldAccess {
+        /// Base expression.
+        base: Box<Expression>,
+        /// Selected field name.
+        field: Name,
+    },
     /// Prefix operation.
     Unary {
         /// Prefix operator.
