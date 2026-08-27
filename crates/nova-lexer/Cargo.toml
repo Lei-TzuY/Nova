@@ -1,0 +1,15 @@
+[package]
+name = "nova-lexer"
+description = "Fail-closed lexer for the implemented Nova frontend subset"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+nova-diagnostics = { path = "../nova-diagnostics" }
+nova-source = { path = "../nova-source" }
+
+[lints]
+workspace = true

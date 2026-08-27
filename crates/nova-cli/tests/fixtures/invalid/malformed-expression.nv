@@ -1,0 +1,4 @@
+fn main() -> Int {
+    let result = 1 + ;
+    result
+}

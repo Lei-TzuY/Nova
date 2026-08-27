@@ -1,0 +1,13 @@
+fn max(a: Int, b: Int) -> Int {
+    if a > b {
+        a
+    } else {
+        b
+    }
+}
+
+fn main() -> Int {
+    let base = 40;
+    var adjustment: Int = 2;
+    max(base + adjustment, 0)
+}
