@@ -72,12 +72,14 @@ are represented explicitly; there is no implicit null inhabitant of every
 reference-like type. Algebraic data types and exhaustive pattern matching are
 core language directions, not library conventions.
 
-**Provisional bootstrap decisions.** `Int` and `Bool` names appear in examples,
-but the Phase 1 frontend only parses type names and performs no type checking.
-Accepted integer literal magnitude is currently `0..=2^63-1`; unary `-` is a
-separate expression, so the most-negative signed 64-bit value has no literal
-spelling in this subset. Numeric widths, inference defaults, conversions, and
-overflow behavior are not yet language semantics.
+**Provisional bootstrap decisions.** The current semantic core recognizes the
+surface type names `Int` and `Bool`, resolves explicitly typed function
+signatures, infers initialized local binding types, and checks the implemented
+operators, calls, branches, returns, and assignments. Accepted integer literal
+magnitude is currently `0..=2^63-1`; unary `-` is a separate expression, so the
+most-negative signed 64-bit value has no literal spelling in this subset.
+Numeric widths, inference defaults beyond the implemented local cases,
+conversions, and overflow behavior are not yet language semantics.
 
 **Research.** The project must decide, with implementation evidence:
 
@@ -94,9 +96,13 @@ must not spread invisibly through an object graph. Shadowing and definite
 assignment rules will be specified before semantic checking is declared
 complete.
 
-**Provisional.** The Phase 1 grammar requires every `let` or `var` to have an
-initializer and allows an optional type annotation. Assignment is deliberately
-not part of the first subset.
+**Provisional bootstrap decisions.** Every `let` or `var` currently requires an
+initializer and may include a type annotation. The implemented assignment form
+is deliberately narrow: `identifier = expression;` is a statement rather than
+an expression, its target must resolve to a lexical `var`, and the replacement
+value must preserve the binding's established type. Function parameters and
+`let` bindings are immutable. Chained assignment, arbitrary lvalues, fields,
+indexing, and uninitialized declarations remain unsupported.
 
 ## 6. Names, modules, and packages
 
@@ -119,7 +125,8 @@ violated internal invariants.
 
 **Research.** Effect polymorphism, effect-row representation, cancellation,
 panic semantics, and the interaction of effects with ABI boundaries require
-prototypes before syntax is selected. Phase 1 contains no effect syntax.
+prototypes before syntax is selected. The bootstrap subset contains no effect
+syntax.
 
 ## 8. Memory and resource model
 
@@ -143,7 +150,8 @@ must share the same observable language semantics.
 
 **Research.** Task ownership, executor abstraction, cancellation safety,
 structured parallelism, `Send`-like constraints, shared mutable state, and
-blocking interoperability remain open. Phase 1 contains no concurrency syntax.
+blocking interoperability remain open. The bootstrap subset contains no
+concurrency syntax.
 
 ## 10. Unsafe capabilities and interoperability
 
@@ -185,9 +193,10 @@ second. Stable diagnostic codes, exact source spans, primary and secondary
 labels, notes, and machine-readable output are required directions. Recovery
 diagnostics must be deterministic for identical input and compiler version.
 
-**Provisional.** Phase 1 uses half-open UTF-8 byte spans and exposes human and
-JSON Lines rendering. Diagnostic code meaning is documented by tests but codes
-are not yet covered by the language compatibility promise.
+**Provisional bootstrap decisions.** The current compiler uses half-open UTF-8
+byte spans and exposes human and JSON Lines rendering across lexical, syntactic,
+and semantic diagnostics. Diagnostic code meaning is documented by tests but
+codes are not yet covered by the language compatibility promise.
 
 Semantic introspection for editors and AI systems must ultimately expose
 resolved symbols, types, effects, ownership facts, and transformations through
@@ -234,4 +243,5 @@ The highest-impact unresolved questions are:
 - deterministic, incremental, reproducible package builds; and
 - versioned semantic-introspection schemas.
 
-These questions intentionally have no surface syntax in the initial frontend.
+These questions intentionally have no surface syntax in the current bootstrap
+subset.

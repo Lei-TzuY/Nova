@@ -1,6 +1,6 @@
 # Nova v0.1 Implemented Frontend Grammar
 
-Status: **normative for the syntax accepted by the Phase 1 frontend**
+Status: **normative for the syntax accepted by the bootstrap frontend**
 
 This document describes only implemented syntax. It does not reserve syntax for
 planned ownership, effects, concurrency, generics, macros, modules, FFI, or
@@ -42,10 +42,12 @@ type_name           = identifier ;
 
 block               = "{" , { statement } , [ expression ] , "}" ;
 statement           = binding_statement
+                    | assignment_statement
                     | return_statement
                     | expression_statement ;
 binding_statement   = ("let" | "var") , identifier ,
                       [ ":" , type_name ] , "=" , expression , ";" ;
+assignment_statement = identifier , "=" , expression , ";" ;
 return_statement    = "return" , expression , ";" ;
 expression_statement = expression , ";" ;
 
@@ -71,8 +73,14 @@ if_expression       = "if" , expression , block , "else" ,
 ```
 
 A block may end in one expression without a semicolon; that expression is its
-tail value. Any earlier expression must end in `;`. Bindings and returns always
-end in `;`. Top-level statements are not accepted.
+tail value. Any earlier expression must end in `;`. Bindings, assignments, and
+returns always end in `;`. Top-level statements are not accepted.
+
+Assignment is intentionally a statement, not an expression. Its target is one
+plain identifier, so chained assignment and assignment inside larger
+expressions are not accepted by this grammar. Semantic checking further
+requires the target to resolve to a mutable `var` binding and the assigned value
+to match that binding's type.
 
 An `if` is an expression and therefore always has an `else` branch in this
 subset. `else if` is represented by the recursive `if_expression` production.
@@ -99,6 +107,6 @@ limit, not a promise that deeply nested source will remain portable unchanged.
 ## Deliberate limitations
 
 The implemented grammar has no strings, floating-point literals, arrays,
-records, enums, pattern matching, assignment, loops, methods, modules, imports,
-generics, traits, effects, async syntax, ownership syntax, unsafe blocks, or
-attributes. Encountering such syntax is an error, not an approximation.
+records, enums, pattern matching, loops, methods, modules, imports, generics,
+traits, effects, async syntax, ownership syntax, unsafe blocks, or attributes.
+Encountering such syntax is an error, not an approximation.

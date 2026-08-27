@@ -14,29 +14,32 @@ concurrency, native code generation, or memory-safety analysis.
 ## Current status
 
 The repository contains the Phase 0 constitution, the executable Phase 1
-frontend, and the first Phase 2 semantic-core slice. The bootstrap toolchain is
+frontend, and early Phase 2 semantic-core slices. The bootstrap toolchain is
 written in Rust and can:
 
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
-- parse functions, bindings, expressions, blocks, calls, and `if` expressions;
+- parse functions, bindings, narrow assignments, expressions, blocks, calls,
+  and `if` expressions;
 - lower accepted syntax into a resolved, typed HIR;
 - resolve top-level functions, parameters, and lexical local bindings;
 - check bootstrap `Int`/`Bool` function signatures, local inference and
-  annotations, calls, operators, block tails, `if` branches, and returns;
+  annotations, calls, operators, block tails, `if` branches, returns, and
+  assignment mutability/type constraints;
 - emit structured, coded diagnostics rendered as human text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
 
-`nova check` now performs lexical, syntactic, name-resolution, and bootstrap
-type validation. This is intentionally narrower than a complete Nova type
-system: numeric semantics, user-defined types, assignment, effects, ownership,
-modules, generics, and execution remain future work.
+`nova check` performs lexical, syntactic, name-resolution, and bootstrap type
+validation. This is intentionally narrower than a complete Nova type system:
+numeric semantics, user-defined types, effects, ownership, modules, generics,
+and execution remain future work.
 
 The implemented syntax is intentionally small:
 
 ```nova
 fn choose(flag: Bool, left: Int, right: Int) -> Int {
-    let selected = if flag {
+    var selected = left;
+    selected = if flag {
         left
     } else {
         right
@@ -59,6 +62,13 @@ names in the same lexical scope are rejected; nested lexical blocks may shadow
 outer bindings in this slice. Function parameters and a function body's
 outermost bindings share one scope.
 
+`let` bindings and function parameters are immutable. `var` bindings may be
+assigned with the narrow statement form `name = expression;`. The target must
+resolve to a lexical `var`; functions, unknown names, `let` bindings, and
+parameters are rejected as assignment targets. The replacement value must keep
+the binding's established type. Assignment is not an expression and therefore
+cannot be chained or embedded in another expression.
+
 Only `Int` and `Bool` are recognized surface types today. Arithmetic and ordered
 comparisons require `Int`; boolean operators require `Bool`; equality accepts
 matching `Int` or matching `Bool`; calls require a function value with matching
@@ -68,8 +78,8 @@ the function signature, and a function cannot fall through without a value.
 Internal HIR uses `()` and `!` only to model value-less and non-continuing
 control flow; neither is a surface type in the current grammar.
 
-These rules are bootstrap semantics, not a promise that Nova's broader type and
-shadowing policies are frozen.
+These rules are bootstrap semantics, not a promise that Nova's broader type,
+mutation, and shadowing policies are frozen.
 
 ## Build and use
 

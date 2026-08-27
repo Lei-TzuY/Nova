@@ -89,6 +89,13 @@ pub enum StatementKind {
         /// Required initializer.
         initializer: Expression,
     },
+    /// Assignment to a named binding.
+    Assignment {
+        /// Name selected as the assignment target.
+        target: Name,
+        /// New value expression.
+        value: Expression,
+    },
     /// Explicit function return.
     Return(Expression),
     /// Expression whose value is discarded by a semicolon.
