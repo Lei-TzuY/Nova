@@ -36,6 +36,50 @@ fn accepts_positive_fixtures() {
 }
 
 #[test]
+fn run_command_executes_checked_program() {
+    let path = fixture("valid/basic.nv");
+    let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "42\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn run_command_reports_runtime_failures() {
+    for (relative, code) in [
+        ("runtime/overflow.nv", "N4002"),
+        ("runtime/divide-by-zero.nv", "N4003"),
+        ("runtime/invalid-main.nv", "N4001"),
+    ] {
+        let path = fixture(relative);
+        let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success(),
+            "fixture {relative} unexpectedly passed"
+        );
+        assert!(stderr.contains(code), "fixture {relative}: {stderr}");
+        assert!(output.stdout.is_empty());
+    }
+
+    let missing_main = fixture("runtime/missing-main.nv");
+    let output = nova(&[
+        "run",
+        missing_main.to_str().expect("fixture path is UTF-8"),
+        "--message-format=json",
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    assert!(stderr.contains("\"code\":\"N4001\""), "{stderr}");
+    assert!(output.stdout.is_empty());
+}
+
+#[test]
 fn ast_command_prints_a_span_preserving_tree() {
     let path = fixture("valid/basic.nv");
     let output = nova(&["ast", path.to_str().expect("fixture path is UTF-8")]);

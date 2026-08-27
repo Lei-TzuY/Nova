@@ -1,7 +1,7 @@
 # Nova Language Constitution
 
 Status: **design constitution for Nova v0.1**
-Last revised: 2026-08-27
+Last revised: 2026-08-28
 
 This document records durable design constraints for Nova. It is not a claim
 that every described property has been implemented, and it is not a substitute
@@ -78,9 +78,14 @@ signatures, infers initialized local binding types, and checks the implemented
 operators, calls, branches, returns, assignments, and definite initialization.
 Accepted integer literal magnitude is currently `0..=2^63-1`; unary `-` is a
 separate expression, so the most-negative signed 64-bit value has no literal
-spelling in this subset. Numeric widths, inference defaults beyond the
-implemented local cases, conversions, and overflow behavior are not yet
-language semantics.
+spelling in this subset.
+
+The bootstrap interpreter provisionally executes `Int` as signed 64-bit values
+with checked arithmetic. Arithmetic overflow, division by zero, and remainder
+by zero fail with structured runtime diagnostics; execution never inherits
+host debug/release overflow behavior. This is implementation evidence for the
+numeric design, not yet a stable language-wide promise about numeric widths,
+defaulting, conversions, or overflow policy for future backends.
 
 **Research.** The project must decide, with implementation evidence:
 
@@ -182,7 +187,7 @@ semantics the default Nova semantics.
 **Research.** Capability composition, trusted intrinsics, provenance, variadic
 calls, callbacks, unwinding, and bindgen policy require dedicated design work.
 
-## 11. Compilation model and shared IR
+## 11. Compilation and execution model
 
 **Decided.** The intended compiler pipeline is:
 
@@ -192,14 +197,26 @@ Source -> tokens -> AST -> HIR -> resolution -> type/effect inference
 ```
 
 The exact pass boundaries may change, but surface parsing must not become the
-owner of type, effect, or target semantics. Native, interactive, WebAssembly,
-and GPU execution must eventually consume a well-defined shared IR and agree on
-observable language behavior. Target-specific restrictions must be diagnosed,
-not silently translated into different semantics.
+owner of type, effect, execution, or target semantics. Native, interactive,
+WebAssembly, and GPU execution must eventually consume well-defined shared
+semantic contracts and agree on observable language behavior. Target-specific
+restrictions must be diagnosed, not silently translated into different
+semantics.
+
+**Provisional bootstrap decisions.** `nova run` executes only after lexical,
+syntactic, name-resolution, type, and definite-assignment validation succeeds.
+The first interpreter consumes typed HIR directly and supports the implemented
+function, call, block, `if`, return, binding, assignment, Boolean, and integer
+subset. Evaluation order is left-to-right; `&&` and `||` short-circuit. The
+entry point is a zero-argument top-level `main` returning `Int` or `Bool`.
+Runtime failures use structured diagnostics and recursive execution is guarded
+by a finite call-depth limit. These choices provide an executable oracle for
+the current subset; HIR interpretation is not the intended final backend ABI.
 
 **Research.** HIR and MIR forms, verification rules, optimization contracts,
-debug information, incremental compilation, monomorphization, and backend
-selection remain open.
+debug information, incremental compilation, monomorphization, backend
+selection, stable entry-point conventions, and cross-backend execution
+conformance remain open.
 
 ## 12. Diagnostics and tooling contracts
 
@@ -208,10 +225,10 @@ second. Stable diagnostic codes, exact source spans, primary and secondary
 labels, notes, and machine-readable output are required directions. Recovery
 diagnostics must be deterministic for identical input and compiler version.
 
-**Provisional bootstrap decisions.** The current compiler uses half-open UTF-8
+**Provisional bootstrap decisions.** The current toolchain uses half-open UTF-8
 byte spans and exposes human and JSON Lines rendering across lexical, syntactic,
-and semantic diagnostics. Diagnostic code meaning is documented by tests but
-codes are not yet covered by the language compatibility promise.
+semantic, and runtime diagnostics. Diagnostic code meaning is documented by
+tests but codes are not yet covered by the language compatibility promise.
 
 Semantic introspection for editors and AI systems must ultimately expose
 resolved symbols, types, effects, ownership facts, and transformations through
@@ -230,16 +247,19 @@ contract is declared stable, silent semantic change is prohibited.
 
 ## 14. Implementation invariants
 
-Every compiler stage must uphold these constraints:
+Every compiler and execution stage must uphold these constraints:
 
 1. Source text is validated UTF-8 before tokenization.
 2. Spans are source-qualified, half-open byte ranges on character boundaries.
 3. Unsupported input produces a diagnostic and a failing result.
 4. No parser recovery loop may repeat without consuming input or terminating.
-5. Literal conversion is checked; overflow is never wrapped or truncated.
-6. Nesting limits fail with diagnostics before uncontrolled recursion.
+5. Literal conversion is checked; bootstrap integer execution never wraps or
+   truncates because of host build-profile behavior.
+6. Nesting and execution-depth limits fail with diagnostics before uncontrolled
+   recursion.
 7. Iteration order that affects output is explicit and deterministic.
-8. An implemented grammar or semantic rule has positive and negative tests.
+8. An implemented grammar, semantic, or execution rule has positive and
+   negative tests.
 9. A local read cannot observe an uninitialized binding; delayed initialization
    must be proven on every reachable continuing path before the read.
 10. Optimization must preserve specified behavior and later operate on verified
@@ -252,6 +272,7 @@ Every compiler stage must uphold these constraints:
 The highest-impact unresolved questions are:
 
 - inference boundaries and public type annotation policy;
+- primitive numeric semantics across all execution backends;
 - typed error and effect representation;
 - the hybrid ownership/region/managed-memory model;
 - data-race freedom and cancellation in structured concurrency;
@@ -260,5 +281,5 @@ The highest-impact unresolved questions are:
 - deterministic, incremental, reproducible package builds; and
 - versioned semantic-introspection schemas.
 
-These questions intentionally have no surface syntax in the current bootstrap
-subset.
+These questions intentionally have no stable surface commitment in the current
+bootstrap subset.

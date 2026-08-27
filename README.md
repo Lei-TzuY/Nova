@@ -7,15 +7,16 @@ design space includes static typing with inference, explicit optional values,
 algebraic data types, typed errors and effects, structured concurrency, and
 low-level control through narrowly classified `unsafe` capabilities.
 
-Those are design goals, not current claims. Nova is not production ready, does
-not yet execute programs, and does not yet implement ownership, effects,
-concurrency, native code generation, or memory-safety analysis.
+Those are design goals, not current claims. Nova is not production ready. The
+current bootstrap can interpret its small checked subset, but it does not yet
+implement ownership, effects, concurrency, native code generation, a standard
+library, or memory-safety analysis.
 
 ## Current status
 
 The repository contains the Phase 0 constitution, the executable Phase 1
-frontend, and early Phase 2 semantic-core slices. The bootstrap toolchain is
-written in Rust and can:
+frontend, early Phase 2 semantic-core slices, and the first Phase 3 bootstrap
+interpreter slice. The toolchain is written in Rust and can:
 
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
@@ -25,14 +26,18 @@ written in Rust and can:
 - resolve top-level functions, parameters, and lexical local bindings;
 - check bootstrap `Int`/`Bool` function signatures, local inference and
   annotations, calls, operators, block tails, `if` branches, returns,
-  assignment mutability/type constraints, and definite initialization; 
-- emit structured, coded diagnostics rendered as human text or JSON Lines; and
+  assignment mutability/type constraints, and definite initialization;
+- execute semantically accepted programs through a deterministic bootstrap
+  interpreter with function calls, recursion, mutation, blocks, and conditionals;
+- emit structured, coded compile-time and runtime diagnostics rendered as human
+  text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
 
 `nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
-definite-assignment validation. This is intentionally narrower than a complete
-Nova type system: numeric semantics, user-defined types, effects, ownership,
-modules, generics, and execution remain future work.
+definite-assignment validation. `nova run` performs those same checks and then
+executes zero-argument `main`. The interpreter is evidence for the executable
+subset, not a claim that Nova's final runtime, numeric model, ABI, or backend is
+stable.
 
 The implemented syntax is intentionally small:
 
@@ -48,6 +53,10 @@ fn choose(flag: Bool, left: Int, right: Int) -> Int {
     };
 
     selected + 1
+}
+
+fn main() -> Int {
+    choose(true, 41, 0)
 }
 ```
 
@@ -91,6 +100,22 @@ control flow; neither is a surface type in the current grammar.
 These rules are bootstrap semantics, not a promise that Nova's broader type,
 mutation, and shadowing policies are frozen.
 
+## Bootstrap execution rules
+
+`nova run` requires one top-level `main` with no parameters and an `Int` or
+`Bool` return type. It evaluates expressions left to right. `&&` and `||` are
+short-circuiting, so a skipped right operand performs no mutation or call.
+Explicit `return` propagates through nested blocks and expressions to the
+current function call.
+
+For deterministic execution while the numeric design remains provisional, the
+bootstrap interpreter represents `Int` as signed 64-bit at runtime and uses
+checked arithmetic. Overflow produces `N4002`; division or remainder by zero
+produces `N4003`. Recursive execution is guarded by a finite active-call budget
+and reports `N4004` instead of intentionally recursing without bound. Missing or
+invalid `main` is `N4001`. These are bootstrap runtime contracts, not the final
+Nova numeric or runtime specification.
+
 ## Build and use
 
 Nova declares Rust 1.85 as its bootstrap minimum and also tracks current stable
@@ -99,27 +124,35 @@ Rust in CI. With Rust and Cargo installed:
 ```console
 cargo build --workspace
 cargo run -p nova-cli -- check examples/basics.nv
+cargo run -p nova-cli -- run examples/basics.nv
 cargo run -p nova-cli -- ast examples/basics.nv
+```
+
+The `run` command prints the returned value from `main`:
+
+```text
+42
 ```
 
 Machine-readable diagnostics are available without changing the compiler's
 internal diagnostic model:
 
 ```console
-cargo run -p nova-cli -- check examples/broken.nv --message-format json
+cargo run -p nova-cli -- run examples/broken.nv --message-format json
 ```
 
 The installed binary is named `nova`:
 
 ```text
 nova check <file> [--message-format human|json]
+nova run <file> [--message-format human|json]
 nova ast <file> [--message-format human|json]
 ```
 
-Exit status `0` means the requested operation succeeded, `1` means the source
-or program was rejected, and `2` means the command line was invalid. `nova ast`
+Exit status `0` means the requested operation succeeded, `1` means the source or
+execution was rejected, and `2` means the command line was invalid. `nova ast`
 intentionally stops after parsing, so it can inspect a syntactically valid AST
-even when `nova check` would reject that program semantically.
+even when `nova check` or `nova run` would reject that program later.
 
 ## Bootstrap architecture
 
@@ -129,21 +162,25 @@ source bytes
   -> nova-lexer         tokens and lexical diagnostics
   -> nova-parser        AST and syntactic diagnostics
   -> nova-sema          typed HIR, resolution, typing, definite assignment
-  -> nova-cli           check/ast commands and diagnostic presentation
+  -> nova-interpreter   deterministic checked execution of accepted HIR
+  -> nova-cli           check/run/ast commands and diagnostic presentation
 
 nova-diagnostics        shared structured diagnostic model and renderers
 ```
 
 Crate boundaries follow semantic responsibilities rather than intended future
 compiler passes. Later work can deepen HIR, inference, effects, MIR, and
-backends without making the AST or CLI the owner of language semantics.
+backends without making the AST, interpreter, or CLI the owner of unfinished
+language semantics.
 
 ## Engineering policy
 
 - Unsupported constructs are errors; the compiler does not approximate them.
-- Every implemented semantic or syntactic rule requires deterministic tests.
+- Every implemented semantic, syntactic, or execution rule requires
+  deterministic tests.
 - Source positions are UTF-8 byte ranges internally and one-based line/column
   locations when rendered.
+- Runtime arithmetic is checked; host build mode never decides Nova results.
 - CI checks Rust 1.85 compatibility, rejects formatting and Clippy warnings on
   current stable, and runs all tests, builds, and rustdoc.
 - Roadmap status is evidence-based; planned properties are not reported as
@@ -153,9 +190,9 @@ The staged implementation plan is in [docs/roadmap.md](docs/roadmap.md).
 
 ## Contributing
 
-Keep changes focused and pair grammar or semantic changes with specification
-updates, positive tests, and negative tests. Prefer a small end-to-end slice
-over disconnected scaffolding for several future phases.
+Keep changes focused and pair grammar, semantic, or runtime changes with
+specification updates, positive tests, and negative tests. Prefer a small
+end-to-end slice over disconnected scaffolding for several future phases.
 
 No project license has been selected yet. Until a license file is added, the
 repository remains under the rights granted by applicable copyright law and

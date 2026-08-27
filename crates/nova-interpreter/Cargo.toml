@@ -1,23 +1,20 @@
 [package]
-name = "nova-cli"
-description = "Official bootstrap command-line frontend for the Nova language"
+name = "nova-interpreter"
+description = "Deterministic bootstrap interpreter for Nova's typed HIR"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 
-[[bin]]
-name = "nova"
-path = "src/main.rs"
-
 [dependencies]
 nova-diagnostics = { path = "../nova-diagnostics" }
-nova-interpreter = { path = "../nova-interpreter" }
-nova-lexer = { path = "../nova-lexer" }
 nova-parser = { path = "../nova-parser" }
 nova-sema = { path = "../nova-sema" }
 nova-source = { path = "../nova-source" }
+
+[dev-dependencies]
+nova-lexer = { path = "../nova-lexer" }
 
 [lints]
 workspace = true
