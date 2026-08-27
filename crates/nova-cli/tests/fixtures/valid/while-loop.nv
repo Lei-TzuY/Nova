@@ -1,0 +1,7 @@
+fn main() -> Int {
+    var value = 0;
+    while value < 5 {
+        value = value + 1;
+    }
+    value
+}
