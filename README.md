@@ -45,7 +45,8 @@ decisions that extend beyond it.
 
 ## Build and use
 
-Nova tracks supported stable Rust. With Rust and Cargo installed:
+Nova declares Rust 1.85 as its bootstrap minimum and also tracks current stable
+Rust in CI. With Rust and Cargo installed:
 
 ```console
 cargo build --workspace
@@ -92,7 +93,8 @@ backends without making the AST or CLI the owner of language semantics.
 - Every implemented semantic or syntactic rule requires deterministic tests.
 - Source positions are UTF-8 byte ranges internally and one-based line/column
   locations when rendered.
-- CI rejects formatting and Clippy warnings and runs all tests and rustdoc.
+- CI checks Rust 1.85 compatibility, rejects formatting and Clippy warnings on
+  current stable, and runs all tests, builds, and rustdoc.
 - Roadmap status is evidence-based; planned properties are not reported as
   implemented guarantees.
 

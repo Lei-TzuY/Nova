@@ -509,4 +509,17 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn handles_every_ascii_code_point_as_source_input() {
+        for byte in 0_u8..=127 {
+            let text = char::from(byte).to_string();
+            let output = lex(&source(&text));
+            assert_eq!(
+                output.tokens.last().map(|token| token.kind),
+                Some(TokenKind::Eof),
+                "ASCII byte {byte} lost the EOF token"
+            );
+        }
+    }
 }

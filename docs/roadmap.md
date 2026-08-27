@@ -28,7 +28,8 @@ Completion of the initial document does not freeze unfinished semantics.
 - AST inspection with `nova ast`;
 - positive, negative, span, precedence, overflow, comment, recovery, and depth
   tests; and
-- stable-Rust formatting, Clippy, test, build, and rustdoc CI.
+- Rust 1.85 MSRV checking plus current-stable formatting, Clippy, test, build,
+  and rustdoc CI.
 
 Next Phase 1 refinements should be driven by the needs of name resolution, not
 by adding unrelated syntax.

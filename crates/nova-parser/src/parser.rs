@@ -747,6 +747,29 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
                 ..
             }
         ));
+
+        let (_, parsed) = parse_text("fn f() -> Int { 10 - 3 - 2 }");
+        let tail = parsed.program.functions[0]
+            .body
+            .tail
+            .as_deref()
+            .expect("function has a tail expression");
+        let ExpressionKind::Binary {
+            operator: BinaryOperator::Subtract,
+            left,
+            right,
+        } = &tail.kind
+        else {
+            panic!("expected outer subtraction: {tail:?}");
+        };
+        assert!(matches!(&right.kind, ExpressionKind::Integer(2)));
+        assert!(matches!(
+            &left.kind,
+            ExpressionKind::Binary {
+                operator: BinaryOperator::Subtract,
+                ..
+            }
+        ));
     }
 
     #[test]
