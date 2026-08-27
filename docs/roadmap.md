@@ -102,7 +102,7 @@ item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: first vertical slice implemented; execution surface remains small.**
+**Status: two vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -119,11 +119,26 @@ Implemented in the first Phase 3 slice:
 - interpreter unit tests plus CLI success, human-runtime-error, and JSON-runtime-
   error fixtures.
 
+Implemented in the second Phase 3 slice:
+
+- pre-test `while condition { body }` syntax represented explicitly in AST and
+  typed HIR;
+- semantic checking that requires a `Bool` condition;
+- conservative loop definite-assignment: the mandatory condition pre-test may
+  establish facts, while body-only initialization cannot escape because the body
+  may execute zero times;
+- interpreter execution of loop mutation and return propagation;
+- a shared deterministic statement/expression step budget with runtime
+  diagnostic `N4006`, so nonterminating loops fail closed instead of hanging the
+  host; and
+- parser, semantic, interpreter, CLI, positive, negative, and nontermination
+  fixtures kept in sync with the grammar and language documentation.
+
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
 
-- add loop/control-flow forms together with conservative dataflow semantics and
-  deterministic execution tests;
+- introduce richer control flow such as `break`/`continue` only with an explicit
+  CFG/dataflow story rather than ad-hoc interpreter behavior;
 - define records and enums only after their Phase 2 resolved type model exists;
 - execute exhaustive pattern matching after semantic exhaustiveness checking;
 - introduce a small explicit execution IR if interpreter complexity begins to
