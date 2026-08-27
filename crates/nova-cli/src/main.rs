@@ -204,7 +204,7 @@ fn emit_diagnostics(
 mod tests {
     use super::{Command, MessageFormat, Options, ParsedArguments, parse_arguments};
     use std::ffi::OsString;
-    use std::path::PathBuf;
+    use std::path::Path;
 
     fn arguments(values: &[&str]) -> Vec<OsString> {
         values.iter().map(OsString::from).collect()
@@ -228,7 +228,7 @@ mod tests {
                 command: Command::Check,
                 path,
                 message_format: MessageFormat::Json,
-            }) if path == PathBuf::from("sample.nv")
+            }) if path.as_path() == Path::new("sample.nv")
         ));
         assert!(matches!(
             joined,
@@ -236,7 +236,7 @@ mod tests {
                 command: Command::Ast,
                 path,
                 message_format: MessageFormat::Human,
-            }) if path == PathBuf::from("sample.nv")
+            }) if path.as_path() == Path::new("sample.nv")
         ));
     }
 
