@@ -15,23 +15,26 @@ library, or memory-safety analysis.
 ## Current status
 
 The repository contains the Phase 0 constitution, the executable Phase 1
-frontend, early Phase 2 semantic-core slices, and executable Phase 3 bootstrap
+frontend, Phase 2 semantic-core slices, and executable Phase 3 bootstrap
 interpreter slices. The toolchain is written in Rust and can:
 
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
-- parse functions, initialized bindings, typed delayed `var` initialization,
-  narrow assignments, expressions, blocks, calls, `if` expressions, and
-  pre-test `while` loops;
-- lower accepted syntax into a resolved, typed HIR;
-- resolve top-level functions, parameters, and lexical local bindings;
-- check bootstrap `Int`/`Bool` function signatures, local inference and
-  annotations, calls, operators, block tails, branches, returns, loop
-  conditions, assignment mutability/type constraints, and definite
-  initialization;
+- parse functions, nominal records, explicit record construction, field
+  projection, initialized bindings, typed delayed `var` initialization, narrow
+  assignments, expressions, blocks, calls, `if` expressions, and pre-test
+  `while` loops;
+- lower accepted syntax into a resolved, typed HIR with stable function,
+  binding, and record identities;
+- resolve top-level functions and record types, parameters, lexical local
+  bindings, and record field slots;
+- check bootstrap `Int`, `Bool`, and nominal record types, function signatures,
+  local inference and annotations, calls, operators, block tails, branches,
+  returns, loop conditions, record construction/projection, assignment
+  mutability/type constraints, and definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
-  interpreter with function calls, recursion, mutation, blocks, conditionals,
-  and bounded loops;
+  interpreter with function calls, recursion, records, mutation, blocks,
+  conditionals, and bounded loops;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
   text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
@@ -39,18 +42,20 @@ interpreter slices. The toolchain is written in Rust and can:
 `nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
 definite-assignment validation. `nova run` performs those same checks and then
 executes zero-argument `main`. The interpreter is evidence for the executable
-subset, not a claim that Nova's final runtime, numeric model, ABI, or backend is
-stable.
+subset, not a claim that Nova's final runtime representation, numeric model,
+record layout, ABI, or backend is stable.
 
 The implemented syntax is intentionally small:
 
 ```nova
+record Pair {
+    left: Int,
+    right: Int,
+}
+
 fn main() -> Int {
-    var value = 0;
-    while value < 5 {
-        value = value + 1;
-    }
-    value
+    let pair = new Pair { right: 2, left: 40 };
+    pair.left + pair.right
 }
 ```
 
@@ -60,12 +65,23 @@ decisions that extend beyond it.
 
 ## Current semantic rules
 
-The Phase 2 bootstrap checker predeclares function signatures, so forward calls
-and recursion resolve deterministically. A local initializer is checked before
-its new binding enters scope, preventing accidental self-reference. Duplicate
-names in the same lexical scope are rejected; nested lexical blocks may shadow
-outer bindings in this slice. Function parameters and a function body's
-outermost bindings share one scope.
+The Phase 2 bootstrap checker predeclares function signatures and nominal record
+identities, so forward calls, recursion, and forward record type references
+resolve deterministically. A local initializer is checked before its new
+binding enters scope, preventing accidental self-reference. Duplicate names in
+the same lexical scope are rejected; nested lexical blocks may shadow outer
+bindings in this slice. Function parameters and a function body's outermost
+bindings share one scope.
+
+`record Name { field: Type, ... }` declares a nominal type: two separately
+declared records are distinct even if their fields have the same shape. Field
+names must be unique. `new Name { field: expression, ... }` must initialize every
+declared field exactly once with a value of the declared type. Named
+initializers may be written in any order, but their expressions evaluate left
+to right in written source order. HIR resolves each initializer to a stable
+record identity and declaration-order field slot without reordering evaluation.
+`value.field` is read-only field projection in this slice. Record equality,
+field assignment, layout, and ABI guarantees are not implemented.
 
 `let` bindings and function parameters are immutable. `var` bindings may be
 assigned with the narrow statement form `name = expression;`. The target must
@@ -88,25 +104,27 @@ condition may survive the loop; facts established only in the body do not make
 a delayed binding definitely initialized afterward. This prevents a zero-run
 loop from manufacturing initialization evidence.
 
-Only `Int` and `Bool` are recognized surface types today. Arithmetic and ordered
-comparisons require `Int`; boolean operators require `Bool`; equality accepts
-matching `Int` or matching `Bool`; calls require a function value with matching
-arity and argument types. `if` conditions require `Bool`, its two branches must
-have compatible value types, explicit `return` expressions are checked against
-the function signature, and a function cannot fall through without a value.
+`Int`, `Bool`, and declared nominal records are recognized surface types today.
+Arithmetic and ordered comparisons require `Int`; boolean operators require
+`Bool`; equality currently accepts only matching `Int` or matching `Bool`;
+calls require a function value with matching arity and argument types. `if`
+conditions require `Bool`, its two branches must have compatible nominal or
+primitive value types, explicit `return` expressions are checked against the
+function signature, and a function cannot fall through without a value.
 Internal HIR uses `()` and `!` only to model value-less and non-continuing
 control flow; neither is a surface type in the current grammar.
 
 These rules are bootstrap semantics, not a promise that Nova's broader type,
-mutation, control-flow, and shadowing policies are frozen.
+mutation, control-flow, aggregate, and shadowing policies are frozen.
 
 ## Bootstrap execution rules
 
 `nova run` requires one top-level `main` with no parameters and an `Int` or
-`Bool` return type. It evaluates expressions left to right. `&&` and `||` are
-short-circuiting, so a skipped right operand performs no mutation or call.
-Explicit `return` propagates through nested blocks, expressions, and loop bodies
-to the current function call.
+`Bool` return type. It evaluates expressions left to right. Record initializer
+expressions follow the same rule even when named fields are written out of
+declaration order. `&&` and `||` are short-circuiting, so a skipped right operand
+performs no mutation or call. Explicit `return` propagates through nested blocks,
+expressions, and loop bodies to the current function call.
 
 For deterministic execution while the numeric design remains provisional, the
 bootstrap interpreter represents `Int` as signed 64-bit at runtime and uses
@@ -114,9 +132,9 @@ checked arithmetic. Overflow produces `N4002`; division or remainder by zero
 produces `N4003`. Recursive execution is guarded by a finite active-call budget
 and reports `N4004`. All statement/expression evaluation also shares a finite
 execution-step budget; a nonterminating loop therefore reports `N4006` instead
-of hanging indefinitely. Missing or invalid `main` is `N4001`. These are
-bootstrap runtime contracts, not the final Nova numeric or runtime
-specification.
+of hanging indefinitely. Missing or invalid `main` is `N4001`. Record values are
+currently interpreter-owned nominal values with declaration-order slots; that
+representation is not a stabilized source layout or ABI contract.
 
 ## Build and use
 
@@ -159,7 +177,7 @@ source bytes
   -> nova-source        source identity, UTF-8 text, spans, locations
   -> nova-lexer         tokens and lexical diagnostics
   -> nova-parser        AST and syntactic diagnostics
-  -> nova-sema          typed HIR, resolution, typing, definite assignment
+  -> nova-sema          typed HIR, nominal identity, resolution, typing, dataflow
   -> nova-interpreter   deterministic checked, bounded execution of accepted HIR
   -> nova-cli           check/run/ast commands and diagnostic presentation
 
@@ -167,7 +185,7 @@ nova-diagnostics        shared structured diagnostic model and renderers
 ```
 
 Crate boundaries follow semantic responsibilities rather than intended future
-compiler passes. Later work can deepen HIR, inference, effects, MIR, and
+compiler passes. Later work can deepen HIR, inference, effects, MIR, layout, and
 backends without making the AST, interpreter, or CLI the owner of unfinished
 language semantics.
 
@@ -179,6 +197,8 @@ language semantics.
 - Source positions are UTF-8 byte ranges internally and one-based line/column
   locations when rendered.
 - Runtime arithmetic is checked; host build mode never decides Nova results.
+- Observable evaluation order is explicit; named record fields do not reorder
+  their initializer expressions.
 - Potentially nonterminating bootstrap execution is bounded and fails with a
   structured diagnostic rather than intentionally hanging the host.
 - CI checks Rust 1.85 compatibility, rejects formatting and Clippy warnings on
