@@ -1,7 +1,7 @@
 # Nova Language Constitution
 
 Status: **design constitution for Nova v0.1**
-Last revised: 2026-08-27
+Last revised: 2026-08-28
 
 This document records durable design constraints for Nova. It is not a claim
 that every described property has been implemented, and it is not a substitute
@@ -72,12 +72,13 @@ are represented explicitly; there is no implicit null inhabitant of every
 reference-like type. Algebraic data types and exhaustive pattern matching are
 core language directions, not library conventions.
 
-**Provisional bootstrap decisions.** `Int` and `Bool` names appear in examples,
-but the Phase 1 frontend only parses type names and performs no type checking.
-Accepted integer literal magnitude is currently `0..=2^63-1`; unary `-` is a
-separate expression, so the most-negative signed 64-bit value has no literal
-spelling in this subset. Numeric widths, inference defaults, conversions, and
-overflow behavior are not yet language semantics.
+**Provisional bootstrap decisions.** `Int` and `Bool` are the only type names
+recognized by the implemented single-file resolver, but resolving those names
+does not type-check expressions. Accepted integer literal magnitude is
+currently `0..=2^63-1`; unary `-` is a separate expression, so the most-negative
+signed 64-bit value has no literal spelling in this subset. Numeric widths,
+inference defaults, conversions, and overflow behavior are not yet language
+semantics.
 
 **Research.** The project must decide, with implementation evidence:
 
@@ -96,7 +97,12 @@ complete.
 
 **Provisional.** The Phase 1 grammar requires every `let` or `var` to have an
 initializer and allows an optional type annotation. Assignment is deliberately
-not part of the first subset.
+not part of the first subset. The implemented resolver rejects duplicate names
+within one lexical scope, permits a nested block to shadow an outer value, and
+makes a binding visible only after its initializer. Parameters and declarations
+in the function's outermost body share a scope. These are pre-1.0 semantic
+choices backed by the tests in the current compiler, not a claim that broader
+shadowing and definite-assignment design is complete.
 
 ## 6. Names, modules, and packages
 
@@ -104,6 +110,14 @@ not part of the first subset.
 filesystem enumeration order, and separate from type inference. Imports must
 make dependency edges inspectable. Packages and modules must have stable
 identity rules that work in reproducible builds.
+
+**Provisional implemented subset.** Unique top-level function names are visible
+throughout their source file, enabling direct recursion and forward calls.
+Value lookup walks lexical scopes from inner to outer before consulting those
+functions. Type positions currently recognize only `Int` and `Bool`. HIR symbol
+IDs are dense and deterministic for identical input but session-local: they are
+not stable across edits, files, builds, or compiler versions. The complete
+implemented rules are in [`name-resolution.md`](name-resolution.md).
 
 **Research.** File-to-module mapping, visibility defaults, namespace separation,
 cyclic module handling, package manifests, lockfiles, and registry trust policy
@@ -185,9 +199,9 @@ second. Stable diagnostic codes, exact source spans, primary and secondary
 labels, notes, and machine-readable output are required directions. Recovery
 diagnostics must be deterministic for identical input and compiler version.
 
-**Provisional.** Phase 1 uses half-open UTF-8 byte spans and exposes human and
-JSON Lines rendering. Diagnostic code meaning is documented by tests but codes
-are not yet covered by the language compatibility promise.
+**Provisional.** The bootstrap compiler uses half-open UTF-8 byte spans and
+exposes human and JSON Lines rendering. Diagnostic code meaning is documented
+by tests but codes are not yet covered by the language compatibility promise.
 
 Semantic introspection for editors and AI systems must ultimately expose
 resolved symbols, types, effects, ownership facts, and transformations through

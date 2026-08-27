@@ -2,6 +2,7 @@
 members = [
     "crates/nova-cli",
     "crates/nova-diagnostics",
+    "crates/nova-hir",
     "crates/nova-lexer",
     "crates/nova-parser",
     "crates/nova-source",

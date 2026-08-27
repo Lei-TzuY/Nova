@@ -18,7 +18,11 @@ fn nova(arguments: &[&str]) -> Output {
 
 #[test]
 fn accepts_positive_fixtures() {
-    for relative in ["valid/basic.nv", "valid/precedence.nv"] {
+    for relative in [
+        "valid/basic.nv",
+        "valid/precedence.nv",
+        "valid/resolution.nv",
+    ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
         assert!(
@@ -51,6 +55,9 @@ fn rejects_negative_fixtures_with_stable_codes() {
         ("invalid/unterminated-comment.nv", "N1003"),
         ("invalid/integer-overflow.nv", "N1004"),
         ("invalid/missing-else.nv", "N2006"),
+        ("invalid/unknown-name.nv", "N3002"),
+        ("invalid/duplicate-name.nv", "N3001"),
+        ("invalid/unknown-type.nv", "N3003"),
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
@@ -61,6 +68,33 @@ fn rejects_negative_fixtures_with_stable_codes() {
         );
         assert!(stderr.contains(code), "fixture {relative}: {stderr}");
     }
+}
+
+#[test]
+fn ast_command_remains_available_for_semantically_invalid_syntax_trees() {
+    let path = fixture("invalid/unknown-name.nv");
+    let output = nova(&["ast", path.to_str().expect("fixture path is UTF-8")]);
+    let stdout = String::from_utf8(output.stdout).expect("AST output is UTF-8");
+
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    assert!(stdout.contains("text: \"missing\""));
+}
+
+#[test]
+fn duplicate_diagnostic_identifies_both_declarations() {
+    let path = fixture("invalid/duplicate-name.nv");
+    let output = nova(&[
+        "check",
+        path.to_str().expect("fixture path is UTF-8"),
+        "--message-format=json",
+    ]);
+    let stderr = String::from_utf8(output.stderr).expect("diagnostics are UTF-8");
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("\"code\":\"N3001\""));
+    assert!(stderr.contains("\"style\":\"primary\""));
+    assert!(stderr.contains("\"style\":\"secondary\""));
 }
 
 #[test]

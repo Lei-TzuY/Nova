@@ -1,0 +1,8 @@
+fn entry(value: Int) -> Int {
+    let result = later(value);
+    { let result = result; result }
+}
+
+fn later(input: Int) -> Int {
+    entry(input)
+}

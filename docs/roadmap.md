@@ -36,15 +36,20 @@ by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: planned.**
+**Status: in progress; deterministic single-file name resolution is
+implemented.**
 
-- lower AST to a purpose-built HIR;
-- lexical scopes and deterministic name resolution;
-- primitive `Int` and `Bool` types;
+- purpose-built resolved HIR with dense session-local symbol IDs;
+- lexical scopes, forward/recursive function lookup, duplicate diagnostics,
+  unknown-name diagnostics, and built-in type-name resolution;
+- `nova check` upgraded from syntax validation through name validation;
+
+Remaining Phase 2 work:
+
+- define primitive `Int` and `Bool` typing and operation semantics;
 - function signatures, local inference, binding mutability, calls, operators,
   block tails, and `if` branch typing;
-- duplicate, unknown-name, and type-mismatch diagnostics; and
-- `nova check` upgraded from syntax validation to semantic validation.
+- type-mismatch diagnostics and a typed HIR contract.
 
 ## Phase 3 — Executable language subset
 

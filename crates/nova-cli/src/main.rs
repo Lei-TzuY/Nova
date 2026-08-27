@@ -1,4 +1,5 @@
 use nova_diagnostics::{Diagnostic, render_human_all, render_json_lines};
+use nova_hir::lower;
 use nova_lexer::lex;
 use nova_parser::{format_ast, parse};
 use nova_source::{SourceFile, SourceId};
@@ -16,8 +17,8 @@ Usage:
   nova ast <file> [--message-format human|json]
   nova --help
 
-`check` validates UTF-8, tokens, and syntax in this Phase 1 build.
-It does not yet perform name resolution or type checking.";
+`check` validates UTF-8, tokens, syntax, and the implemented name rules.
+It does not yet perform type inference or type checking.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {
@@ -119,8 +120,22 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
         return Ok(1);
     }
 
-    if matches!(options.command, Command::Ast) {
-        writeln!(stdout, "{}", format_ast(&parsed.program))?;
+    match options.command {
+        Command::Check => {
+            let lowered = lower(&parsed.program);
+            if !lowered.is_success() {
+                emit_diagnostics(
+                    &lowered.diagnostics,
+                    &source,
+                    options.message_format,
+                    stderr,
+                )?;
+                return Ok(1);
+            }
+        }
+        Command::Ast => {
+            writeln!(stdout, "{}", format_ast(&parsed.program))?;
+        }
     }
     Ok(0)
 }

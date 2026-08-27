@@ -13,17 +13,22 @@ effects, concurrency, native code generation, or memory-safety analysis.
 
 ## Current status
 
-The repository contains the Phase 0 constitution and the first executable
-Phase 1 frontend slice. The bootstrap toolchain is written in Rust and can:
+The repository contains the Phase 0 constitution, the executable Phase 1
+frontend, and the first narrow Phase 2 semantic slice. The bootstrap toolchain
+is written in Rust and can:
 
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
 - parse functions, bindings, expressions, blocks, calls, and `if` expressions;
+- lower valid syntax to a purpose-built HIR with deterministic symbol IDs;
+- resolve single-file functions, parameters, local bindings, `Int`, and `Bool`;
 - emit structured, coded diagnostics rendered as human text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
 
-`nova check` currently means **lexical and syntactic validation only**. It does
-not imply that names resolve or that a program is well typed.
+`nova check` validates UTF-8, tokens, syntax, and the implemented single-file
+name rules. It does **not** imply that a program is well typed. `nova ast`
+intentionally remains a syntax-tree inspection command and does not require
+names to resolve.
 
 The implemented syntax is intentionally small:
 
@@ -39,8 +44,9 @@ fn choose(flag: Bool, left: Int, right: Int) -> Int {
 }
 ```
 
-See [the implemented grammar](docs/grammar.md) for the normative frontend
-subset and [the language constitution](docs/language-constitution.md) for
+See [the implemented grammar](docs/grammar.md) and
+[name-resolution rules](docs/name-resolution.md) for the normative executable
+subset, and [the language constitution](docs/language-constitution.md) for
 decisions that extend beyond it.
 
 ## Build and use
@@ -78,14 +84,15 @@ source bytes
   -> nova-source        source identity, UTF-8 text, spans, locations
   -> nova-lexer         tokens and lexical diagnostics
   -> nova-parser        AST and syntactic diagnostics
+  -> nova-hir           resolved HIR, lexical scopes, symbol identities
   -> nova-cli           check/ast commands and diagnostic presentation
 
 nova-diagnostics        shared structured diagnostic model and renderers
 ```
 
 Crate boundaries follow semantic responsibilities rather than intended future
-compiler passes. Later work can add HIR, resolution, typing, effects, MIR, and
-backends without making the AST or CLI the owner of language semantics.
+compiler passes. Later work can add type inference, effects, MIR, and backends
+without making the AST or CLI the owner of language semantics.
 
 ## Engineering policy
 
