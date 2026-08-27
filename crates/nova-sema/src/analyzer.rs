@@ -613,7 +613,7 @@ impl Analyzer {
         name: &ast::Name,
         fields: &[ast::RecordLiteralField],
         return_type: &Type,
-        span: Span,
+        _span: Span,
     ) -> (ExpressionKind, Type) {
         let Some(record_id) = self.records.get(&name.text).copied() else {
             for field in fields {
@@ -673,10 +673,7 @@ impl Analyzer {
 
             let expected = &definition.fields[field_index].ty;
             self.require_type(&value.ty, expected, value.span, "record field initializer");
-            resolved.push(RecordFieldValue {
-                field_index,
-                value,
-            });
+            resolved.push(RecordFieldValue { field_index, value });
         }
 
         for declared in &definition.fields {
@@ -727,12 +724,11 @@ impl Analyzer {
             if base.ty.is_error() {
                 return (ExpressionKind::Error, Type::Error);
             }
-            self.diagnostics.push(
-                Diagnostic::error("N3004", "type mismatch").with_primary(
+            self.diagnostics
+                .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     field.span,
                     format!("field access requires a record value, found {}", base.ty),
-                ),
-            );
+                ));
             return (ExpressionKind::Error, Type::Error);
         };
 
@@ -1168,7 +1164,11 @@ mod tests {
             Type::Record(_)
         ));
 
-        let tail = output.program.functions[1].body.tail.as_deref().expect("tail");
+        let tail = output.program.functions[1]
+            .body
+            .tail
+            .as_deref()
+            .expect("tail");
         let ExpressionKind::RecordLiteral { record, fields } = &tail.kind else {
             panic!("expected record literal: {tail:?}");
         };
