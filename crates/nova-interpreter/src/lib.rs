@@ -9,7 +9,7 @@ use nova_sema::hir::{
 use std::collections::BTreeMap;
 use std::fmt;
 
-const MAX_CALL_DEPTH: usize = 256;
+const MAX_CALL_DEPTH: usize = 64;
 const MAX_EXECUTION_STEPS: usize = 100_000;
 
 /// Runtime value produced by the bootstrap interpreter.
@@ -291,7 +291,10 @@ impl<'program> Interpreter<'program> {
                 let Some(definition) = self.program.records.get(record.index()) else {
                     return Err(self.invariant(
                         expression.span,
-                        format!("resolved record id {} is outside the program", record.index()),
+                        format!(
+                            "resolved record id {} is outside the program",
+                            record.index()
+                        ),
                     ));
                 };
                 if definition.id != *record {
