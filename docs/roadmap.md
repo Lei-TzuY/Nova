@@ -87,7 +87,8 @@ prematurely. In particular:
 
 - split and stabilize HIR/resolution/type-analysis/dataflow contracts as
   implementation evidence accumulates;
-- define numeric types, defaulting, conversions, and overflow behavior;
+- define language-level numeric types, defaulting, conversions, and overflow
+  behavior beyond the provisional interpreter contract;
 - add user-defined records and enums only with resolved type identity and
   deterministic diagnostics;
 - introduce exhaustive pattern checking after algebraic data types exist;
@@ -101,15 +102,37 @@ item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: planned.**
+**Status: first vertical slice implemented; execution surface remains small.**
 
-- a small verified interpreter or simple execution IR;
-- functions and control flow;
-- records, enums, and exhaustive pattern matching; and
-- deterministic execution and semantic fixture tests.
+Implemented in the first Phase 3 slice:
 
-The backend choice will follow evidence from the Phase 2 HIR rather than
-precede it.
+- `nova-interpreter`, a deterministic interpreter over semantically accepted
+  typed HIR rather than raw syntax;
+- `nova run`, which reuses the exact lex/parse/semantic pipeline before execution;
+- a zero-argument `main` entry-point contract with `Int` or `Bool` result;
+- function calls, recursion, block values, `if`, explicit return propagation,
+  initialized and delayed mutable locals, and assignment;
+- left-to-right expression evaluation with short-circuit `&&` and `||`;
+- provisional checked signed-64-bit `Int` execution, with runtime diagnostics
+  for overflow and zero divisors instead of host-profile-dependent behavior;
+- a guarded active-call limit for deterministic recursion failure; and
+- interpreter unit tests plus CLI success, human-runtime-error, and JSON-runtime-
+  error fixtures.
+
+Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
+contracts:
+
+- add loop/control-flow forms together with conservative dataflow semantics and
+  deterministic execution tests;
+- define records and enums only after their Phase 2 resolved type model exists;
+- execute exhaustive pattern matching after semantic exhaustiveness checking;
+- introduce a small explicit execution IR if interpreter complexity begins to
+  leak backend concerns into HIR; and
+- keep runtime diagnostics source-qualified and reproducible.
+
+Native code generation is not implied by the bootstrap interpreter. Backend
+work remains a later phase and must consume verified shared IR rather than
+reimplement source semantics independently.
 
 ## Phase 4 — Typed errors and effects
 
