@@ -28,7 +28,7 @@ pub struct ParseOutput {
 impl ParseOutput {
     /// Reports whether the token stream matched the implemented grammar.
     #[must_use]
-    pub const fn is_success(&self) -> bool {
+    pub fn is_success(&self) -> bool {
         self.diagnostics.is_empty()
     }
 }

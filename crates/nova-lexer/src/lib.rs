@@ -147,7 +147,7 @@ pub struct LexOutput {
 impl LexOutput {
     /// Reports whether lexing found any errors.
     #[must_use]
-    pub const fn is_success(&self) -> bool {
+    pub fn is_success(&self) -> bool {
         self.diagnostics.is_empty()
     }
 }
