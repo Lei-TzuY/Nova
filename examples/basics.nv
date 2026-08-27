@@ -1,0 +1,15 @@
+fn choose(flag: Bool, left: Int, right: Int) -> Int {
+    let selected = if flag {
+        left
+    } else {
+        right
+    };
+
+    selected + 1
+}
+
+fn main() -> Int {
+    var seed: Int = 40;
+    // `var` records binding mutability; assignment is not in v0.1 yet.
+    choose(seed > 0 && true, seed + 1, 0)
+}

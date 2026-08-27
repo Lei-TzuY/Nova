@@ -1,0 +1,14 @@
+[package]
+name = "nova-diagnostics"
+description = "Structured diagnostics and renderers for the Nova bootstrap compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+nova-source = { path = "../nova-source" }
+
+[lints]
+workspace = true

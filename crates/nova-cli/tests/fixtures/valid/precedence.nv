@@ -1,0 +1,7 @@
+fn arithmetic() -> Int {
+    1 + 2 * 3 - 4 / 2 % 2
+}
+
+fn logic() -> Bool {
+    1 + 2 * 3 == 7 || false && !false
+}
