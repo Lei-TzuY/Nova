@@ -83,6 +83,7 @@ struct FunctionSymbol {
 struct LocalSymbol {
     id: BindingId,
     ty: Type,
+    mutable: bool,
     span: Span,
 }
 
@@ -285,6 +286,46 @@ impl Analyzer {
                     diverges,
                 )
             }
+            ast::StatementKind::Assignment { target, value } => {
+                let local = self.find_local(&target.text);
+                let function_span = self.functions.get(&target.text).map(|symbol| symbol.span);
+                let value = self.lower_expression(value, return_type);
+                let target_id = if let Some(symbol) = local {
+                    if !symbol.mutable {
+                        self.diagnostics.push(
+                            Diagnostic::error("N3008", "cannot assign to immutable binding")
+                                .with_primary(
+                                    target.span,
+                                    format!("`{}` is not mutable", target.text),
+                                )
+                                .with_secondary(symbol.span, "binding declared here"),
+                        );
+                    }
+                    self.require_type(&value.ty, &symbol.ty, value.span, "assigned value");
+                    Some(symbol.id)
+                } else if let Some(span) = function_span {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3008", "invalid assignment target")
+                            .with_primary(target.span, "functions cannot be assigned")
+                            .with_secondary(span, "function declared here"),
+                    );
+                    None
+                } else {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3003", "unknown name")
+                            .with_primary(target.span, format!("cannot resolve `{}`", target.text)),
+                    );
+                    None
+                };
+                let diverges = value.ty.is_never();
+                (
+                    StatementKind::Assignment {
+                        target: target_id,
+                        value,
+                    },
+                    diverges,
+                )
+            }
             ast::StatementKind::Return(expression) => {
                 let expression = self.lower_expression(expression, return_type);
                 self.require_type(
@@ -406,10 +447,8 @@ impl Analyzer {
     }
 
     fn lower_name(&mut self, name: &ast::Name) -> (ExpressionKind, Type) {
-        for scope in self.scopes.iter().rev() {
-            if let Some(symbol) = scope.get(&name.text) {
-                return (ExpressionKind::Binding(symbol.id), symbol.ty.clone());
-            }
+        if let Some(symbol) = self.find_local(&name.text) {
+            return (ExpressionKind::Binding(symbol.id), symbol.ty);
         }
         if let Some(symbol) = self.functions.get(&name.text) {
             return (
@@ -423,6 +462,13 @@ impl Analyzer {
                 .with_primary(name.span, format!("cannot resolve `{}`", name.text)),
         );
         (ExpressionKind::Error, Type::Error)
+    }
+
+    fn find_local(&self, name: &str) -> Option<LocalSymbol> {
+        self.scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name).cloned())
     }
 
     fn check_unary(
@@ -680,6 +726,7 @@ impl Analyzer {
             LocalSymbol {
                 id: binding.id,
                 ty: binding.ty.clone(),
+                mutable: binding.mutable,
                 span: binding.span,
             },
         );
@@ -762,6 +809,42 @@ mod tests {
             panic!("expected binding statement");
         };
         assert_eq!(binding.ty, Type::Int);
+    }
+
+    #[test]
+    fn resolves_and_checks_mutable_assignments() {
+        let output = analyze_text("fn f() -> Int { var value = 1; value = value + 1; value }");
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+
+        let function = &output.program.functions[0];
+        let StatementKind::Binding { binding, .. } = &function.body.statements[0].kind else {
+            panic!("expected binding statement");
+        };
+        let StatementKind::Assignment { target, .. } = &function.body.statements[1].kind else {
+            panic!("expected assignment statement");
+        };
+        assert_eq!(*target, Some(binding.id));
+    }
+
+    #[test]
+    fn rejects_immutable_and_mistyped_assignments() {
+        let output = analyze_text(
+            "fn f(parameter: Int) -> Int {\n\
+                 let fixed = 1; fixed = 2;\n\
+                 parameter = 3;\n\
+                 var count = 0; count = true;\n\
+                 count\n\
+             }",
+        );
+        assert_eq!(codes(&output), vec!["N3008", "N3008", "N3004"]);
+    }
+
+    #[test]
+    fn rejects_unknown_and_function_assignment_targets() {
+        let output = analyze_text(
+            "fn f() -> Int { missing = 1; f = 2; 0 }",
+        );
+        assert_eq!(codes(&output), vec!["N3003", "N3008"]);
     }
 
     #[test]
