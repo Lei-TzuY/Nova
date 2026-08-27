@@ -15,20 +15,23 @@ library, or memory-safety analysis.
 ## Current status
 
 The repository contains the Phase 0 constitution, the executable Phase 1
-frontend, early Phase 2 semantic-core slices, and the first Phase 3 bootstrap
-interpreter slice. The toolchain is written in Rust and can:
+frontend, early Phase 2 semantic-core slices, and executable Phase 3 bootstrap
+interpreter slices. The toolchain is written in Rust and can:
 
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
 - parse functions, initialized bindings, typed delayed `var` initialization,
-  narrow assignments, expressions, blocks, calls, and `if` expressions;
+  narrow assignments, expressions, blocks, calls, `if` expressions, and
+  pre-test `while` loops;
 - lower accepted syntax into a resolved, typed HIR;
 - resolve top-level functions, parameters, and lexical local bindings;
 - check bootstrap `Int`/`Bool` function signatures, local inference and
-  annotations, calls, operators, block tails, `if` branches, returns,
-  assignment mutability/type constraints, and definite initialization;
+  annotations, calls, operators, block tails, branches, returns, loop
+  conditions, assignment mutability/type constraints, and definite
+  initialization;
 - execute semantically accepted programs through a deterministic bootstrap
-  interpreter with function calls, recursion, mutation, blocks, and conditionals;
+  interpreter with function calls, recursion, mutation, blocks, conditionals,
+  and bounded loops;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
   text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
@@ -42,21 +45,12 @@ stable.
 The implemented syntax is intentionally small:
 
 ```nova
-fn choose(flag: Bool, left: Int, right: Int) -> Int {
-    var selected: Int;
-    if flag {
-        selected = left;
-        0
-    } else {
-        selected = right;
-        0
-    };
-
-    selected + 1
-}
-
 fn main() -> Int {
-    choose(true, 41, 0)
+    var value = 0;
+    while value < 5 {
+        value = value + 1;
+    }
+    value
 }
 ```
 
@@ -85,8 +79,14 @@ later assignment. The explicit type is required. Reading such a binding before
 it is definitely initialized is diagnostic `N3009`. For `if` expressions,
 analysis evaluates the two branch states independently and keeps a binding
 initialized afterward only when every branch that can continue has initialized
-it. A branch that returns does not constrain the surviving path. This is
-compile-time dataflow; Nova does not insert a runtime default value.
+it. A branch that returns does not constrain the surviving path.
+
+`while condition { body }` is a pre-test statement. The condition must be
+`Bool`. Because its first condition test always happens but its body may execute
+zero times, definite-assignment facts established while evaluating the
+condition may survive the loop; facts established only in the body do not make
+a delayed binding definitely initialized afterward. This prevents a zero-run
+loop from manufacturing initialization evidence.
 
 Only `Int` and `Bool` are recognized surface types today. Arithmetic and ordered
 comparisons require `Int`; boolean operators require `Bool`; equality accepts
@@ -98,23 +98,25 @@ Internal HIR uses `()` and `!` only to model value-less and non-continuing
 control flow; neither is a surface type in the current grammar.
 
 These rules are bootstrap semantics, not a promise that Nova's broader type,
-mutation, and shadowing policies are frozen.
+mutation, control-flow, and shadowing policies are frozen.
 
 ## Bootstrap execution rules
 
 `nova run` requires one top-level `main` with no parameters and an `Int` or
 `Bool` return type. It evaluates expressions left to right. `&&` and `||` are
 short-circuiting, so a skipped right operand performs no mutation or call.
-Explicit `return` propagates through nested blocks and expressions to the
-current function call.
+Explicit `return` propagates through nested blocks, expressions, and loop bodies
+to the current function call.
 
 For deterministic execution while the numeric design remains provisional, the
 bootstrap interpreter represents `Int` as signed 64-bit at runtime and uses
 checked arithmetic. Overflow produces `N4002`; division or remainder by zero
 produces `N4003`. Recursive execution is guarded by a finite active-call budget
-and reports `N4004` instead of intentionally recursing without bound. Missing or
-invalid `main` is `N4001`. These are bootstrap runtime contracts, not the final
-Nova numeric or runtime specification.
+and reports `N4004`. All statement/expression evaluation also shares a finite
+execution-step budget; a nonterminating loop therefore reports `N4006` instead
+of hanging indefinitely. Missing or invalid `main` is `N4001`. These are
+bootstrap runtime contracts, not the final Nova numeric or runtime
+specification.
 
 ## Build and use
 
@@ -128,11 +130,7 @@ cargo run -p nova-cli -- run examples/basics.nv
 cargo run -p nova-cli -- ast examples/basics.nv
 ```
 
-The `run` command prints the returned value from `main`:
-
-```text
-42
-```
+The `run` command prints the returned value from `main`.
 
 Machine-readable diagnostics are available without changing the compiler's
 internal diagnostic model:
@@ -162,7 +160,7 @@ source bytes
   -> nova-lexer         tokens and lexical diagnostics
   -> nova-parser        AST and syntactic diagnostics
   -> nova-sema          typed HIR, resolution, typing, definite assignment
-  -> nova-interpreter   deterministic checked execution of accepted HIR
+  -> nova-interpreter   deterministic checked, bounded execution of accepted HIR
   -> nova-cli           check/run/ast commands and diagnostic presentation
 
 nova-diagnostics        shared structured diagnostic model and renderers
@@ -181,6 +179,8 @@ language semantics.
 - Source positions are UTF-8 byte ranges internally and one-based line/column
   locations when rendered.
 - Runtime arithmetic is checked; host build mode never decides Nova results.
+- Potentially nonterminating bootstrap execution is bounded and fails with a
+  structured diagnostic rather than intentionally hanging the host.
 - CI checks Rust 1.85 compatibility, rejects formatting and Clippy warnings on
   current stable, and runs all tests, builds, and rustdoc.
 - Roadmap status is evidence-based; planned properties are not reported as
