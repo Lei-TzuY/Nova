@@ -51,12 +51,18 @@ fn run_command_executes_checked_program() {
 
 #[test]
 fn run_command_reports_runtime_failures() {
-    let overflow = fixture("runtime/overflow.nv");
-    let output = nova(&["run", overflow.to_str().expect("fixture path is UTF-8")]);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success());
-    assert!(stderr.contains("N4002"), "{stderr}");
-    assert!(output.stdout.is_empty());
+    for (relative, code) in [
+        ("runtime/overflow.nv", "N4002"),
+        ("runtime/divide-by-zero.nv", "N4003"),
+        ("runtime/invalid-main.nv", "N4001"),
+    ] {
+        let path = fixture(relative);
+        let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "fixture {relative} unexpectedly passed");
+        assert!(stderr.contains(code), "fixture {relative}: {stderr}");
+        assert!(output.stdout.is_empty());
+    }
 
     let missing_main = fixture("runtime/missing-main.nv");
     let output = nova(&[
