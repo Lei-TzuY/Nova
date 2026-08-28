@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: seven vertical slices implemented; broader type-system work remains.**
+**Status: eight vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -149,6 +149,25 @@ Implemented in the seventh Phase 2 slice:
   mutations are discarded; and
 - semantic unit tests plus CLI check/run fixtures lock the positive and negative
   guaranteed-loop behavior end to end.
+
+Implemented in the eighth Phase 2 slice:
+
+- semantic flow for `&&` and `||` now follows the interpreter's established
+  short-circuit evaluation rather than treating both operands as unconditionally
+  executed;
+- a directly skipped RHS (`false && rhs`, `true || rhs`) is still lowered for
+  deterministic name/type diagnostics while its assignment and loop-exit facts
+  are discarded;
+- a directly forced RHS (`true && rhs`, `false || rhs`) contributes ordinary
+  definite-initialization and non-continuation facts;
+- a dynamic Boolean LHS keeps both the short-circuit continuation and RHS
+  continuation reachable, so post-expression initialization is their
+  intersection rather than an RHS-only fact;
+- an optionally executed non-continuing RHS does not make the whole Boolean
+  expression non-continuing, while reachable RHS `break` transfers remain valid
+  exits from the enclosing loop; and
+- analyzer adversarial tests plus CLI check/run fixtures lock literal, dynamic,
+  initialization, return, and loop-exit behavior against runtime semantics.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
