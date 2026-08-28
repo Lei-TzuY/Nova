@@ -1,5 +1,8 @@
 //! Deterministic bootstrap interpreter for semantically accepted Nova HIR.
 
+mod int_semantics;
+
+use int_semantics::IntArithmeticError;
 use nova_diagnostics::Diagnostic;
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::hir::{
@@ -619,10 +622,9 @@ impl<'program> Interpreter<'program> {
         expression: &Expression,
     ) -> Result<Value, Diagnostic> {
         match (operator, operand) {
-            (UnaryOperator::Negate, Value::Int(value)) => value
-                .checked_neg()
-                .map(Value::Int)
-                .ok_or_else(|| self.overflow(expression)),
+            (UnaryOperator::Negate, Value::Int(value)) => {
+                self.int_result(int_semantics::negate(value), expression)
+            }
             (UnaryOperator::Not, Value::Bool(value)) => Ok(Value::Bool(!value)),
             _ => Err(self.invariant(
                 expression.span,
@@ -670,31 +672,21 @@ impl<'program> Interpreter<'program> {
         expression: &Expression,
     ) -> Result<Value, Diagnostic> {
         match (operator, left, right) {
-            (BinaryOperator::Add, Value::Int(left), Value::Int(right)) => left
-                .checked_add(right)
-                .map(Value::Int)
-                .ok_or_else(|| self.overflow(expression)),
-            (BinaryOperator::Subtract, Value::Int(left), Value::Int(right)) => left
-                .checked_sub(right)
-                .map(Value::Int)
-                .ok_or_else(|| self.overflow(expression)),
-            (BinaryOperator::Multiply, Value::Int(left), Value::Int(right)) => left
-                .checked_mul(right)
-                .map(Value::Int)
-                .ok_or_else(|| self.overflow(expression)),
-            (BinaryOperator::Divide, Value::Int(_), Value::Int(0))
-            | (BinaryOperator::Remainder, Value::Int(_), Value::Int(0)) => {
-                Err(Diagnostic::error("N4003", "division by zero")
-                    .with_primary(expression.span, "zero divisor is not executable"))
+            (BinaryOperator::Add, Value::Int(left), Value::Int(right)) => {
+                self.int_result(int_semantics::add(left, right), expression)
             }
-            (BinaryOperator::Divide, Value::Int(left), Value::Int(right)) => left
-                .checked_div(right)
-                .map(Value::Int)
-                .ok_or_else(|| self.overflow(expression)),
-            (BinaryOperator::Remainder, Value::Int(left), Value::Int(right)) => left
-                .checked_rem(right)
-                .map(Value::Int)
-                .ok_or_else(|| self.overflow(expression)),
+            (BinaryOperator::Subtract, Value::Int(left), Value::Int(right)) => {
+                self.int_result(int_semantics::subtract(left, right), expression)
+            }
+            (BinaryOperator::Multiply, Value::Int(left), Value::Int(right)) => {
+                self.int_result(int_semantics::multiply(left, right), expression)
+            }
+            (BinaryOperator::Divide, Value::Int(left), Value::Int(right)) => {
+                self.int_result(int_semantics::divide(left, right), expression)
+            }
+            (BinaryOperator::Remainder, Value::Int(left), Value::Int(right)) => {
+                self.int_result(int_semantics::remainder(left, right), expression)
+            }
             (BinaryOperator::Less, Value::Int(left), Value::Int(right)) => {
                 Ok(Value::Bool(left < right))
             }
@@ -747,6 +739,23 @@ impl<'program> Interpreter<'program> {
         }
         self.steps += 1;
         Ok(())
+    }
+
+    fn int_result(
+        &self,
+        result: Result<i64, IntArithmeticError>,
+        expression: &Expression,
+    ) -> Result<Value, Diagnostic> {
+        match result {
+            Ok(value) => Ok(Value::Int(value)),
+            Err(IntArithmeticError::Overflow) => Err(self.overflow(expression)),
+            Err(IntArithmeticError::ZeroDivisor) => Err(self.zero_divisor(expression)),
+        }
+    }
+
+    fn zero_divisor(&self, expression: &Expression) -> Diagnostic {
+        Diagnostic::error("N4003", "division by zero")
+            .with_primary(expression.span, "zero divisor is not executable")
     }
 
     fn overflow(&self, expression: &Expression) -> Diagnostic {

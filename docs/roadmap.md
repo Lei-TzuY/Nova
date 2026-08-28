@@ -382,7 +382,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: six vertical slices implemented; execution surface remains small.**
+**Status: seven vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -469,6 +469,23 @@ Implemented in the sixth Phase 3 slice:
   semantically valid `main() -> Unit` still fails deterministically with `N4001`; and
 - CLI end-to-end fixtures prove Unit execution while retaining the existing runtime
   entry-point boundary.
+
+Implemented in the seventh Phase 3 slice:
+
+- bootstrap integer arithmetic policy is centralized in an interpreter-owned pure
+  `int_semantics` contract instead of scattering host `checked_*` behavior across
+  expression evaluation;
+- signed division is explicitly truncation toward zero and signed remainder is tied
+  to that quotient, carries the dividend's sign when non-zero, and obeys the usual
+  division identity for successful operations;
+- zero divisors are a distinct `ZeroDivisor` arithmetic failure mapped to runtime
+  `N4003`, while representability failures map to `Overflow` / `N4002`;
+- both `Int::MIN / -1` and `Int::MIN % -1` remain deliberate overflow edges rather
+  than accidental consequences of Rust's operators;
+- truth-table unit tests cover all sign combinations, zero divisors, extreme values,
+  the quotient/remainder identity, and checked add/subtract/multiply/negate; and
+- CLI fixtures lock negative division/remainder results plus both extreme overflow
+  and zero-divisor classes end to end without adding new syntax or numeric types.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

@@ -114,11 +114,16 @@ expression is rejected as semantic diagnostic `N3030`, and larger magnitudes are
 rejected lexically as `N1004`. No literal is wrapped or truncated.
 
 The bootstrap interpreter provisionally executes `Int` as signed 64-bit values
-with checked arithmetic. Arithmetic overflow, division by zero, and remainder
-by zero fail with structured runtime diagnostics; execution never inherits
-host debug/release overflow behavior. This is implementation evidence for the
-numeric design, not yet a stable language-wide promise about numeric widths,
-defaulting, conversions, or overflow policy for future backends.
+with checked arithmetic. Signed division truncates toward zero. The associated
+remainder has the dividend's sign when non-zero, has magnitude smaller than the
+divisor's magnitude, and satisfies `a = (a / b) * b + (a % b)` whenever the
+operation succeeds. `Int::MIN / -1` and `Int::MIN % -1` are both overflow; zero
+divisors are a separate runtime failure class. Arithmetic overflow, division by
+zero, and remainder by zero fail with structured runtime diagnostics, and the
+interpreter routes these through a pure arithmetic contract rather than relying
+on host debug/release behavior or undocumented edge cases. This is implementation
+evidence for the numeric design, not yet a stable language-wide promise about
+numeric widths, defaulting, conversions, or overflow policy for future backends.
 
 **Research.** The project must decide, with implementation evidence:
 

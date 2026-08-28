@@ -235,8 +235,12 @@ literals end at `9223372036854775807`, while `-9223372036854775808` is normalize
 during semantic lowering to the exact minimum `Int`. Positive `9223372036854775808`
 is `N3030`; any larger decimal magnitude is lexical `N1004`. The interpreter
 represents `Int` as signed 64-bit at runtime and uses checked arithmetic.
-Overflow produces `N4002`; division or remainder by zero
-produces `N4003`. Recursive execution is guarded by a finite active-call budget
+Signed division truncates the quotient toward zero; a non-zero remainder has the
+same sign as the dividend and satisfies `a = (a / b) * b + (a % b)`. Both
+`i64::MIN / -1` and `i64::MIN % -1` are classified as integer overflow. Overflow
+produces `N4002`; division or remainder by zero produces `N4003`. Arithmetic
+policy lives in a pure interpreter contract rather than being inferred from host
+operator edge cases. Recursive execution is guarded by a finite active-call budget
 and reports `N4004`. All statement/expression evaluation also shares a finite
 execution-step budget; a nonterminating loop therefore reports `N4006` instead
 of hanging indefinitely. Missing or invalid `main` is `N4001`. Record values
