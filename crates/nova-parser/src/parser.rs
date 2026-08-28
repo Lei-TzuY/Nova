@@ -1180,7 +1180,8 @@ fn f() -> Int {
     fn parses_break_and_continue_as_statement_only_loop_control() {
         let (_, parsed) = parse_text("fn f() -> Int { while true { continue; break; } 0 }");
         assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
-        let StatementKind::While { body, .. } = &parsed.program.functions[0].body.statements[0].kind
+        let StatementKind::While { body, .. } =
+            &parsed.program.functions[0].body.statements[0].kind
         else {
             panic!("expected while statement");
         };
