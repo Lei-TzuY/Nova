@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: five vertical slices implemented; broader type-system work remains.**
+**Status: six vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -114,6 +114,24 @@ Implemented in the fifth Phase 2 slice:
 - definite-assignment merging by intersection across every continuing arm of a
   valid exhaustive match, while invalid matches establish no flow facts.
 
+Implemented in the sixth Phase 2 slice:
+
+- reserved, statement-only `break;` and `continue;` syntax represented explicitly
+  in AST and typed HIR rather than encoded as calls or special identifiers;
+- lexical loop-control legality checked against the nearest enclosing `while`
+  body, with diagnostic `N3013` outside that scope and the loop condition
+  deliberately excluded from it;
+- legal loop transfers represented as non-continuing paths so `if` and valid
+  exhaustive `match` joins consider only branches that can reach the following
+  source;
+- unreachable statements and tails still lowered for deterministic name/type
+  diagnostics while their scope and definite-initialization mutations are
+  discarded from the reachable continuation state;
+- loop-body-only initialization continues to be excluded from the post-loop
+  state, preserving the zero-iteration proof; and
+- adversarial semantic tests cover transfers nested in conditions, dead
+  assignments after transfers, and `continue` inside selected match paths.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
@@ -135,7 +153,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: four vertical slices implemented; execution surface remains small.**
+**Status: five vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -196,11 +214,28 @@ Implemented in the fourth Phase 3 slice:
 - CLI check/run fixtures plus semantic and runtime tests for successful and
   rejected enum/match programs.
 
+Implemented in the fifth Phase 3 slice:
+
+- structured interpreter flow for `Return`, `Break`, and `Continue` rather than
+  an ad-hoc Boolean or sentinel attached to loop execution;
+- propagation of loop transfers through nested blocks, `if`, aggregate
+  initializers, function-call operands, Boolean/arithmetic operands, and selected
+  exhaustive-match arms without changing their established evaluation order;
+- nearest-loop execution semantics in which `break` exits only the active
+  enclosing `while` and `continue` re-enters that loop at its condition test;
+- nested-loop behavior that leaves outer loops untouched by an inner `break`;
+- fail-closed runtime invariant `N4005` if malformed HIR lets loop control reach a
+  condition or escape a lexical loop/function boundary; and
+- interpreter and CLI end-to-end tests covering `break`, `continue`, nested
+  loops, selected match-arm propagation, invalid placement, and deterministic
+  results.
+
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
 
-- introduce richer control flow such as `break`/`continue` only with an explicit
-  CFG/dataflow story rather than ad-hoc interpreter behavior;
+- consider labelled loops, value-producing loop expressions, or value-carrying
+  `break` only after their target identity, type-join, and CFG/dataflow contracts
+  are explicit rather than extending the current nearest-`while` rule ad hoc;
 - consider richer patterns only after their usefulness, binding, dataflow, and
   execution contracts can remain deterministic;
 - decide whether aggregate update/mutation requires a dedicated semantic model
