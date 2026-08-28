@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: ten vertical slices implemented; broader type-system work remains.**
+**Status: eleven vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -201,6 +201,21 @@ Implemented in the tenth Phase 2 slice:
 - analyzer adversarial tests plus CLI check/run fixtures lock selected-arm payload,
   initialization, return, continue, break, and dead-arm diagnostic behavior.
 
+Implemented in the eleventh Phase 2 slice:
+
+- `Unit` promoted from an internal HIR-only concept to a reserved surface built-in
+  type, with `()` as its sole literal;
+- AST and typed HIR represent explicit Unit literals directly while value-less blocks
+  continue to produce the same semantic `Unit` type;
+- functions declared `-> Unit` may fall through a body with no tail expression, while
+  explicit `return ();` remains type checked through the ordinary return path;
+- non-Unit functions retain the existing all-continuing-path value requirement, and
+  non-Unit values returned from Unit functions are rejected with `N3004`;
+- `Unit` cannot be redefined as a record or enum, and Unit equality remains outside
+  the bootstrap operator contract; and
+- parser, semantic, CLI, grammar, constitution, README, and runtime-entry-point tests
+  distinguish surface Unit support from the still-Int/Bool-only `main` contract.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
@@ -223,7 +238,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: five vertical slices implemented; execution surface remains small.**
+**Status: six vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -299,6 +314,19 @@ Implemented in the fifth Phase 3 slice:
 - interpreter and CLI end-to-end tests covering `break`, `continue`, nested
   loops, selected match-arm propagation, invalid placement, and deterministic
   results.
+
+Implemented in the sixth Phase 3 slice:
+
+- the interpreter executes the explicit HIR Unit literal as the existing `Value::Unit`
+  representation rather than introducing a second runtime sentinel;
+- value-less Unit-returning functions complete normally with Unit, and explicit
+  `return ();` propagates through the same structured return machinery as other values;
+- Unit values may flow through ordinary local bindings, parameters, calls, returns,
+  record fields, and enum payloads under the existing static type checks;
+- CLI execution fixtures confirm Unit-valued helper procedures compose with an Int
+  `main`, while `main() -> Unit` remains rejected at runtime with `N4001`; and
+- no Unit equality, special calling convention, layout promise, or widened entry-point
+  ABI is inferred from this bootstrap execution support.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

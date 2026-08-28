@@ -87,6 +87,7 @@ primary             = integer
                     | identifier
                     | record_literal
                     | enum_constructor
+                    | unit_literal
                     | "(" , expression , ")"
                     | block
                     | if_expression
@@ -94,6 +95,7 @@ primary             = integer
 record_literal      = "new" , identifier , "{" , [ record_initializers ] , "}" ;
 record_initializers = record_initializer , { "," , record_initializer } , [ "," ] ;
 record_initializer  = identifier , ":" , expression ;
+unit_literal        = "(" , ")" ;
 enum_constructor    = identifier , "::" , identifier ,
                       [ "(" , expression , [ "," ] , ")" ] ;
 if_expression       = "if" , expression , block , "else" ,
@@ -110,6 +112,13 @@ tail value. Any earlier expression must end in `;`. Bindings, assignments,
 `break`, `continue`, and returns always end in `;`. A `while` statement ends
 with its body block and does not take a trailing semicolon. Top-level statements
 are not accepted.
+
+`Unit` is a built-in surface type and `()` is its sole literal. A block with no
+tail expression also has type `Unit`. A function declared `-> Unit` may therefore
+fall through a value-less body; `return ();` is the explicit equivalent. Other
+return types still require a compatible tail or an explicit return on every
+continuing path. Parenthesized non-empty expressions retain ordinary grouping, so
+`(value)` is not a Unit literal.
 
 Records are nominal top-level types. Each field has an explicit type and field
 names must be unique within a record. `new Type { ... }` constructs a record by
@@ -129,8 +138,10 @@ feedback during parsing.
 Enums are nominal top-level types and must declare at least one variant. A
 variant carries either no payload or exactly one explicitly typed payload.
 `Enum::Variant` constructs a payload-free variant; `Enum::Variant(expression)`
-constructs a payload variant. Empty `()` is not an alternate spelling for a
-payload-free constructor. Declared enum names and record names share one type
+constructs a payload variant. `()` is the Unit literal, so `Enum::Variant(())`
+supplies one Unit payload and is valid only for a variant declared with payload
+type `Unit`; it is not an alternate spelling for a payload-free constructor.
+Declared enum names and record names share one type
 namespace, and recursive enum payload types are accepted. This does not define a
 stable runtime layout, size, allocation strategy, or ABI for enums.
 
