@@ -27,7 +27,11 @@ jobs:
             exit 1
           fi
       - name: Apply constant Int preflight
-        run: python scripts/apply_constant_int_preflight.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/apply_constant_int_preflight.py
+          python scripts/apply_constant_int_reachability.py
       - name: Validate semantic and runtime boundaries
         shell: bash
         run: |
@@ -39,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/constant-int-preflight.yml scripts/apply_constant_int_preflight.py
+          git rm .github/workflows/constant-int-preflight.yml scripts/apply_constant_int_preflight.py scripts/apply_constant_int_reachability.py
           git add -A
           git config user.name "LeiZ"
           git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
