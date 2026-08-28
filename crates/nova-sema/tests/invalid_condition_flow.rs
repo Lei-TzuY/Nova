@@ -7,9 +7,17 @@ use nova_source::{SourceFile, SourceId};
 fn analyze_text(text: &str) -> AnalysisOutput {
     let source = SourceFile::new(SourceId::new(0), "invalid-condition-flow.nv", text);
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
-    assert!(parsed.is_success(), "parse diagnostics: {:?}", parsed.diagnostics);
+    assert!(
+        parsed.is_success(),
+        "parse diagnostics: {:?}",
+        parsed.diagnostics
+    );
     analyze(&parsed.program)
 }
 
@@ -45,9 +53,8 @@ fn expression_statement_type<'a>(
 
 #[test]
 fn invalid_if_condition_does_not_export_condition_initialization() {
-    let output = analyze_text(
-        "fn f() -> Int { var x: Int; if ({ x = 1; 0 }) { 1 } else { 2 }; x }",
-    );
+    let output =
+        analyze_text("fn f() -> Int { var x: Int; if ({ x = 1; 0 }) { 1 } else { 2 }; x }");
     let actual = codes(&output);
     assert!(actual.contains(&"N3004"), "{actual:?}");
     assert!(actual.contains(&"N3009"), "{actual:?}");
@@ -56,9 +63,8 @@ fn invalid_if_condition_does_not_export_condition_initialization() {
 
 #[test]
 fn invalid_if_condition_does_not_export_branch_initialization() {
-    let output = analyze_text(
-        "fn f() -> Int { var x: Int; if 0 { x = 1; 1 } else { x = 2; 2 }; x }",
-    );
+    let output =
+        analyze_text("fn f() -> Int { var x: Int; if 0 { x = 1; 1 } else { x = 2; 2 }; x }");
     let actual = codes(&output);
     assert!(actual.contains(&"N3004"), "{actual:?}");
     assert!(actual.contains(&"N3009"), "{actual:?}");
@@ -67,9 +73,8 @@ fn invalid_if_condition_does_not_export_branch_initialization() {
 
 #[test]
 fn erroneous_if_condition_is_error_typed_and_fail_closed() {
-    let output = analyze_text(
-        "fn f() -> Int { var x: Int; if missing { x = 1; 1 } else { x = 2; 2 }; x }",
-    );
+    let output =
+        analyze_text("fn f() -> Int { var x: Int; if missing { x = 1; 1 } else { x = 2; 2 }; x }");
     let actual = codes(&output);
     assert!(actual.contains(&"N3003"), "{actual:?}");
     assert!(actual.contains(&"N3009"), "{actual:?}");
@@ -78,9 +83,8 @@ fn erroneous_if_condition_is_error_typed_and_fail_closed() {
 
 #[test]
 fn invalid_if_condition_discards_branch_break_exits() {
-    let output = analyze_text(
-        "fn f() -> Int { while true { if 0 { break; 1 } else { break; 2 }; } }",
-    );
+    let output =
+        analyze_text("fn f() -> Int { while true { if 0 { break; 1 } else { break; 2 }; } }");
     let actual = codes(&output);
     assert!(actual.contains(&"N3004"), "{actual:?}");
     assert!(!actual.contains(&"N3007"), "{actual:?}");

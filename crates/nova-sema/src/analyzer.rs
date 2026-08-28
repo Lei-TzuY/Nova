@@ -628,6 +628,7 @@ impl Analyzer {
                 )
             }
             ast::StatementKind::While { condition, body } => {
+                let condition_entry_state = self.capture_reachable_state();
                 let condition = self.lower_expression(condition, return_type);
                 self.require_type(
                     &condition.ty,
@@ -651,6 +652,9 @@ impl Analyzer {
                 let diverges = if condition.ty.is_never() {
                     self.scopes = post_condition_scopes;
                     true
+                } else if condition.ty != Type::Bool {
+                    self.restore_reachable_state(condition_entry_state);
+                    false
                 } else if guaranteed_entry {
                     if loop_context.break_states.is_empty() {
                         self.scopes = post_condition_scopes;
@@ -845,6 +849,7 @@ impl Analyzer {
                 then_branch,
                 else_branch,
             } => {
+                let condition_entry_state = self.capture_reachable_state();
                 let condition = self.lower_expression(condition, return_type);
                 self.require_type(&condition.ty, &Type::Bool, condition.span, "if condition");
 
@@ -903,6 +908,9 @@ impl Analyzer {
                     self.scopes = entry_scopes;
                     self.loop_stack = post_condition_loop_stack;
                     Type::Never
+                } else if condition.ty != Type::Bool {
+                    self.restore_reachable_state(condition_entry_state);
+                    Type::Error
                 } else {
                     match condition_literal {
                         Some(true) => {

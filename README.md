@@ -97,6 +97,12 @@ a continuing rejected operator are rolled back. Non-continuation from an operand
 must be evaluated keeps `!` precedence; short-circuit operators retain their existing
 conditional right-hand evaluation rules.
 
+Invalid continuing control conditions are fail-closed too. A non-Bool or erroneous
+`if` condition makes the expression Error-typed and discards condition/branch flow
+facts; a rejected `while` condition likewise cannot export pre-test initialization or
+loop exits. A condition that is already `!` keeps its non-continuation, while valid
+Bool conditions retain the established pre-test and branch dataflow rules.
+
 `record Name { field: Type, ... }` declares a nominal type: two separately
 declared records are distinct even if their fields have the same shape. Field
 names must be unique. `new Name { field: expression, ... }` must initialize every

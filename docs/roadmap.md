@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: nineteen vertical slices implemented; broader type-system work remains.**
+**Status: twenty vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -329,6 +329,21 @@ Implemented in the nineteenth Phase 2 slice:
   flow rollback at the shared binary lowering boundary; and
 - red-to-green adversarial tests lock typing, definite-initialization, loop-exit,
   strict non-continuation, and short-circuit behavior.
+
+Implemented in the twentieth Phase 2 slice:
+
+- `if` and `while` capture reachable state before evaluating their condition so a
+  continuing rejected condition cannot export assignments or loop-exit facts;
+- concrete non-Bool and recovery-Error `if` conditions make the whole expression
+  `Type::Error` instead of retaining a normal branch join type;
+- invalid `while` conditions still lower their body under a lexical loop context for
+  deterministic diagnostics, but condition/body flow is rolled back afterward;
+- nested invalid loop conditions cannot manufacture break exits for an enclosing
+  otherwise-infinite loop;
+- conditions already typed `!` retain non-continuation precedence, while valid Bool
+  pre-test initialization and ordinary branch merging remain unchanged; and
+- red-to-green adversarial tests lock condition-side initialization, branch flow,
+  nested break exits, Error typing, valid pre-test facts, and `!` behavior.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

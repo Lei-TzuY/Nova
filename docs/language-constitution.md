@@ -184,6 +184,14 @@ lowering that rejected operator are discarded. A definitely evaluated operand th
 is already `!` retains non-continuation precedence; `&&` and `||` continue to model
 conditional right-hand evaluation rather than treating every lowered RHS as reachable.
 
+A continuing `if` or `while` whose condition is not a valid `Bool` is also fail-closed
+for flow recovery. The condition and nested branches/body are still lowered for
+source diagnostics and lexical loop-control checking, but assignments and loop-exit
+facts created only inside the rejected control construct do not become post-construct
+facts. Invalid `if` conditions make the expression `<error>`-typed. A condition that
+is already `!` retains non-continuation precedence rather than being flattened to a
+continuing recovery error.
+
 Continuing record or enum construction that is itself rejected by type-head,
 structural, or payload/field type validation is fail-closed for flow recovery:
 assignments and
