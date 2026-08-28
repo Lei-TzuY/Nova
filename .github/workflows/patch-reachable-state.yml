@@ -1,0 +1,130 @@
+name: Patch reachable state
+
+on:
+  push:
+    branches:
+      - refactor/reachable-state
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/reachable-state
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Refactor reachable-state snapshots
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/nova-sema/src/analyzer.rs")
+          text = path.read_text()
+
+          def replace_once(old, new):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one match, found {count}: {old!r}")
+              text = text.replace(old, new)
+
+          replace_once(
+              "#[derive(Clone, Debug)]\nstruct LoopContext {\n    visible_scope_count: usize,\n    break_states: Vec<ScopeState>,\n}\n\nstruct Analyzer {",
+              "#[derive(Clone, Debug)]\nstruct LoopContext {\n    visible_scope_count: usize,\n    break_states: Vec<ScopeState>,\n}\n\n#[derive(Clone, Debug)]\nstruct ReachableState {\n    scopes: ScopeState,\n    loop_stack: Vec<LoopContext>,\n}\n\nstruct Analyzer {",
+          )
+
+          marker = "    fn collect_type_definitions(&mut self, program: &ast::Program) {"
+          methods = (
+              "    fn capture_reachable_state(&self) -> ReachableState {\n"
+              "        ReachableState {\n"
+              "            scopes: self.scopes.clone(),\n"
+              "            loop_stack: self.loop_stack.clone(),\n"
+              "        }\n"
+              "    }\n\n"
+              "    fn restore_reachable_state(&mut self, state: ReachableState) {\n"
+              "        self.scopes = state.scopes;\n"
+              "        self.loop_stack = state.loop_stack;\n"
+              "    }\n\n"
+          )
+          replace_once(marker, methods + marker)
+
+          replace_once(
+              "        for statement in &block.statements {\n            let reachable_scopes = self.scopes.clone();\n            let reachable_loop_stack = self.loop_stack.clone();\n            let (statement, diverges) = self.lower_statement(statement, return_type);\n            statements.push(statement);\n            if terminated {\n                self.scopes = reachable_scopes;\n                self.loop_stack = reachable_loop_stack;\n            } else if diverges {\n                terminated = true;\n            }\n        }",
+              "        for statement in &block.statements {\n            let reachable_state = self.capture_reachable_state();\n            let (statement, diverges) = self.lower_statement(statement, return_type);\n            statements.push(statement);\n            if terminated {\n                self.restore_reachable_state(reachable_state);\n            } else if diverges {\n                terminated = true;\n            }\n        }",
+          )
+
+          replace_once(
+              "        let tail = block.tail.as_deref().map(|expression| {\n            let reachable_scopes = self.scopes.clone();\n            let reachable_loop_stack = self.loop_stack.clone();\n            let expression = Box::new(self.lower_expression(expression, return_type));\n            if terminated {\n                self.scopes = reachable_scopes;\n                self.loop_stack = reachable_loop_stack;\n            }\n            expression\n        });",
+              "        let tail = block.tail.as_deref().map(|expression| {\n            let reachable_state = self.capture_reachable_state();\n            let expression = Box::new(self.lower_expression(expression, return_type));\n            if terminated {\n                self.restore_reachable_state(reachable_state);\n            }\n            expression\n        });",
+          )
+
+          replace_once(
+              "    fn lower_expression_for_diagnostics(\n        &mut self,\n        expression: &ast::Expression,\n        return_type: &Type,\n    ) -> hir::Expression {\n        let reachable_scopes = self.scopes.clone();\n        let reachable_loop_stack = self.loop_stack.clone();\n        let lowered = self.lower_expression(expression, return_type);\n        self.scopes = reachable_scopes;\n        self.loop_stack = reachable_loop_stack;\n        lowered\n    }",
+              "    fn lower_expression_for_diagnostics(\n        &mut self,\n        expression: &ast::Expression,\n        return_type: &Type,\n    ) -> hir::Expression {\n        let reachable_state = self.capture_reachable_state();\n        let lowered = self.lower_expression(expression, return_type);\n        self.restore_reachable_state(reachable_state);\n        lowered\n    }",
+          )
+
+          replace_once(
+              "    fn lower_block_for_diagnostics(\n        &mut self,\n        block: &ast::Block,\n        return_type: &Type,\n        push_scope: bool,\n    ) -> hir::Block {\n        let reachable_scopes = self.scopes.clone();\n        let reachable_loop_stack = self.loop_stack.clone();\n        let lowered = self.lower_block(block, return_type, push_scope);\n        self.scopes = reachable_scopes;\n        self.loop_stack = reachable_loop_stack;\n        lowered\n    }",
+              "    fn lower_block_for_diagnostics(\n        &mut self,\n        block: &ast::Block,\n        return_type: &Type,\n        push_scope: bool,\n    ) -> hir::Block {\n        let reachable_state = self.capture_reachable_state();\n        let lowered = self.lower_block(block, return_type, push_scope);\n        self.restore_reachable_state(reachable_state);\n        lowered\n    }",
+          )
+
+          path.write_text(text)
+
+          roadmap = Path("docs/roadmap.md")
+          roadmap_text = roadmap.read_text()
+
+          def roadmap_replace_once(old, new):
+              global roadmap_text
+              count = roadmap_text.count(old)
+              if count != 1:
+                  raise SystemExit(f"roadmap: expected one match, found {count}: {old!r}")
+              roadmap_text = roadmap_text.replace(old, new)
+
+          roadmap_replace_once(
+              "**Status: ten vertical slices implemented; broader type-system work remains.**",
+              "**Status: eleven vertical slices implemented; broader type-system work remains.**",
+          )
+          anchor = (
+              "- analyzer adversarial tests plus CLI check/run fixtures lock selected-arm payload,\n"
+              "  initialization, return, continue, break, and dead-arm diagnostic behavior.\n\n"
+              "The next Phase 2 slices should address semantic depth rather than widen syntax\n"
+          )
+          replacement = (
+              "- analyzer adversarial tests plus CLI check/run fixtures lock selected-arm payload,\n"
+              "  initialization, return, continue, break, and dead-arm diagnostic behavior.\n\n"
+              "Implemented in the eleventh Phase 2 slice:\n\n"
+              "- semantic rollback now has an explicit internal `ReachableState` that bundles\n"
+              "  lexical scope/definite-initialization state with enclosing loop contexts;\n"
+              "- diagnostic-only expression/block lowering captures and restores that state\n"
+              "  atomically instead of cloning the two components independently;\n"
+              "- unreachable statement suffixes and block tails use the same state contract,\n"
+              "  preventing dead assignments or loop transfers from leaking reachable facts;\n"
+              "- binding identity allocation and diagnostics intentionally remain outside the\n"
+              "  rollback snapshot, preserving deterministic HIR identities and error reporting;\n"
+              "- scope-only merges for dynamic branches, matches, and optional short-circuit RHS\n"
+              "  remain separate because reachable loop exits from those paths must accumulate; and\n"
+              "- dedicated regression tests plus the existing adversarial semantic suite lock the\n"
+              "  refactor to behavior-preserving state restoration.\n\n"
+              "The next Phase 2 slices should address semantic depth rather than widen syntax\n"
+          )
+          roadmap_replace_once(anchor, replacement)
+          roadmap.write_text(roadmap_text)
+          PY
+          cargo fmt --all
+      - name: Validate semantic refactor
+        run: cargo test -p nova-sema --all-targets --locked
+      - name: Commit refactor and remove helper
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-reachable-state.yml
+          git add crates/nova-sema/src/analyzer.rs crates/nova-sema/tests/reachable_state.rs docs/roadmap.md
+          git commit -m "refactor: centralize reachable-state rollback"
+          git push origin HEAD:refactor/reachable-state
