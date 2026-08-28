@@ -73,6 +73,8 @@ type Frame = BTreeMap<BindingId, Option<Value>>;
 enum Flow {
     Value(Value),
     Return(Value),
+    Break,
+    Continue,
 }
 
 struct Interpreter<'program> {
@@ -178,13 +180,17 @@ impl<'program> Interpreter<'program> {
     ) -> Result<Value, Diagnostic> {
         match self.eval_block(&function.body, frame)? {
             Flow::Value(value) | Flow::Return(value) => Ok(value),
+            Flow::Break | Flow::Continue => Err(self.invariant(
+                function.span,
+                "loop control escaped the function that owns its lexical loop",
+            )),
         }
     }
 
     fn eval_block(&mut self, block: &Block, frame: &mut Frame) -> Result<Flow, Diagnostic> {
         for statement in &block.statements {
-            if let Some(value) = self.eval_statement(statement, frame)? {
-                return Ok(Flow::Return(value));
+            if let Some(flow) = self.eval_statement(statement, frame)? {
+                return Ok(flow);
             }
         }
 
@@ -198,7 +204,7 @@ impl<'program> Interpreter<'program> {
         &mut self,
         statement: &Statement,
         frame: &mut Frame,
-    ) -> Result<Option<Value>, Diagnostic> {
+    ) -> Result<Option<Flow>, Diagnostic> {
         self.step(statement.span)?;
         match &statement.kind {
             StatementKind::Binding {
@@ -209,7 +215,7 @@ impl<'program> Interpreter<'program> {
                     frame.insert(binding.id, Some(value));
                     Ok(None)
                 }
-                Flow::Return(value) => Ok(Some(value)),
+                flow => Ok(Some(flow)),
             },
             StatementKind::UninitializedBinding(binding) => {
                 frame.insert(binding.id, None);
@@ -236,19 +242,26 @@ impl<'program> Interpreter<'program> {
                         *slot = Some(value);
                         Ok(None)
                     }
-                    Flow::Return(value) => Ok(Some(value)),
+                    flow => Ok(Some(flow)),
                 }
             }
             StatementKind::While { condition, body } => loop {
                 let condition = match self.eval_expression(condition, frame)? {
                     Flow::Value(value) => value,
-                    Flow::Return(value) => return Ok(Some(value)),
+                    Flow::Return(value) => return Ok(Some(Flow::Return(value))),
+                    Flow::Break | Flow::Continue => {
+                        return Err(self.invariant(
+                            condition.span,
+                            "loop control reached a `while` condition outside the loop-body control scope",
+                        ));
+                    }
                 };
                 match condition {
                     Value::Bool(false) => return Ok(None),
                     Value::Bool(true) => match self.eval_block(body, frame)? {
-                        Flow::Value(_) => {}
-                        Flow::Return(value) => return Ok(Some(value)),
+                        Flow::Value(_) | Flow::Continue => {}
+                        Flow::Break => return Ok(None),
+                        Flow::Return(value) => return Ok(Some(Flow::Return(value))),
                     },
                     _ => {
                         return Err(self.invariant(
@@ -258,13 +271,17 @@ impl<'program> Interpreter<'program> {
                     }
                 }
             },
+            StatementKind::Break => Ok(Some(Flow::Break)),
+            StatementKind::Continue => Ok(Some(Flow::Continue)),
             StatementKind::Return(expression) => match self.eval_expression(expression, frame)? {
-                Flow::Value(value) | Flow::Return(value) => Ok(Some(value)),
+                Flow::Value(value) | Flow::Return(value) => Ok(Some(Flow::Return(value))),
+                Flow::Break => Ok(Some(Flow::Break)),
+                Flow::Continue => Ok(Some(Flow::Continue)),
             },
             StatementKind::Expression(expression) => {
                 match self.eval_expression(expression, frame)? {
                     Flow::Value(_) => Ok(None),
-                    Flow::Return(value) => Ok(Some(value)),
+                    flow => Ok(Some(flow)),
                 }
             }
         }
@@ -322,7 +339,7 @@ impl<'program> Interpreter<'program> {
                 for field in fields {
                     let value = match self.eval_expression(&field.value, frame)? {
                         Flow::Value(value) => value,
-                        Flow::Return(value) => return Ok(Flow::Return(value)),
+                        flow => return Ok(flow),
                     };
                     let Some(slot) = slots.get_mut(field.field_index) else {
                         return Err(self.invariant(
@@ -398,7 +415,7 @@ impl<'program> Interpreter<'program> {
                 let payload = if let Some(payload) = payload {
                     match self.eval_expression(payload, frame)? {
                         Flow::Value(value) => Some(Box::new(value)),
-                        Flow::Return(value) => return Ok(Flow::Return(value)),
+                        flow => return Ok(flow),
                     }
                 } else {
                     None
@@ -416,7 +433,7 @@ impl<'program> Interpreter<'program> {
             } => {
                 let base = match self.eval_expression(base, frame)? {
                     Flow::Value(value) => value,
-                    Flow::Return(value) => return Ok(Flow::Return(value)),
+                    flow => return Ok(flow),
                 };
                 let Value::Record {
                     record: actual,
@@ -449,7 +466,7 @@ impl<'program> Interpreter<'program> {
             ExpressionKind::Unary { operator, operand } => {
                 let operand = match self.eval_expression(operand, frame)? {
                     Flow::Value(value) => value,
-                    Flow::Return(value) => return Ok(Flow::Return(value)),
+                    flow => return Ok(flow),
                 };
                 self.eval_unary(*operator, operand, expression)
                     .map(Flow::Value)
@@ -462,7 +479,7 @@ impl<'program> Interpreter<'program> {
             ExpressionKind::Call { callee, arguments } => {
                 let callee = match self.eval_expression(callee, frame)? {
                     Flow::Value(value) => value,
-                    Flow::Return(value) => return Ok(Flow::Return(value)),
+                    flow => return Ok(flow),
                 };
                 let Value::Function(function) = callee else {
                     return Err(self.invariant(
@@ -474,7 +491,7 @@ impl<'program> Interpreter<'program> {
                 for argument in arguments {
                     match self.eval_expression(argument, frame)? {
                         Flow::Value(value) => values.push(value),
-                        Flow::Return(value) => return Ok(Flow::Return(value)),
+                        flow => return Ok(flow),
                     }
                 }
                 self.call_function(function, values).map(Flow::Value)
@@ -487,7 +504,7 @@ impl<'program> Interpreter<'program> {
             } => {
                 let condition = match self.eval_expression(condition, frame)? {
                     Flow::Value(value) => value,
-                    Flow::Return(value) => return Ok(Flow::Return(value)),
+                    flow => return Ok(flow),
                 };
                 match condition {
                     Value::Bool(true) => self.eval_block(then_branch, frame),
@@ -544,7 +561,7 @@ impl<'program> Interpreter<'program> {
 
                 let scrutinee = match self.eval_expression(scrutinee, frame)? {
                     Flow::Value(value) => value,
-                    Flow::Return(value) => return Ok(Flow::Return(value)),
+                    flow => return Ok(flow),
                 };
                 let Value::Enum {
                     enumeration: actual_enum,
@@ -623,7 +640,7 @@ impl<'program> Interpreter<'program> {
     ) -> Result<Flow, Diagnostic> {
         let left = match self.eval_expression(left, frame)? {
             Flow::Value(value) => value,
-            Flow::Return(value) => return Ok(Flow::Return(value)),
+            flow => return Ok(flow),
         };
 
         match (operator, &left) {
@@ -638,7 +655,7 @@ impl<'program> Interpreter<'program> {
 
         let right = match self.eval_expression(right, frame)? {
             Flow::Value(value) => value,
-            Flow::Return(value) => return Ok(Flow::Return(value)),
+            flow => return Ok(flow),
         };
         self.apply_binary(operator, left, right, expression)
             .map(Flow::Value)
@@ -898,6 +915,52 @@ mod tests {
         )
         .expect("program executes");
         assert_eq!(value, Value::Int(5));
+    }
+
+    #[test]
+    fn executes_break_continue_and_nested_loop_targets() {
+        let value = execute_text(
+            "fn main() -> Int {\n\
+                 var index = 0;\n\
+                 var sum = 0;\n\
+                 while index < 8 {\n\
+                     index = index + 1;\n\
+                     if index == 3 { continue; } else { 0 };\n\
+                     if index == 6 { break; } else { 0 };\n\
+                     sum = sum + index;\n\
+                 }\n\
+                 var outer = 0;\n\
+                 while outer < 3 {\n\
+                     outer = outer + 1;\n\
+                     while true { sum = sum + 10; break; }\n\
+                 }\n\
+                 sum\n\
+             }",
+        )
+        .expect("loop control should execute");
+        assert_eq!(value, Value::Int(42));
+    }
+
+    #[test]
+    fn continue_propagates_through_selected_match_arm() {
+        let value = execute_text(
+            "enum Step { Skip, Add(Int) }\n\
+             fn main() -> Int {\n\
+                 var index = 0;\n\
+                 var sum = 0;\n\
+                 while index < 4 {\n\
+                     index = index + 1;\n\
+                     let step = if index == 2 { Step::Skip } else { Step::Add(index) };\n\
+                     match step {\n\
+                         Step::Skip => { continue; },\n\
+                         Step::Add(value) => { sum = sum + value; 0 },\n\
+                     };\n\
+                 }\n\
+                 sum\n\
+             }",
+        )
+        .expect("continue should propagate through the selected match arm");
+        assert_eq!(value, Value::Int(8));
     }
 
     #[test]
