@@ -159,6 +159,13 @@ initialization facts during diagnostic recovery. This is direct-constructor
 reachability, not propagation of enum values through locals, calls, or general
 constant evaluation.
 
+Continuing record or enum construction that is itself rejected by structural or
+payload/field type validation is fail-closed for flow recovery: assignments and
+loop-exit facts produced only while lowering that invalid aggregate cannot establish
+state after the rejected expression. If a child expression is already `!`, its
+reachable non-continuation remains dominant; this rollback rule applies only when
+the invalid aggregate would otherwise continue.
+
 The bootstrap `while` form is a pre-test statement. For an ordinary condition,
 the body may execute zero times. Initialization facts established while
 evaluating the mandatory first condition test may therefore flow after the

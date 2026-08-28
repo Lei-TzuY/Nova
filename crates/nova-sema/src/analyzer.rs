@@ -1004,11 +1004,13 @@ impl Analyzer {
             return (ExpressionKind::Error, Type::Error);
         };
         let definition = self.record_definitions[record_id.index()].clone();
+        let aggregate_entry_state = self.capture_reachable_state();
         let mut seen = BTreeMap::<String, Span>::new();
         let mut resolved = Vec::with_capacity(fields.len());
         let mut structural_error = false;
         let mut contains_error = false;
         let mut contains_never = false;
+        let mut type_error = false;
         let mut can_continue = true;
 
         for field in fields {
@@ -1058,7 +1060,9 @@ impl Analyzer {
             seen.insert(field.name.text.clone(), field.name.span);
 
             let expected = &definition.fields[field_index].ty;
+            let type_matches = types_compatible(&value.ty, expected);
             self.require_type(&value.ty, expected, value.span, "record field initializer");
+            type_error |= !type_matches;
             resolved.push(RecordFieldValue { field_index, value });
         }
 
@@ -1081,12 +1085,13 @@ impl Analyzer {
 
         let ty = if contains_never {
             Type::Never
-        } else if structural_error || contains_error {
+        } else if structural_error || contains_error || type_error {
             Type::Error
         } else {
             Type::Record(definition.record_type())
         };
-        if structural_error {
+        let should_restore = ty.is_error();
+        let result = if structural_error {
             (ExpressionKind::Error, ty)
         } else {
             (
@@ -1096,7 +1101,11 @@ impl Analyzer {
                 },
                 ty,
             )
+        };
+        if should_restore {
+            self.restore_reachable_state(aggregate_entry_state);
         }
+        result
     }
 
     fn lower_enum_constructor(
@@ -1106,6 +1115,7 @@ impl Analyzer {
         payload: Option<&ast::Expression>,
         return_type: &Type,
     ) -> (ExpressionKind, Type) {
+        let aggregate_entry_state = self.capture_reachable_state();
         let payload =
             payload.map(|expression| Box::new(self.lower_expression(expression, return_type)));
         let payload_never = payload
@@ -1124,14 +1134,13 @@ impl Analyzer {
                     )
                     .with_note("enum constructors use `Enum::Variant` qualification"),
             );
-            return (
-                ExpressionKind::Error,
-                if payload_never {
-                    Type::Never
-                } else {
-                    Type::Error
-                },
-            );
+            let ty = if payload_never {
+                Type::Never
+            } else {
+                self.restore_reachable_state(aggregate_entry_state);
+                Type::Error
+            };
+            return (ExpressionKind::Error, ty);
         };
         let TypeDefinition::Enum(enum_id) = symbol.definition else {
             self.diagnostics.push(
@@ -1142,14 +1151,13 @@ impl Analyzer {
                     )
                     .with_secondary(symbol.span, "record declared here"),
             );
-            return (
-                ExpressionKind::Error,
-                if payload_never {
-                    Type::Never
-                } else {
-                    Type::Error
-                },
-            );
+            let ty = if payload_never {
+                Type::Never
+            } else {
+                self.restore_reachable_state(aggregate_entry_state);
+                Type::Error
+            };
+            return (ExpressionKind::Error, ty);
         };
         let definition = self.enum_definitions[enum_id.index()].clone();
         let Some(variant_index) = definition
@@ -1168,20 +1176,22 @@ impl Analyzer {
                     )
                     .with_secondary(definition.span, "enum declared here"),
             );
-            return (
-                ExpressionKind::Error,
-                if payload_never {
-                    Type::Never
-                } else {
-                    Type::Error
-                },
-            );
+            let ty = if payload_never {
+                Type::Never
+            } else {
+                self.restore_reachable_state(aggregate_entry_state);
+                Type::Error
+            };
+            return (ExpressionKind::Error, ty);
         };
 
         let declared = &definition.variants[variant_index];
+        let mut payload_type_error = false;
         let arity_matches = match (&declared.payload, payload.as_deref()) {
             (Some(expected), Some(actual)) => {
+                let type_matches = types_compatible(&actual.ty, expected);
                 self.require_type(&actual.ty, expected, actual.span, "enum variant payload");
+                payload_type_error = !type_matches;
                 true
             }
             (None, None) => true,
@@ -1211,12 +1221,13 @@ impl Analyzer {
 
         let ty = if payload_never {
             Type::Never
-        } else if payload_error || !arity_matches {
+        } else if payload_error || payload_type_error || !arity_matches {
             Type::Error
         } else {
             Type::Enum(definition.enum_type())
         };
-        if arity_matches {
+        let should_restore = ty.is_error();
+        let result = if arity_matches {
             (
                 ExpressionKind::EnumConstructor {
                     enumeration: enum_id,
@@ -1227,7 +1238,11 @@ impl Analyzer {
             )
         } else {
             (ExpressionKind::Error, ty)
+        };
+        if should_restore {
+            self.restore_reachable_state(aggregate_entry_state);
         }
+        result
     }
 
     fn lower_match(

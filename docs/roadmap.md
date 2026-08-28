@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: eleven vertical slices implemented; broader type-system work remains.**
+**Status: twelve vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -215,6 +215,20 @@ Implemented in the eleventh Phase 2 slice:
   remain separate because reachable loop exits from those paths must accumulate; and
 - dedicated regression tests plus the existing adversarial semantic suite lock the
   refactor to behavior-preserving state restoration.
+
+Implemented in the twelfth Phase 2 slice:
+
+- continuing record construction that fails structural, child-error, or field-type
+  validation restores its pre-construction reachable state instead of exporting
+  assignments or loop-exit facts from rejected source;
+- enum constructors apply the same rollback to unknown/invalid constructors, payload
+  arity errors, child errors, and payload type mismatches;
+- aggregate field/payload type mismatches now produce `Type::Error` HIR rather than
+  retaining a nominal aggregate type after diagnostic `N3004`;
+- a child expression that is already non-continuing still yields `!`, preserving
+  reachable return/break/continue precedence over continuing recovery rollback; and
+- adversarial tests lock both definite-initialization rollback and non-continuing
+  aggregate inputs across records and enums.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
