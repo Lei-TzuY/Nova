@@ -735,11 +735,41 @@ impl Analyzer {
                 right,
             } => {
                 let left = self.lower_expression(left, return_type);
-                let right = if left.ty.is_never() {
+                let left_scopes = self.scopes.clone();
+                let left_literal = match &left.kind {
+                    ExpressionKind::Boolean(value) => Some(*value),
+                    _ => None,
+                };
+                let skips_right = matches!(
+                    (*operator, left_literal),
+                    (BinaryOperator::And, Some(false)) | (BinaryOperator::Or, Some(true))
+                );
+                let forces_right = matches!(
+                    (*operator, left_literal),
+                    (BinaryOperator::And, Some(true)) | (BinaryOperator::Or, Some(false))
+                );
+                let short_circuit_operator =
+                    matches!(operator, BinaryOperator::And | BinaryOperator::Or);
+
+                let right = if left.ty.is_never() || (short_circuit_operator && skips_right) {
                     self.lower_expression_for_diagnostics(right, return_type)
                 } else {
                     self.lower_expression(right, return_type)
                 };
+
+                if short_circuit_operator
+                    && !left.ty.is_never()
+                    && !skips_right
+                    && !forces_right
+                {
+                    let right_scopes = self.scopes.clone();
+                    self.merge_optional_execution_initialization(
+                        &left_scopes,
+                        &right_scopes,
+                        right.ty.is_never(),
+                    );
+                }
+
                 let ty = self.check_binary(*operator, &left, &right, expression.span);
                 (
                     ExpressionKind::Binary {
@@ -1512,6 +1542,29 @@ impl Analyzer {
         }
     }
 
+    fn merge_optional_execution_initialization(
+        &mut self,
+        entry_scopes: &[Scope],
+        executed_scopes: &[Scope],
+        executed_never: bool,
+    ) {
+        self.scopes = entry_scopes.to_vec();
+        if executed_never {
+            return;
+        }
+        for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
+            for (name, entry_symbol) in entry_scope {
+                let executed_initialized = executed_scopes
+                    .get(scope_index)
+                    .and_then(|scope| scope.get(name))
+                    .is_some_and(|symbol| symbol.initialized);
+                if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
+                    symbol.initialized = entry_symbol.initialized && executed_initialized;
+                }
+            }
+        }
+    }
+
     fn merge_branch_initialization(
         &mut self,
         entry_scopes: &[Scope],
@@ -1621,12 +1674,40 @@ impl Analyzer {
                 binary_result_type(left, right, Type::Bool)
             }
             BinaryOperator::And | BinaryOperator::Or => {
-                self.require_binary_operands(left, right, &Type::Bool, span, "boolean operator");
-                binary_result_type(left, right, Type::Bool)
+                self.check_short_circuit_binary(operator, left, right, span)
             }
             BinaryOperator::Equal | BinaryOperator::NotEqual => {
                 self.check_equality(left, right, span)
             }
+        }
+    }
+
+    fn check_short_circuit_binary(
+        &mut self,
+        operator: BinaryOperator,
+        left: &hir::Expression,
+        right: &hir::Expression,
+        span: Span,
+    ) -> Type {
+        self.require_binary_operands(left, right, &Type::Bool, span, "boolean operator");
+        if left.ty.is_never() {
+            return Type::Never;
+        }
+        if left.ty.is_error() || right.ty.is_error() {
+            return Type::Error;
+        }
+        let left_literal = match &left.kind {
+            ExpressionKind::Boolean(value) => Some(*value),
+            _ => None,
+        };
+        let right_is_required = matches!(
+            (operator, left_literal),
+            (BinaryOperator::And, Some(true)) | (BinaryOperator::Or, Some(false))
+        );
+        if right_is_required && right.ty.is_never() {
+            Type::Never
+        } else {
+            Type::Bool
         }
     }
 
@@ -2227,6 +2308,60 @@ mod tests {
              }",
         );
         assert_eq!(codes(&output), vec!["N3009"]);
+    }
+
+    #[test]
+    fn short_circuit_literals_control_definite_initialization() {
+        for text in [
+            "fn f() -> Int { var value: Int; true && { value = 1; true }; value }",
+            "fn f() -> Int { var value: Int; false || { value = 1; true }; value }",
+        ] {
+            let output = analyze_text(text);
+            assert!(output.is_success(), "{text}: {:?}", output.diagnostics);
+        }
+
+        for text in [
+            "fn f() -> Int { var value: Int; false && { value = 1; true }; value }",
+            "fn f() -> Int { var value: Int; true || { value = 1; false }; value }",
+        ] {
+            let output = analyze_text(text);
+            assert_eq!(codes(&output), vec!["N3009"], "{text}");
+        }
+    }
+
+    #[test]
+    fn dynamic_short_circuit_rhs_is_only_conditionally_executed() {
+        let output = analyze_text(
+            "fn f(flag: Bool) -> Int { var value: Int; flag && { value = 1; true }; value }",
+        );
+        assert_eq!(codes(&output), vec!["N3009"]);
+
+        let output = analyze_text(
+            "fn f(flag: Bool) -> Int { flag && { return 1; }; 2 }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        assert_eq!(output.program.functions[0].body.ty, Type::Int);
+    }
+
+    #[test]
+    fn short_circuit_loop_breaks_follow_runtime_reachability() {
+        let skipped = analyze_text("fn f() -> Int { while true { false && { break; true }; } }");
+        assert!(skipped.is_success(), "{:?}", skipped.diagnostics);
+        assert!(skipped.program.functions[0].body.ty.is_never());
+
+        let dynamic = analyze_text(
+            "fn f(flag: Bool) -> Int { while true { flag && { break; true }; } }",
+        );
+        assert_eq!(codes(&dynamic), vec!["N3007"]);
+
+        let forced = analyze_text("fn f() -> Int { while true { true && { break; true }; } }");
+        assert_eq!(codes(&forced), vec!["N3007"]);
+    }
+
+    #[test]
+    fn skipped_short_circuit_rhs_still_reports_static_type_errors() {
+        let output = analyze_text("fn f() -> Bool { false && 1 }");
+        assert_eq!(codes(&output), vec!["N3004"]);
     }
 
     #[test]
