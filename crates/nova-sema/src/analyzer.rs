@@ -2,6 +2,9 @@ use crate::hir::{
     self, BindingId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType, MatchArm,
     RecordFieldValue, RecordId, RecordType, StatementKind, Type,
 };
+use crate::type_rules::{
+    JoinObservation, TypeJoin, expected_type_compatible, strict_binary_result_type,
+};
 use nova_diagnostics::{Diagnostic, LabelStyle};
 use nova_parser::ast::{self, BinaryOperator, UnaryOperator};
 use nova_source::Span;
@@ -595,7 +598,7 @@ impl Analyzer {
                     if symbol.mutable
                         && !value.ty.is_error()
                         && !value.ty.is_never()
-                        && types_compatible(&value.ty, &symbol.ty)
+                        && expected_type_compatible(&value.ty, &symbol.ty)
                     {
                         self.mark_initialized(&target.text);
                     }
@@ -1065,7 +1068,7 @@ impl Analyzer {
             seen.insert(field.name.text.clone(), field.name.span);
 
             let expected = &definition.fields[field_index].ty;
-            let type_matches = types_compatible(&value.ty, expected);
+            let type_matches = expected_type_compatible(&value.ty, expected);
             self.require_type(&value.ty, expected, value.span, "record field initializer");
             type_error |= !type_matches;
             resolved.push(RecordFieldValue { field_index, value });
@@ -1194,7 +1197,7 @@ impl Analyzer {
         let mut payload_type_error = false;
         let arity_matches = match (&declared.payload, payload.as_deref()) {
             (Some(expected), Some(actual)) => {
-                let type_matches = types_compatible(&actual.ty, expected);
+                let type_matches = expected_type_compatible(&actual.ty, expected);
                 self.require_type(&actual.ty, expected, actual.span, "enum variant payload");
                 payload_type_error = !type_matches;
                 true
@@ -1769,7 +1772,7 @@ impl Analyzer {
         self.require_type(&operand.ty, &expected, span, "unary operator operand");
         if operand.ty.is_error() {
             Type::Error
-        } else if types_compatible(&operand.ty, &expected) {
+        } else if expected_type_compatible(&operand.ty, &expected) {
             expected
         } else {
             Type::Error
@@ -1790,14 +1793,14 @@ impl Analyzer {
             | BinaryOperator::Divide
             | BinaryOperator::Remainder => {
                 self.require_binary_operands(left, right, &Type::Int, span, "arithmetic operator");
-                binary_result_type(left, right, Type::Int)
+                strict_binary_result_type(&left.ty, &right.ty, Type::Int)
             }
             BinaryOperator::Less
             | BinaryOperator::LessEqual
             | BinaryOperator::Greater
             | BinaryOperator::GreaterEqual => {
                 self.require_binary_operands(left, right, &Type::Int, span, "comparison operator");
-                binary_result_type(left, right, Type::Bool)
+                strict_binary_result_type(&left.ty, &right.ty, Type::Bool)
             }
             BinaryOperator::And | BinaryOperator::Or => {
                 self.check_short_circuit_binary(operator, left, right, span)
@@ -1848,7 +1851,9 @@ impl Analyzer {
         if left.ty.is_error() || right.ty.is_error() {
             return;
         }
-        if !types_compatible(&left.ty, expected) || !types_compatible(&right.ty, expected) {
+        if !expected_type_compatible(&left.ty, expected)
+            || !expected_type_compatible(&right.ty, expected)
+        {
             self.diagnostics
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
@@ -1965,77 +1970,50 @@ impl Analyzer {
         else_type: &Type,
         else_span: Span,
     ) -> Type {
-        if then_type.is_never() {
-            return else_type.clone();
+        let mut join = TypeJoin::default();
+        let _ = join.observe(then_type);
+        if let JoinObservation::Mismatch { expected, found } = join.observe(else_type) {
+            self.diagnostics.push(
+                Diagnostic::error("N3004", "type mismatch")
+                    .with_primary(
+                        else_span,
+                        format!("else branch has type {found}, expected {expected}"),
+                    )
+                    .with_secondary(then_span, format!("then branch has type {expected}")),
+            );
         }
-        if else_type.is_never() {
-            return then_type.clone();
-        }
-        if then_type.is_error() {
-            return else_type.clone();
-        }
-        if else_type.is_error() {
-            return then_type.clone();
-        }
-        if then_type == else_type {
-            return then_type.clone();
-        }
-
-        self.diagnostics.push(
-            Diagnostic::error("N3004", "type mismatch")
-                .with_primary(
-                    else_span,
-                    format!("else branch has type {else_type}, expected {then_type}"),
-                )
-                .with_secondary(then_span, format!("then branch has type {then_type}")),
-        );
-        Type::Error
+        join.finish()
     }
 
     fn join_match_arm_types(&mut self, arms: &[(Type, Span)]) -> Type {
-        let mut expected = None::<(Type, Span)>;
-        let mut saw_error = false;
-        let mut mismatch = false;
+        let mut join = TypeJoin::default();
+        let mut anchor_span = None;
 
         for (ty, span) in arms {
-            if ty.is_never() {
-                continue;
-            }
-            if ty.is_error() {
-                saw_error = true;
-                continue;
-            }
-            if let Some((expected_type, expected_span)) = &expected {
-                if ty != expected_type {
+            match join.observe(ty) {
+                JoinObservation::Anchor(_) => anchor_span = Some(*span),
+                JoinObservation::Mismatch { expected, found } => {
                     self.diagnostics.push(
                         Diagnostic::error("N3004", "type mismatch")
                             .with_primary(
                                 *span,
-                                format!("match arm has type {ty}, expected {expected_type}"),
+                                format!("match arm has type {found}, expected {expected}"),
                             )
                             .with_secondary(
-                                *expected_span,
-                                format!("first continuing arm has type {expected_type}"),
+                                anchor_span.expect("a mismatch requires a concrete anchor"),
+                                format!("first continuing arm has type {expected}"),
                             ),
                     );
-                    mismatch = true;
                 }
-            } else {
-                expected = Some((ty.clone(), *span));
+                JoinObservation::Never | JoinObservation::Error | JoinObservation::Compatible => {}
             }
         }
 
-        if mismatch || (expected.is_none() && saw_error) {
-            Type::Error
-        } else if let Some((ty, _)) = expected {
-            ty
-        } else {
-            Type::Never
-        }
+        join.finish()
     }
 
     fn require_type(&mut self, actual: &Type, expected: &Type, span: Span, context: &str) {
-        if types_compatible(actual, expected) {
+        if expected_type_compatible(actual, expected) {
             return;
         }
         self.diagnostics
@@ -2083,20 +2061,6 @@ impl Analyzer {
                 span: binding.span,
             },
         );
-    }
-}
-
-fn types_compatible(actual: &Type, expected: &Type) -> bool {
-    actual.is_error() || expected.is_error() || actual.is_never() || actual == expected
-}
-
-fn binary_result_type(left: &hir::Expression, right: &hir::Expression, success: Type) -> Type {
-    if left.ty.is_never() || right.ty.is_never() {
-        Type::Never
-    } else if left.ty.is_error() || right.ty.is_error() {
-        Type::Error
-    } else {
-        success
     }
 }
 
