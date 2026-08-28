@@ -177,6 +177,7 @@ struct Analyzer {
     functions: BTreeMap<String, FunctionSymbol>,
     scopes: Vec<BTreeMap<String, LocalSymbol>>,
     next_binding: usize,
+    loop_depth: usize,
 }
 
 impl Analyzer {
@@ -190,6 +191,7 @@ impl Analyzer {
             functions: BTreeMap::new(),
             scopes: Vec::new(),
             next_binding: 0,
+            loop_depth: 0,
         }
     }
 
@@ -404,6 +406,7 @@ impl Analyzer {
         let signature = self.signatures[id.index()].clone();
         self.scopes.clear();
         self.scopes.push(BTreeMap::new());
+        self.loop_depth = 0;
 
         let mut parameters = Vec::with_capacity(function.parameters.len());
         for (parameter, ty) in function.parameters.iter().zip(&signature.parameters) {
@@ -413,6 +416,7 @@ impl Analyzer {
         }
 
         let body = self.lower_block(&function.body, &signature.return_type, false);
+        debug_assert_eq!(self.loop_depth, 0);
         if !body.ty.is_never() && function.body.tail.is_none() {
             self.diagnostics.push(
                 Diagnostic::error("N3007", "function can complete without returning a value")
@@ -461,15 +465,24 @@ impl Analyzer {
         let mut terminated = false;
         let mut statements = Vec::with_capacity(block.statements.len());
         for statement in &block.statements {
+            let reachable_scopes = self.scopes.clone();
             let (statement, diverges) = self.lower_statement(statement, return_type);
             statements.push(statement);
-            terminated |= diverges;
+            if terminated {
+                self.scopes = reachable_scopes;
+            } else if diverges {
+                terminated = true;
+            }
         }
 
-        let tail = block
-            .tail
-            .as_deref()
-            .map(|expression| Box::new(self.lower_expression(expression, return_type)));
+        let tail = block.tail.as_deref().map(|expression| {
+            let reachable_scopes = self.scopes.clone();
+            let expression = Box::new(self.lower_expression(expression, return_type));
+            if terminated {
+                self.scopes = reachable_scopes;
+            }
+            expression
+        });
         let ty = if terminated {
             Type::Never
         } else {
@@ -589,10 +602,34 @@ impl Analyzer {
                 );
 
                 let post_condition_scopes = self.scopes.clone();
+                self.loop_depth += 1;
                 let body = self.lower_block(body, return_type, true);
+                self.loop_depth -= 1;
                 self.scopes = post_condition_scopes;
                 let diverges = condition.ty.is_never();
                 (StatementKind::While { condition, body }, diverges)
+            }
+            ast::StatementKind::Break => {
+                if self.loop_depth == 0 {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3013", "loop control outside loop").with_primary(
+                            statement.span,
+                            "`break` requires a lexically enclosing `while` body",
+                        ),
+                    );
+                }
+                (StatementKind::Break, true)
+            }
+            ast::StatementKind::Continue => {
+                if self.loop_depth == 0 {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3013", "loop control outside loop").with_primary(
+                            statement.span,
+                            "`continue` requires a lexically enclosing `while` body",
+                        ),
+                    );
+                }
+                (StatementKind::Continue, true)
             }
             ast::StatementKind::Return(expression) => {
                 let expression = self.lower_expression(expression, return_type);
@@ -1934,6 +1971,42 @@ mod tests {
     }
 
     #[test]
+    fn checks_structured_break_continue_and_continuing_branch_facts() {
+        let output = analyze_text(
+            "fn f(flag: Bool) -> Int {\n\
+                 while flag {\n\
+                     var value: Int;\n\
+                     if flag { continue; } else { value = 1; 0 };\n\
+                     value;\n\
+                     break;\n\
+                 }\n\
+                 0\n\
+             }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        let StatementKind::While { body, .. } = &output.program.functions[0].body.statements[0].kind
+        else {
+            panic!("expected while HIR");
+        };
+        assert!(matches!(
+            body.statements.last().map(|statement| &statement.kind),
+            Some(StatementKind::Break)
+        ));
+    }
+
+    #[test]
+    fn rejects_loop_control_without_enclosing_while_body() {
+        let output = analyze_text("fn f() -> Int { break; continue; 0 }");
+        assert_eq!(codes(&output), vec!["N3013", "N3013"]);
+    }
+
+    #[test]
+    fn rejects_loop_control_nested_in_while_condition() {
+        let output = analyze_text("fn f() -> Int { while { break; true } {} 0 }");
+        assert_eq!(codes(&output), vec!["N3013"]);
+    }
+
+    #[test]
     fn loop_body_initialization_does_not_escape_zero_iteration_path() {
         let output = analyze_text(
             "fn f(flag: Bool) -> Int { var value: Int; while flag { value = 1; } value }",
@@ -1946,6 +2019,21 @@ mod tests {
         let output =
             analyze_text("fn f() -> Int { var value: Int; while { value = 1; false } {} value }");
         assert!(output.is_success(), "{:?}", output.diagnostics);
+    }
+
+    #[test]
+    fn unreachable_statements_after_loop_control_do_not_change_dataflow_facts() {
+        let output = analyze_text(
+            "fn f(flag: Bool) -> Int {\n\
+                 while flag {\n\
+                     var value: Int;\n\
+                     if flag { continue; value = 1; } else { 0 };\n\
+                     value;\n\
+                 }\n\
+                 0\n\
+             }",
+        );
+        assert_eq!(codes(&output), vec!["N3009"]);
     }
 
     #[test]
@@ -2173,6 +2261,26 @@ mod tests {
              }",
         );
         assert_eq!(codes(&incomplete), vec!["N3009"]);
+    }
+
+    #[test]
+    fn match_loop_control_excludes_noncontinuing_arms_from_dataflow() {
+        let output = analyze_text(
+            "enum Choice { Skip, Set(Int) }\n\
+             fn f(choice: Choice) -> Int {\n\
+                 while true {\n\
+                     var value: Int;\n\
+                     match choice {\n\
+                         Choice::Skip => { continue; },\n\
+                         Choice::Set(inner) => { value = inner; 0 },\n\
+                     };\n\
+                     value;\n\
+                     break;\n\
+                 }\n\
+                 0\n\
+             }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
     }
 
     #[test]
