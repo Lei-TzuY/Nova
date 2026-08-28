@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: fourteen vertical slices implemented; broader type-system work remains.**
+**Status: fifteen vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -259,6 +259,20 @@ Implemented in the fourteenth Phase 2 slice:
   decisions are separated from diagnostic rendering; and
 - truth-table tests lock primitive, `Unit`, nominal, `!`, `<error>`, compatible, and
   mismatched joins so later type-system work has an executable semantic contract.
+
+Implemented in the fifteenth Phase 2 slice:
+
+- definite-initialization joins now share an internal pure `InitializationJoin`
+  contract instead of encoding continuing-path intersection separately for loops,
+  optional execution, `if`, and exhaustive `match`;
+- only paths that can reach the join point participate, and a binding is considered
+  initialized exactly when every such path reports it initialized;
+- when every alternative is non-continuing, the entry fact is retained for later
+  diagnostic-only lowering rather than inventing a reachable initialization fact;
+- scope lookup and binding identity remain analyzer responsibilities, keeping the
+  reusable flow rule independent of lexical representation; and
+- truth-table tests plus the existing loop, short-circuit, branch, match, and invalid-
+  aggregate adversarial suites lock the refactor to behavior-preserving dataflow.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
