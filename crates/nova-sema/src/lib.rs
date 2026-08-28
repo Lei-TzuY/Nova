@@ -1,6 +1,7 @@
 //! Nova semantic analysis: HIR lowering, lexical name resolution, and bootstrap typing.
 
 mod analyzer;
+mod flow_rules;
 mod type_rules;
 
 pub mod hir;

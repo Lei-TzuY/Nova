@@ -1,3 +1,4 @@
+use crate::flow_rules::InitializationJoin;
 use crate::hir::{
     self, BindingId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType, MatchArm,
     RecordFieldValue, RecordId, RecordType, StatementKind, Type,
@@ -1657,15 +1658,17 @@ impl Analyzer {
         debug_assert!(!break_states.is_empty());
         self.scopes = entry_scopes.to_vec();
         for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
-            for name in entry_scope.keys() {
-                let initialized = break_states.iter().all(|break_scopes| {
-                    break_scopes
+            for (name, entry_symbol) in entry_scope {
+                let mut join = InitializationJoin::default();
+                for break_scopes in break_states {
+                    let initialized = break_scopes
                         .get(scope_index)
                         .and_then(|scope| scope.get(name))
-                        .is_some_and(|symbol| symbol.initialized)
-                });
+                        .is_some_and(|symbol| symbol.initialized);
+                    join.observe(initialized, true);
+                }
                 if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
-                    symbol.initialized = initialized;
+                    symbol.initialized = join.finish(entry_symbol.initialized);
                 }
             }
         }
@@ -1678,17 +1681,17 @@ impl Analyzer {
         executed_never: bool,
     ) {
         self.scopes = entry_scopes.to_vec();
-        if executed_never {
-            return;
-        }
         for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
             for (name, entry_symbol) in entry_scope {
                 let executed_initialized = executed_scopes
                     .get(scope_index)
                     .and_then(|scope| scope.get(name))
                     .is_some_and(|symbol| symbol.initialized);
+                let mut join = InitializationJoin::default();
+                join.observe(entry_symbol.initialized, true);
+                join.observe(executed_initialized, !executed_never);
                 if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
-                    symbol.initialized = entry_symbol.initialized && executed_initialized;
+                    symbol.initialized = join.finish(entry_symbol.initialized);
                 }
             }
         }
@@ -1713,14 +1716,11 @@ impl Analyzer {
                     .get(scope_index)
                     .and_then(|scope| scope.get(name))
                     .is_some_and(|symbol| symbol.initialized);
-                let initialized = match (then_never, else_never) {
-                    (true, true) => entry_symbol.initialized,
-                    (true, false) => else_initialized,
-                    (false, true) => then_initialized,
-                    (false, false) => then_initialized && else_initialized,
-                };
+                let mut join = InitializationJoin::default();
+                join.observe(then_initialized, !then_never);
+                join.observe(else_initialized, !else_never);
                 if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
-                    symbol.initialized = initialized;
+                    symbol.initialized = join.finish(entry_symbol.initialized);
                 }
             }
         }
@@ -1732,25 +1732,18 @@ impl Analyzer {
         branches: &[(ScopeState, bool)],
     ) {
         self.scopes = entry_scopes.to_vec();
-        let continuing = branches
-            .iter()
-            .filter(|(_, never)| !never)
-            .map(|(scopes, _)| scopes)
-            .collect::<Vec<_>>();
-        if continuing.is_empty() {
-            return;
-        }
-
         for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
-            for name in entry_scope.keys() {
-                let initialized = continuing.iter().all(|branch_scopes| {
-                    branch_scopes
+            for (name, entry_symbol) in entry_scope {
+                let mut join = InitializationJoin::default();
+                for (branch_scopes, never) in branches {
+                    let initialized = branch_scopes
                         .get(scope_index)
                         .and_then(|scope| scope.get(name))
-                        .is_some_and(|symbol| symbol.initialized)
-                });
+                        .is_some_and(|symbol| symbol.initialized);
+                    join.observe(initialized, !never);
+                }
                 if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
-                    symbol.initialized = initialized;
+                    symbol.initialized = join.finish(entry_symbol.initialized);
                 }
             }
         }
