@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: four vertical slices implemented; broader type-system work remains.**
+**Status: five vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -98,6 +98,24 @@ Implemented in the fourth Phase 2 slice:
 - record types integrated with function signatures, local inference,
   annotations, assignment type preservation, returns, and branch type joining.
 
+Implemented in the fifth Phase 2 slice:
+
+- statement-only `break;` and `continue;` with lexical legality restricted to
+  the nearest enclosing `while` body and semantic diagnostic `N3013` otherwise;
+- explicit non-continuing HIR paths for loop transfer so `if` dataflow merges can
+  ignore branches that do not reach the following statement;
+- `continue` modeled as returning to the loop's pre-test condition and `break`
+  as leaving the nearest active loop, without introducing value-producing loop
+  semantics;
+- unreachable source remains name/type checked for deterministic diagnostics,
+  while its declarations and assignments are rolled back from reachable
+  definite-assignment state;
+- the `while` condition deliberately remains outside its body's loop-control
+  scope, avoiding an implicit exit protocol inside condition expressions; and
+- semantic/adversarial tests covering valid nested transfer, misuse outside a
+  loop, and unreachable assignments that must not manufacture initialization
+  evidence.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
@@ -109,17 +127,19 @@ prematurely. In particular:
 - introduce exhaustive pattern checking after algebraic data types exist;
 - specify aggregate mutation/ownership and layout semantics before field mutation
   or ABI claims are added;
+- define labelled/value-producing loop semantics only with an explicit CFG and
+  type/dataflow contract rather than extending bootstrap transfer ad hoc;
 - define a versioned semantic-introspection schema rather than exposing debug
   HIR as a tooling protocol; and
 - expand negative and adversarial tests as each rule becomes implemented.
 
 Phase 2 is not complete until its implemented type, name, mutation, aggregate,
-and dataflow semantics are sufficiently specified for the executable subset and
-no roadmap item is being silently approximated.
+control-flow, and dataflow semantics are sufficiently specified for the
+executable subset and no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: three vertical slices implemented; execution surface remains small.**
+**Status: four vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -166,15 +186,29 @@ Implemented in the third Phase 3 slice:
 - CLI end-to-end fixtures for record checking/execution plus negative missing-
   field diagnostics.
 
+Implemented in the fourth Phase 3 slice:
+
+- interpreter `Flow` extended with structured `Break` and `Continue` alongside
+  ordinary values and function returns;
+- loop transfer propagated through nested blocks, conditionals, record
+  initializers, call arguments, unary/binary expressions, and other evaluated
+  subexpressions until the nearest active `while` consumes it;
+- `break` exits only the nearest loop while nested outer loops continue normally;
+- `continue` starts the next iteration by re-evaluating the pre-test condition;
+- invariant failures guard impossible loop-control escape across semantic
+  boundaries rather than silently assigning ad-hoc runtime meaning; and
+- interpreter and CLI end-to-end tests cover skipping iterations, early loop
+  exit, nested-loop targeting, and semantic rejection outside a loop.
+
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
 
-- introduce richer control flow such as `break`/`continue` only with an explicit
-  CFG/dataflow story rather than ad-hoc interpreter behavior;
 - execute enums and exhaustive pattern matching only after their semantic model
   and exhaustiveness checking exist;
 - decide whether aggregate update/mutation requires a dedicated semantic model
   rather than extending the current identifier-only assignment form;
+- introduce labelled or value-producing loop execution only after matching
+  Phase 2 CFG/type/dataflow contracts exist;
 - introduce a small explicit execution IR if interpreter complexity begins to
   leak backend concerns into HIR; and
 - keep runtime diagnostics source-qualified and reproducible.
