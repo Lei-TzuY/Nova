@@ -80,6 +80,12 @@ accidental self-reference. Duplicate names in the same lexical scope are
 rejected; nested lexical blocks may shadow outer bindings in this slice.
 Function parameters and a function body's outermost bindings share one scope.
 
+Rejected calls are fail-closed for continuing flow recovery. Callees and arguments
+are still lowered left-to-right for deterministic diagnostics, but a non-callable
+callee, wrong arity, argument type mismatch, or erroneous argument yields Error HIR
+and cannot export assignments or loop-exit facts. An actually evaluated child that
+is already non-continuing keeps its `!` flow.
+
 `record Name { field: Type, ... }` declares a nominal type: two separately
 declared records are distinct even if their fields have the same shape. Field
 names must be unique. `new Name { field: expression, ... }` must initialize every
