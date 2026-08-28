@@ -31,6 +31,10 @@ pub enum TokenKind {
     Else,
     /// `while`.
     While,
+    /// `break`.
+    Break,
+    /// `continue`.
+    Continue,
     /// `return`.
     Return,
     /// `true`.
@@ -110,6 +114,8 @@ impl TokenKind {
             Self::If => "`if`",
             Self::Else => "`else`",
             Self::While => "`while`",
+            Self::Break => "`break`",
+            Self::Continue => "`continue`",
             Self::Return => "`return`",
             Self::True => "`true`",
             Self::False => "`false`",
@@ -346,6 +352,8 @@ impl<'source> Lexer<'source> {
             "if" => TokenKind::If,
             "else" => TokenKind::Else,
             "while" => TokenKind::While,
+            "break" => TokenKind::Break,
+            "continue" => TokenKind::Continue,
             "return" => TokenKind::Return,
             "true" => TokenKind::True,
             "false" => TokenKind::False,
@@ -445,7 +453,7 @@ mod tests {
     #[test]
     fn lexes_keywords_operators_and_exact_spans() {
         let source = source(
-            "record Pair { left: Int, right: Int } enum Maybe { None, Some(Int) } fn yes(x: Maybe) -> Bool { let p = new Pair { left: 1, right: 2 }; while p.left >= 1 && true { return match x { Maybe::None => false, Maybe::Some(value) => value > 0, }; } true }",
+            "record Pair { left: Int, right: Int } enum Maybe { None, Some(Int) } fn yes(x: Maybe) -> Bool { let p = new Pair { left: 1, right: 2 }; while p.left >= 1 && true { continue; break; } return match x { Maybe::None => false, Maybe::Some(value) => value > 0, }; } true }",
         );
         let output = lex(&source);
         let kinds = output
@@ -463,6 +471,8 @@ mod tests {
         assert!(kinds.contains(&TokenKind::New));
         assert!(kinds.contains(&TokenKind::Fn));
         assert!(kinds.contains(&TokenKind::While));
+        assert!(kinds.contains(&TokenKind::Break));
+        assert!(kinds.contains(&TokenKind::Continue));
         assert!(kinds.contains(&TokenKind::Dot));
         assert!(kinds.contains(&TokenKind::GreaterEqual));
         assert!(kinds.contains(&TokenKind::AndAnd));
