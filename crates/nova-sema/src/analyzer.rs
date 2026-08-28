@@ -1228,6 +1228,17 @@ impl Analyzer {
         span: Span,
     ) -> (ExpressionKind, Type) {
         let scrutinee = self.lower_expression(scrutinee, return_type);
+        let selected_variant_index = match (&scrutinee.kind, &scrutinee.ty) {
+            (
+                ExpressionKind::EnumConstructor {
+                    enumeration,
+                    variant_index,
+                    ..
+                },
+                Type::Enum(scrutinee_type),
+            ) if *enumeration == scrutinee_type.id => Some(*variant_index),
+            _ => None,
+        };
         let post_scrutinee_loop_stack = self.loop_stack.clone();
         let mut scrutinee_enum = match &scrutinee.ty {
             Type::Enum(enumeration) => Some(enumeration.clone()),
@@ -1247,6 +1258,7 @@ impl Analyzer {
         let mut lowered_arms = Vec::with_capacity(arms.len());
         let mut branch_states = Vec::with_capacity(arms.len());
         let mut branch_types = Vec::with_capacity(arms.len());
+        let mut selected_branch = None::<(ScopeState, Type)>;
         let mut structural_error = scrutinee_enum.is_none() && !scrutinee.ty.is_never();
 
         for arm in arms {
@@ -1401,10 +1413,20 @@ impl Analyzer {
                 }
             }
 
-            let value = self.lower_expression(&arm.value, return_type);
+            let selected_arm = selected_variant_index
+                .is_some_and(|selected| valid_pattern && resolved_index == Some(selected));
+            let value = if selected_variant_index.is_some() && !selected_arm {
+                self.lower_expression_for_diagnostics(&arm.value, return_type)
+            } else {
+                self.lower_expression(&arm.value, return_type)
+            };
             let popped = self.scopes.pop();
             debug_assert!(popped.is_some());
-            branch_states.push((self.scopes.clone(), value.ty.is_never()));
+            let branch_state = (self.scopes.clone(), value.ty.is_never());
+            if selected_arm {
+                selected_branch = Some((branch_state.0.clone(), value.ty.clone()));
+            }
+            branch_states.push(branch_state);
             branch_types.push((value.ty.clone(), value.span));
 
             if let Some(variant_index) = resolved_index {
@@ -1456,6 +1478,13 @@ impl Analyzer {
             self.scopes = entry_scopes;
             self.loop_stack = post_scrutinee_loop_stack;
             Type::Error
+        } else if let Some((selected_scopes, selected_type)) = selected_branch {
+            self.scopes = selected_scopes;
+            if joined_type.is_error() {
+                Type::Error
+            } else {
+                selected_type
+            }
         } else {
             self.merge_match_initialization(&entry_scopes, &branch_states);
             joined_type
@@ -2610,6 +2639,89 @@ mod tests {
              fn f(value: Flag) -> Int { match value { Flag::Off => 0, Flag::On => true, } }",
         );
         assert_eq!(codes(&wrong_type), vec!["N3004"]);
+    }
+
+    #[test]
+    fn direct_enum_constructor_selects_only_one_match_arm_for_dataflow() {
+        let initialized = analyze_text(
+            "enum Choice { A, B }\n\\
+             fn f() -> Int {\n\\
+                 var value: Int;\n\\
+                 match Choice::A { Choice::A => { value = 1; 0 }, Choice::B => 0, };\n\\
+                 value\n\\
+             }",
+        );
+        assert!(initialized.is_success(), "{:?}", initialized.diagnostics);
+
+        let uninitialized = analyze_text(
+            "enum Choice { A, B }\n\\
+             fn f() -> Int {\n\\
+                 var value: Int;\n\\
+                 match Choice::A { Choice::A => 0, Choice::B => { value = 1; 0 }, };\n\\
+                 value\n\\
+             }",
+        );
+        assert_eq!(codes(&uninitialized), vec!["N3009"]);
+    }
+
+    #[test]
+    fn direct_enum_constructor_selected_arm_controls_noncontinuation() {
+        let returned = analyze_text(
+            "enum Choice { A, B }\n\\
+             fn f() -> Int { match Choice::A { Choice::A => { return 1; }, Choice::B => 0, } }",
+        );
+        assert!(returned.is_success(), "{:?}", returned.diagnostics);
+        assert!(returned.program.functions[0].body.ty.is_never());
+
+        let selected_continue = analyze_text(
+            "enum Choice { A, B }\n\\
+             fn f() -> Int {\n\\
+                 while true {\n\\
+                     match Choice::A { Choice::A => { continue; }, Choice::B => { break; }, };\n\\
+                 }\n\\
+             }",
+        );
+        assert!(
+            selected_continue.is_success(),
+            "{:?}",
+            selected_continue.diagnostics
+        );
+        assert!(selected_continue.program.functions[0].body.ty.is_never());
+
+        let selected_break = analyze_text(
+            "enum Choice { A, B }\n\\
+             fn f() -> Int {\n\\
+                 while true {\n\\
+                     match Choice::B { Choice::A => { continue; }, Choice::B => { break; }, };\n\\
+                 }\n\\
+             }",
+        );
+        assert_eq!(codes(&selected_break), vec!["N3007"]);
+    }
+
+    #[test]
+    fn direct_enum_constructor_dead_arms_still_receive_static_checks() {
+        let output = analyze_text(
+            "enum Choice { A, B }\n\\
+             fn f() -> Int { match Choice::A { Choice::A => 0, Choice::B => true, } }",
+        );
+        assert_eq!(codes(&output), vec!["N3004"]);
+    }
+
+    #[test]
+    fn direct_enum_constructor_payload_binding_can_establish_flow_facts() {
+        let output = analyze_text(
+            "enum Maybe { None, Some(Int) }\n\\
+             fn f() -> Int {\n\\
+                 var value: Int;\n\\
+                 match Maybe::Some(42) {\n\\
+                     Maybe::None => 0,\n\\
+                     Maybe::Some(inner) => { value = inner; 0 },\n\\
+                 };\n\\
+                 value\n\\
+             }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
     }
 
     #[test]
