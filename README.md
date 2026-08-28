@@ -23,19 +23,19 @@ interpreter slices. The toolchain is written in Rust and can:
 - parse functions, nominal records and enums, explicit aggregate construction,
   exhaustive enum matching, field projection, initialized bindings, typed
   delayed `var` initialization, narrow assignments, expressions, blocks, calls,
-  `if` expressions, and pre-test `while` loops;
+  `if` expressions, pre-test `while` loops, and statement-only `break`/`continue`;
 - lower accepted syntax into a resolved, typed HIR with stable function,
   binding, record, and enum identities;
 - resolve top-level functions and nominal types, parameters, lexical local
   bindings, record field slots, enum variant slots, and match payload bindings;
 - check bootstrap `Int`, `Bool`, and nominal aggregate types, function signatures,
   local inference and annotations, calls, operators, block tails, branches,
-  returns, loop conditions, record construction/projection, enum construction,
-  match exhaustiveness and arm types, assignment mutability/type constraints,
-  and definite initialization;
+  returns, loop conditions, loop-control legality, record construction/projection,
+  enum construction, match exhaustiveness and arm types, assignment
+  mutability/type constraints, and definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
   interpreter with function calls, recursion, records, enums, pattern matching,
-  mutation, blocks, conditionals, and bounded loops;
+  mutation, blocks, conditionals, bounded loops, and structured `break`/`continue`;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
   text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
@@ -44,7 +44,7 @@ interpreter slices. The toolchain is written in Rust and can:
 definite-assignment validation. `nova run` performs those same checks and then
 executes zero-argument `main`. The interpreter is evidence for the executable
 subset, not a claim that Nova's final runtime representation, numeric model,
-record layout, ABI, or backend is stable.
+aggregate layout, ABI, or backend is stable.
 
 The implemented syntax is intentionally small:
 
@@ -64,10 +64,10 @@ fn main() -> Int {
 ```
 
 See [the implemented grammar](docs/grammar.md) for the normative frontend
-subset, [the enum and pattern semantics](docs/enums-and-patterns.md) for this
-slice's semantic contract, and
+subset, [the enum and pattern semantics](docs/enums-and-patterns.md) for that
+aggregate slice's semantic contract, and
 [the language constitution](docs/language-constitution.md) for decisions that
-extend beyond it.
+extend beyond them.
 
 ## Current semantic rules
 
@@ -75,10 +75,9 @@ The Phase 2 bootstrap checker predeclares function signatures and nominal record
 and enum identities, so forward calls, recursion, forward aggregate type
 references, and recursive enum payload types resolve deterministically. A local
 initializer is checked before its new binding enters scope, preventing
-accidental self-reference. Duplicate names in
-the same lexical scope are rejected; nested lexical blocks may shadow outer
-bindings in this slice. Function parameters and a function body's outermost
-bindings share one scope.
+accidental self-reference. Duplicate names in the same lexical scope are
+rejected; nested lexical blocks may shadow outer bindings in this slice.
+Function parameters and a function body's outermost bindings share one scope.
 
 `record Name { field: Type, ... }` declares a nominal type: two separately
 declared records are distinct even if their fields have the same shape. Field
@@ -111,7 +110,9 @@ it is definitely initialized is diagnostic `N3009`. For `if` expressions,
 analysis evaluates the branch states independently and keeps a binding
 initialized afterward only when every branch that can continue has initialized
 it. The same intersection rule applies across all arms of a valid exhaustive
-match. A branch or arm that returns does not constrain the surviving path.
+match. A branch or arm that returns, breaks, or continues does not constrain the
+surviving path. Unreachable code is still analyzed for deterministic diagnostics,
+but its assignments cannot manufacture reachable definite-initialization facts.
 
 `while condition { body }` is a pre-test statement. The condition must be
 `Bool`. Because its first condition test always happens but its body may execute
@@ -120,15 +121,21 @@ condition may survive the loop; facts established only in the body do not make
 a delayed binding definitely initialized afterward. This prevents a zero-run
 loop from manufacturing initialization evidence.
 
+`break;` and `continue;` are legal only inside an enclosing `while` body. The
+condition expression is intentionally outside that loop-control scope. `break;`
+exits the nearest enclosing loop; `continue;` skips the rest of the current
+iteration and re-evaluates that same loop's condition. Neither carries a value
+or acts as an expression. Labelled loops and value-carrying breaks are not part
+of the bootstrap subset.
+
 `Int`, `Bool`, and declared nominal records and enums are recognized surface
-types today.
-Arithmetic and ordered comparisons require `Int`; boolean operators require
-`Bool`; equality currently accepts only matching `Int` or matching `Bool`;
-calls require a function value with matching arity and argument types. `if`
-conditions require `Bool`, its two branches must have compatible nominal or
-primitive value types, and all continuing match arms must likewise agree on one
-type. Explicit `return` expressions are checked against the function signature,
-and a function cannot fall through without a value.
+types today. Arithmetic and ordered comparisons require `Int`; boolean
+operators require `Bool`; equality currently accepts only matching `Int` or
+matching `Bool`; calls require a function value with matching arity and argument
+types. `if` conditions require `Bool`, its two continuing branches must have
+compatible nominal or primitive value types, and all continuing match arms must
+likewise agree on one type. Explicit `return` expressions are checked against
+the function signature, and a function cannot fall through without a value.
 Internal HIR uses `()` and `!` only to model value-less and non-continuing
 control flow; neither is a surface type in the current grammar.
 
@@ -142,8 +149,15 @@ mutation, control-flow, aggregate, and shadowing policies are frozen.
 expressions follow the same rule even when named fields are written out of
 declaration order. `&&` and `||` are short-circuiting, so a skipped right operand
 performs no mutation or call. A match evaluates its scrutinee exactly once and
-then only its selected arm. Explicit `return` propagates through nested blocks,
-expressions, match arms, and loop bodies to the current function call.
+then only its selected arm.
+
+The interpreter propagates structured control flow through nested blocks,
+conditionals, aggregate initializers, call arguments, and selected match arms.
+`return` reaches the current function call. `break` and `continue` travel only
+to the nearest enclosing `while`; that loop consumes them by exiting or starting
+the next condition test. If malformed HIR lets loop control escape its lexical
+loop or cross a function boundary, execution fails closed with invariant
+diagnostic `N4005` rather than guessing a target.
 
 For deterministic execution while the numeric design remains provisional, the
 bootstrap interpreter represents `Int` as signed 64-bit at runtime and uses
@@ -220,6 +234,8 @@ language semantics.
 - Runtime arithmetic is checked; host build mode never decides Nova results.
 - Observable evaluation order is explicit; named record fields do not reorder
   their initializer expressions, and a match evaluates only its selected arm.
+- Non-continuing control-flow paths cannot contribute definite-assignment facts
+  to code they cannot reach.
 - Potentially nonterminating bootstrap execution is bounded and fails with a
   structured diagnostic rather than intentionally hanging the host.
 - CI checks Rust 1.85 compatibility, rejects formatting and Clippy warnings on
