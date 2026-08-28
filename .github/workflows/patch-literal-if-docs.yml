@@ -1,0 +1,83 @@
+name: Patch literal-if docs
+
+on:
+  push:
+    branches:
+      - feat/literal-if-dataflow
+
+permissions:
+  contents: write
+
+jobs:
+  patch-docs:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/literal-if-dataflow
+      - name: Synchronize semantic documentation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              file.write_text(text.replace(old, new))
+
+          replace_once(
+              "README.md",
+              "For `if` expressions,\nanalysis evaluates the branch states independently and keeps a binding\ninitialized afterward only when every branch that can continue has initialized\nit.",
+              "For `if` expressions with a non-literal condition,\nanalysis evaluates the branch states independently and keeps a binding\ninitialized afterward only when every branch that can continue has initialized\nit.",
+          )
+          replace_once(
+              "README.md",
+              "`while condition { body }` is a pre-test statement.",
+              "A direct `if true` or `if false` refines control-flow reachability without\nturning the checker into a general constant folder. Only the selected branch may\ncontribute definite-initialization, non-continuation, or loop-exit facts; the\nunselected branch is still lowered for deterministic static diagnostics and still\nparticipates in branch type compatibility. Block-valued or computed Boolean\nconditions keep the ordinary conservative two-branch merge.\n\n`while condition { body }` is a pre-test statement.",
+          )
+
+          replace_once(
+              "docs/language-constitution.md",
+              "Definite-initialization state is propagated through lexical\nblocks and merged across `if` branches.",
+              "Definite-initialization state is propagated through lexical\nblocks and merged across `if` branches whose condition is not a direct Boolean\nliteral.",
+          )
+          replace_once(
+              "docs/language-constitution.md",
+              "Chained assignment, arbitrary lvalues, field mutation, indexing, and general\nuninitialized storage remain unsupported.",
+              "A direct Boolean-literal `if` is another provisional reachability refinement.\nFor `if true`, only the then branch contributes reachable flow facts; for\n`if false`, only the else branch does. The unselected branch remains fully\nsubject to name and type diagnostics, including branch type compatibility, but\nits assignments, returns, and loop transfers cannot affect reachable continuation\nstate. Computed and block-valued Boolean conditions keep the ordinary two-branch\nmerge; this rule is not general constant folding.\n\nChained assignment, arbitrary lvalues, field mutation, indexing, and general\nuninitialized storage remain unsupported.",
+          )
+          replace_once(
+              "docs/language-constitution.md",
+              "loop fixed-point analysis, path-sensitive Boolean reasoning beyond direct\nshort-circuit literals, and diagnostics for more complex control-flow graphs",
+              "loop fixed-point analysis, path-sensitive Boolean reasoning beyond direct\nBoolean literals, and diagnostics for more complex control-flow graphs",
+          )
+          replace_once(
+              "docs/language-constitution.md",
+              "12. Unreachable statements, strict-expression suffixes, and statically skipped\n    short-circuit operands may still produce diagnostics but must not change\n    definite-initialization or loop-exit facts observed by reachable continuation\n    paths. Dynamic short-circuit operands contribute only facts valid on both\n    possible continuing paths.",
+              "12. Unreachable statements, strict-expression suffixes, statically skipped\n    short-circuit operands, and unselected direct-literal `if` branches may still\n    produce diagnostics but must not change definite-initialization or loop-exit\n    facts observed by reachable continuation paths. Dynamic short-circuit operands\n    and non-literal `if` branches contribute only facts valid on their possible\n    continuing paths.",
+          )
+
+          replace_once(
+              "docs/roadmap.md",
+              "**Status: eight vertical slices implemented; broader type-system work remains.**",
+              "**Status: nine vertical slices implemented; broader type-system work remains.**",
+          )
+          replace_once(
+              "docs/roadmap.md",
+              "The next Phase 2 slices should address semantic depth rather than widen syntax\nprematurely.",
+              "Implemented in the ninth Phase 2 slice:\n\n- direct Boolean-literal `if` conditions refine branch reachability without\n  introducing general constant folding;\n- only the selected literal branch contributes definite-initialization,\n  non-continuation, and loop-exit facts to reachable continuation state;\n- the unselected branch remains fully lowered for deterministic name/type\n  diagnostics and branch type compatibility while its flow mutations are\n  discarded;\n- non-literal conditions preserve the existing conservative merge across every\n  continuing branch;\n- literal-selected `return`, `break`, and `continue` now agree with interpreter\n  execution when classifying `!` expressions and guaranteed-loop exits; and\n- analyzer adversarial tests plus CLI check/run fixtures lock selected/dead\n  initialization and loop-control behavior end to end.\n\nThe next Phase 2 slices should address semantic depth rather than widen syntax\nprematurely.",
+          )
+          PY
+      - name: Commit documentation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md docs/language-constitution.md docs/roadmap.md
+          git commit -m "docs: specify literal-if semantic reachability"
+          git push origin HEAD:feat/literal-if-dataflow
