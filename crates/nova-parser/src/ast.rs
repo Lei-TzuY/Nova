@@ -7,9 +7,33 @@ use nova_source::Span;
 pub struct Program {
     /// Top-level record declarations in source order among records.
     pub records: Vec<Record>,
+    /// Top-level enum declarations in source order among enums.
+    pub enums: Vec<Enum>,
     /// Top-level functions in source order among functions.
     pub functions: Vec<Function>,
     /// Range covering the complete source file.
+    pub span: Span,
+}
+
+/// A top-level nominal enum declaration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Enum {
+    /// Declared enum name.
+    pub name: Name,
+    /// Variants in declaration order.
+    pub variants: Vec<EnumVariant>,
+    /// Range from `enum` through the closing brace.
+    pub span: Span,
+}
+
+/// One enum variant with zero or one payload type.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EnumVariant {
+    /// Variant name.
+    pub name: Name,
+    /// Optional single payload type.
+    pub payload: Option<TypeRef>,
+    /// Complete variant range.
     pub span: Span,
 }
 
@@ -151,6 +175,30 @@ pub struct RecordLiteralField {
     pub span: Span,
 }
 
+/// A nominal enum-variant pattern.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EnumPattern {
+    /// Enum type qualifier.
+    pub enumeration: Name,
+    /// Selected variant.
+    pub variant: Name,
+    /// Optional immutable binding for the variant payload.
+    pub binding: Option<Name>,
+    /// Complete pattern range.
+    pub span: Span,
+}
+
+/// One arm in a `match` expression.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MatchArm {
+    /// Variant pattern selecting this arm.
+    pub pattern: EnumPattern,
+    /// Value produced by the arm.
+    pub value: Expression,
+    /// Complete arm range, excluding a trailing comma.
+    pub span: Span,
+}
+
 /// A parsed expression and its complete source range.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Expression {
@@ -175,6 +223,15 @@ pub enum ExpressionKind {
         name: Name,
         /// Written fields in source order.
         fields: Vec<RecordLiteralField>,
+    },
+    /// Nominal enum variant construction.
+    EnumConstructor {
+        /// Enum type qualifier.
+        enumeration: Name,
+        /// Selected variant.
+        variant: Name,
+        /// Optional single payload expression.
+        payload: Option<Box<Expression>>,
     },
     /// Field projection from a record value.
     FieldAccess {
@@ -216,6 +273,13 @@ pub enum ExpressionKind {
         then_branch: Block,
         /// Block or nested `if` selected by `false`.
         else_branch: Box<Expression>,
+    },
+    /// Exhaustively checked nominal enum matching.
+    Match {
+        /// Value inspected exactly once before arm selection.
+        scrutinee: Box<Expression>,
+        /// Arms in written source order.
+        arms: Vec<MatchArm>,
     },
 }
 

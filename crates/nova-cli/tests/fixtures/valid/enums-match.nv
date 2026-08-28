@@ -1,0 +1,15 @@
+enum Result {
+    Empty,
+    Value(Int),
+}
+
+fn unwrap(result: Result) -> Int {
+    match result {
+        Result::Empty => 0,
+        Result::Value(value) => value,
+    }
+}
+
+fn main() -> Int {
+    unwrap(Result::Value(42))
+}

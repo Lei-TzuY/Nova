@@ -73,13 +73,13 @@ reference-like type. Algebraic data types and exhaustive pattern matching are
 core language directions, not library conventions.
 
 **Provisional bootstrap decisions.** The current semantic core recognizes the
-surface types `Int`, `Bool`, and declared nominal record types. Record identity
-comes from the declaration rather than field shape: separately declared records
-remain different types even when their fields have identical names and types.
-The checker resolves explicitly typed function signatures, infers initialized
-local binding types, and checks the implemented operators, calls, branches,
-loops, returns, assignments, record construction/projection, and definite
-initialization.
+surface types `Int`, `Bool`, and declared nominal record and enum types. Aggregate
+identity comes from the declaration rather than shape: separately declared
+types remain different even when their fields or variants have identical names
+and types. The checker resolves explicitly typed function signatures, infers
+initialized local binding types, and checks the implemented operators, calls,
+branches, loops, returns, assignments, aggregate construction, field projection,
+exhaustive enum matching, and definite initialization.
 
 A bootstrap record declares explicitly typed, uniquely named fields.
 `new Record { field: expression, ... }` must initialize every declared field
@@ -89,6 +89,16 @@ order, but their expressions retain written left-to-right evaluation order.
 equality and field mutation are not part of this slice. HIR carries stable
 record identities and resolved field slots, but that is semantic identity—not a
 promise about memory layout, padding, calling convention, or ABI.
+
+A bootstrap enum declares at least one uniquely named variant. Each variant has
+zero or one explicitly typed payload, and qualified construction must match that
+arity and type. Recursive enum payload types are accepted. `match` currently
+supports only qualified variant patterns with an optional single immutable
+payload binding. Every variant of the scrutinee's nominal enum must appear
+exactly once, and every continuing arm must produce a compatible type. The
+scrutinee runs once and only the selected arm runs. These rules establish a
+small executable algebraic-data-type core without selecting wildcard, guard,
+nested-pattern, usefulness, layout, or ownership semantics prematurely.
 
 Accepted integer literal magnitude is currently `0..=2^63-1`; unary `-` is a
 separate expression, so the most-negative signed 64-bit value has no literal
@@ -106,7 +116,7 @@ defaulting, conversions, or overflow policy for future backends.
 - the primitive numeric set and defaulting rules;
 - whether value restriction or another rule is needed for inference;
 - layout, representation, padding, and ABI guarantees for user-defined types;
-- the algebraic data-type and pattern-matching model beyond records; and
+- the pattern-matching model beyond qualified single-payload enum variants; and
 - the boundary between language, standard library, and target-specific types.
 
 ## 5. Bindings and mutability
@@ -135,6 +145,12 @@ binding is definitely initialized afterward only when both continuing paths
 initialize it; a branch that cannot continue because it returns does not
 constrain the surviving path.
 
+Each match payload binding is immutable and scoped to one arm. A valid
+exhaustive match merges definite-initialization state by intersecting every arm
+that can continue; non-continuing arms are excluded. Invalid or non-exhaustive
+matches establish no arm-derived initialization facts during diagnostic
+recovery.
+
 The bootstrap `while` form is a pre-test statement. Its condition executes
 before the loop can exit, while its body may execute zero times. Therefore
 initialization facts established while evaluating the condition may flow after
@@ -146,9 +162,10 @@ Chained assignment, arbitrary lvalues, field mutation, indexing, and general
 uninitialized storage remain unsupported.
 
 **Research.** Broader flow-sensitive facts, `break`, `continue`, labelled loops,
-pattern bindings, partial aggregate initialization, mutable aggregate views,
-ownership interactions, and diagnostics for more complex control-flow graphs
-require implementation evidence before their rules are frozen.
+nested and refutable binding forms, partial aggregate initialization, mutable
+aggregate views, ownership interactions, and diagnostics for more complex
+control-flow graphs require implementation evidence before their rules are
+frozen.
 
 ## 6. Names, modules, and packages
 
@@ -157,12 +174,12 @@ filesystem enumeration order, and separate from type inference. Imports must
 make dependency edges inspectable. Packages and modules must have stable
 identity rules that work in reproducible builds.
 
-**Provisional bootstrap decisions.** Top-level record type identities and
-function signatures are collected before function bodies are lowered. This
-supports deterministic forward references to declared record types and forward
-function calls without consulting filesystem or declaration traversal order for
-semantic meaning. Built-in `Int` and `Bool` type names cannot be redefined as
-records.
+**Provisional bootstrap decisions.** Top-level record and enum type identities
+and function signatures are collected before function bodies are lowered. This
+supports deterministic forward and recursive references to declared aggregate
+types plus forward function calls without consulting filesystem or declaration
+traversal order for semantic meaning. Records and enums share one type
+namespace; built-in `Int` and `Bool` type names cannot be redefined.
 
 **Research.** File-to-module mapping, visibility defaults, namespace separation,
 cyclic module handling, package manifests, lockfiles, and registry trust policy
@@ -192,9 +209,9 @@ regions for ordinary values, deterministic ownership for resources, and
 optional managed regions for graph-shaped shared data—is not solved. Open work
 includes aliasing, destruction order, region inference, cycles, pinning, FFI
 roots, real-time constraints, aggregate representation, and the cost model.
-The interpreter's current record storage is not evidence of a final allocation
-or ownership strategy. Until a checked model exists, Nova must not claim memory
-safety or zero-cost ownership.
+The interpreter's current record-slot storage and boxed enum payloads are not
+evidence of a final allocation or ownership strategy. Until a checked model
+exists, Nova must not claim memory safety or zero-cost ownership.
 
 ## 9. Concurrency
 
@@ -242,17 +259,20 @@ semantics.
 **Provisional bootstrap decisions.** `nova run` executes only after lexical,
 syntactic, name-resolution, type, and definite-assignment validation succeeds.
 The interpreter consumes typed HIR directly and supports the implemented
-function, call, record construction/projection, block, `if`, `while`, return,
-binding, assignment, Boolean, and integer subset. Evaluation order is
-left-to-right; named record initializers do not reorder their expressions when
-resolved to declaration slots. `&&` and `||` short-circuit. The entry point is a
+function, call, record construction/projection, enum construction/matching,
+block, `if`, `while`, return, binding, assignment, Boolean, and integer subset.
+Evaluation order is left-to-right; named record initializers do not reorder their
+expressions when resolved to declaration slots. A match evaluates its scrutinee
+once and only its selected arm. `&&` and `||` short-circuit. The entry point is a
 zero-argument top-level `main` returning `Int` or `Bool`.
 
-Runtime record values carry nominal identity and declaration-order field slots
-inside the interpreter. That representation is an executable semantic oracle,
-not a stable layout, serialization format, or backend ABI. Runtime failures use
-structured diagnostics. Recursive execution is guarded by a finite call-depth
-limit, and all statement/expression evaluation shares a finite step budget so
+Runtime record values carry nominal identity and declaration-order field slots;
+runtime enum values carry nominal identity, a declaration-order variant slot,
+and an optional boxed payload. Those representations are executable semantic
+oracles, not stable layouts, allocation promises, serialization formats, or
+backend ABIs. Runtime failures use structured diagnostics. Recursive execution
+is guarded by a finite call-depth limit, and all statement/expression evaluation
+shares a finite step budget so
 nonterminating loops fail closed rather than intentionally hanging the host.
 These choices provide an executable oracle for the current subset; HIR
 interpretation is not the intended final backend ABI.
@@ -271,8 +291,9 @@ diagnostics must be deterministic for identical input and compiler version.
 
 **Provisional bootstrap decisions.** The current toolchain uses half-open UTF-8
 byte spans and exposes human and JSON Lines rendering across lexical, syntactic,
-semantic, and runtime diagnostics. Record diagnostics distinguish duplicate,
-unknown, missing, and mistyped fields while preserving source-qualified labels.
+semantic, and runtime diagnostics. Aggregate diagnostics distinguish duplicate,
+unknown, missing, mistyped, payload-arity, nominal-mismatch, and non-exhaustive
+cases while preserving source-qualified labels.
 Diagnostic code meaning is documented by tests but codes are not yet covered by
 the language compatibility promise.
 
@@ -316,9 +337,13 @@ Every compiler and execution stage must uphold these constraints:
 11. Nominal type identity must not silently collapse to structural field shape.
 12. Resolved field slots must preserve source semantics and must not be mistaken
     for a stabilized memory-layout or ABI guarantee.
-13. Optimization must preserve specified behavior and later operate on verified
+13. An accepted enum match names every variant of exactly one nominal enum once;
+    its scrutinee runs once and unselected arms do not run.
+14. Resolved enum variant slots and boxed interpreter payloads are not stabilized
+    layout, allocation, ownership, serialization, or ABI guarantees.
+15. Optimization must preserve specified behavior and later operate on verified
     IR rather than repair invalid earlier output.
-14. Roadmap documents distinguish implemented, provisional, and researched
+16. Roadmap documents distinguish implemented, provisional, and researched
     properties; benchmarks and safety claims require reproducible evidence.
 
 ## 15. Current unresolved research register
@@ -327,7 +352,8 @@ The highest-impact unresolved questions are:
 
 - inference boundaries and public type annotation policy;
 - primitive numeric semantics across all execution backends;
-- algebraic data types, exhaustive patterns, and aggregate layout guarantees;
+- richer algebraic data types, pattern usefulness, and aggregate layout
+  guarantees;
 - typed error and effect representation;
 - the hybrid ownership/region/managed-memory model;
 - data-race freedom and cancellation in structured concurrency;

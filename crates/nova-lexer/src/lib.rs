@@ -15,6 +15,10 @@ pub enum TokenKind {
     Fn,
     /// `record`.
     Record,
+    /// `enum`.
+    Enum,
+    /// `match`.
+    Match,
     /// `new`.
     New,
     /// `let`.
@@ -45,6 +49,8 @@ pub enum TokenKind {
     Comma,
     /// `:`.
     Colon,
+    /// `::`.
+    ColonColon,
     /// `;`.
     Semicolon,
     /// `.`.
@@ -65,6 +71,8 @@ pub enum TokenKind {
     Equal,
     /// `==`.
     EqualEqual,
+    /// `=>`.
+    FatArrow,
     /// `!`.
     Bang,
     /// `!=`.
@@ -94,6 +102,8 @@ impl TokenKind {
             Self::Integer(_) => "integer literal",
             Self::Fn => "`fn`",
             Self::Record => "`record`",
+            Self::Enum => "`enum`",
+            Self::Match => "`match`",
             Self::New => "`new`",
             Self::Let => "`let`",
             Self::Var => "`var`",
@@ -109,6 +119,7 @@ impl TokenKind {
             Self::RightBrace => "`}`",
             Self::Comma => "`,`",
             Self::Colon => "`:`",
+            Self::ColonColon => "`::`",
             Self::Semicolon => "`;`",
             Self::Dot => "`.`",
             Self::Arrow => "`->`",
@@ -119,6 +130,7 @@ impl TokenKind {
             Self::Percent => "`%`",
             Self::Equal => "`=`",
             Self::EqualEqual => "`==`",
+            Self::FatArrow => "`=>`",
             Self::Bang => "`!`",
             Self::BangEqual => "`!=`",
             Self::Less => "`<`",
@@ -276,6 +288,7 @@ impl<'source> Lexer<'source> {
             '{' => Some(TokenKind::LeftBrace),
             '}' => Some(TokenKind::RightBrace),
             ',' => Some(TokenKind::Comma),
+            ':' if self.consume_if(b':') => Some(TokenKind::ColonColon),
             ':' => Some(TokenKind::Colon),
             ';' => Some(TokenKind::Semicolon),
             '.' => Some(TokenKind::Dot),
@@ -286,6 +299,7 @@ impl<'source> Lexer<'source> {
             '-' if self.consume_if(b'>') => Some(TokenKind::Arrow),
             '-' => Some(TokenKind::Minus),
             '=' if self.consume_if(b'=') => Some(TokenKind::EqualEqual),
+            '=' if self.consume_if(b'>') => Some(TokenKind::FatArrow),
             '=' => Some(TokenKind::Equal),
             '!' if self.consume_if(b'=') => Some(TokenKind::BangEqual),
             '!' => Some(TokenKind::Bang),
@@ -324,6 +338,8 @@ impl<'source> Lexer<'source> {
         let kind = match text {
             "fn" => TokenKind::Fn,
             "record" => TokenKind::Record,
+            "enum" => TokenKind::Enum,
+            "match" => TokenKind::Match,
             "new" => TokenKind::New,
             "let" => TokenKind::Let,
             "var" => TokenKind::Var,
@@ -429,7 +445,7 @@ mod tests {
     #[test]
     fn lexes_keywords_operators_and_exact_spans() {
         let source = source(
-            "record Pair { left: Int, right: Int } fn yes(x: Pair) -> Bool { let p = new Pair { left: 1, right: 2 }; while p.left >= 1 && true { return false; } true }",
+            "record Pair { left: Int, right: Int } enum Maybe { None, Some(Int) } fn yes(x: Maybe) -> Bool { let p = new Pair { left: 1, right: 2 }; while p.left >= 1 && true { return match x { Maybe::None => false, Maybe::Some(value) => value > 0, }; } true }",
         );
         let output = lex(&source);
         let kinds = output
@@ -440,6 +456,10 @@ mod tests {
 
         assert!(output.diagnostics.is_empty());
         assert_eq!(kinds[0], TokenKind::Record);
+        assert!(kinds.contains(&TokenKind::Enum));
+        assert!(kinds.contains(&TokenKind::Match));
+        assert!(kinds.contains(&TokenKind::ColonColon));
+        assert!(kinds.contains(&TokenKind::FatArrow));
         assert!(kinds.contains(&TokenKind::New));
         assert!(kinds.contains(&TokenKind::Fn));
         assert!(kinds.contains(&TokenKind::While));

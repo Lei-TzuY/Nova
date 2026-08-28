@@ -1,0 +1,15 @@
+enum MaybeInt {
+    None,
+    Some(Int),
+}
+
+fn unwrap(value: MaybeInt) -> Int {
+    match value {
+        MaybeInt::None => 0,
+        MaybeInt::Some(inner) => inner,
+    }
+}
+
+fn main() -> Int {
+    unwrap(MaybeInt::Some(42))
+}

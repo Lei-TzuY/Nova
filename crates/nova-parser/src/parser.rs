@@ -1,6 +1,7 @@
 use crate::ast::{
-    BinaryOperator, Block, Expression, ExpressionKind, Function, Name, Parameter, Program, Record,
-    RecordField, RecordLiteralField, Statement, StatementKind, TypeRef, UnaryOperator,
+    BinaryOperator, Block, Enum, EnumPattern, EnumVariant, Expression, ExpressionKind, Function,
+    MatchArm, Name, Parameter, Program, Record, RecordField, RecordLiteralField, Statement,
+    StatementKind, TypeRef, UnaryOperator,
 };
 use nova_diagnostics::Diagnostic;
 use nova_lexer::{Token, TokenKind};
@@ -87,6 +88,7 @@ impl<'source> Parser<'source> {
 
     fn parse_program(&mut self) -> Program {
         let mut records = Vec::new();
+        let mut enums = Vec::new();
         let mut functions = Vec::new();
 
         while !self.at(TokenKind::Eof) {
@@ -94,6 +96,12 @@ impl<'source> Parser<'source> {
             if self.at(TokenKind::Record) {
                 if let Some(record) = self.parse_record() {
                     records.push(record);
+                } else {
+                    self.recover_top_level();
+                }
+            } else if self.at(TokenKind::Enum) {
+                if let Some(enumeration) = self.parse_enum() {
+                    enums.push(enumeration);
                 } else {
                     self.recover_top_level();
                 }
@@ -109,7 +117,7 @@ impl<'source> Parser<'source> {
                     Diagnostic::error("N2003", "expected a top-level declaration").with_primary(
                         token.span,
                         format!(
-                            "found {}; only `record` and `fn` declarations are supported",
+                            "found {}; only `record`, `enum`, and `fn` declarations are supported",
                             token.kind
                         ),
                     ),
@@ -124,12 +132,63 @@ impl<'source> Parser<'source> {
 
         Program {
             records,
+            enums,
             functions,
             span: self
                 .source
                 .span(0, self.source.len())
                 .unwrap_or(self.source.eof_span()),
         }
+    }
+
+    fn parse_enum(&mut self) -> Option<Enum> {
+        let start = self
+            .expect(TokenKind::Enum, "to start an enum declaration")?
+            .span;
+        let name = self.parse_name("after `enum`")?;
+        self.expect(TokenKind::LeftBrace, "after the enum name")?;
+        let mut variants = Vec::new();
+
+        if self.at(TokenKind::RightBrace) {
+            self.diagnostics.push(
+                Diagnostic::error("N2001", "expected an enum variant").with_primary(
+                    self.current().span,
+                    "an enum must declare at least one variant",
+                ),
+            );
+        } else {
+            loop {
+                let variant_name = self.parse_name("as an enum variant name")?;
+                let (payload, end) = if self.consume(TokenKind::LeftParen).is_some() {
+                    let payload = self.parse_type_ref("as the enum variant payload type")?;
+                    let closing =
+                        self.expect(TokenKind::RightParen, "after the enum variant payload type")?;
+                    (Some(payload), closing.span)
+                } else {
+                    (None, variant_name.span)
+                };
+                let span = self.cover(variant_name.span, end);
+                variants.push(EnumVariant {
+                    name: variant_name,
+                    payload,
+                    span,
+                });
+
+                if self.consume(TokenKind::Comma).is_none() {
+                    break;
+                }
+                if self.at(TokenKind::RightBrace) {
+                    break;
+                }
+            }
+        }
+
+        let closing = self.expect(TokenKind::RightBrace, "to close the enum declaration")?;
+        Some(Enum {
+            name,
+            variants,
+            span: self.cover(start, closing.span),
+        })
     }
 
     fn parse_record(&mut self) -> Option<Record> {
@@ -234,7 +293,7 @@ impl<'source> Parser<'source> {
         let mut tail = None;
 
         while !self.at(TokenKind::RightBrace) && !self.at(TokenKind::Eof) {
-            if self.at(TokenKind::Fn) || self.at(TokenKind::Record) {
+            if self.at(TokenKind::Fn) || self.at(TokenKind::Record) || self.at(TokenKind::Enum) {
                 break;
             }
             let before = self.position;
@@ -288,6 +347,7 @@ impl<'source> Parser<'source> {
                 && !self.at(TokenKind::Eof)
                 && !self.at(TokenKind::Fn)
                 && !self.at(TokenKind::Record)
+                && !self.at(TokenKind::Enum)
             {
                 self.bump();
             }
@@ -465,17 +525,13 @@ impl<'source> Parser<'source> {
                     span: token.span,
                 })
             }
-            TokenKind::Identifier => {
-                self.bump();
-                let name = Name {
-                    text: self.source.slice(token.span).unwrap_or("").to_owned(),
-                    span: token.span,
-                };
-                Some(Expression {
-                    kind: ExpressionKind::Name(name),
-                    span: token.span,
-                })
+            TokenKind::Identifier if self.at_offset(1, TokenKind::ColonColon) => {
+                self.parse_enum_constructor_expression()
             }
+            TokenKind::Identifier => self.parse_name("as an expression").map(|name| Expression {
+                span: name.span,
+                kind: ExpressionKind::Name(name),
+            }),
             TokenKind::New => self.parse_record_literal_expression(),
             TokenKind::Minus | TokenKind::Bang => {
                 self.bump();
@@ -505,6 +561,7 @@ impl<'source> Parser<'source> {
                 kind: ExpressionKind::Block(block),
             }),
             TokenKind::If => self.parse_if_expression(),
+            TokenKind::Match => self.parse_match_expression(),
             _ => {
                 self.diagnostics.push(
                     Diagnostic::error("N2002", "expected an expression").with_primary(
@@ -515,6 +572,29 @@ impl<'source> Parser<'source> {
                 None
             }
         }
+    }
+
+    fn parse_enum_constructor_expression(&mut self) -> Option<Expression> {
+        let enumeration = self.parse_name("as an enum constructor qualifier")?;
+        self.expect(TokenKind::ColonColon, "after the enum type name")?;
+        let variant = self.parse_name("after `::`")?;
+        let (payload, end) = if self.consume(TokenKind::LeftParen).is_some() {
+            let payload = self.parse_expression_with_binding_power(0)?;
+            self.consume(TokenKind::Comma);
+            let closing = self.expect(TokenKind::RightParen, "after the enum variant payload")?;
+            (Some(Box::new(payload)), closing.span)
+        } else {
+            (None, variant.span)
+        };
+
+        Some(Expression {
+            span: self.cover(enumeration.span, end),
+            kind: ExpressionKind::EnumConstructor {
+                enumeration,
+                variant,
+                payload,
+            },
+        })
     }
 
     fn parse_record_literal_expression(&mut self) -> Option<Expression> {
@@ -640,6 +720,60 @@ impl<'source> Parser<'source> {
         })
     }
 
+    fn parse_match_expression(&mut self) -> Option<Expression> {
+        let keyword = self.expect(TokenKind::Match, "to start a match expression")?;
+        let scrutinee = self.parse_expression_with_binding_power(0)?;
+        self.expect(TokenKind::LeftBrace, "after the match scrutinee")?;
+        let mut arms = Vec::new();
+
+        while !self.at(TokenKind::RightBrace) && !self.at(TokenKind::Eof) {
+            let pattern = self.parse_enum_pattern()?;
+            self.expect(TokenKind::FatArrow, "after the match pattern")?;
+            let value = self.parse_expression_with_binding_power(0)?;
+            let span = self.cover(pattern.span, value.span);
+            arms.push(MatchArm {
+                pattern,
+                value,
+                span,
+            });
+
+            if self.consume(TokenKind::Comma).is_none() {
+                break;
+            }
+        }
+
+        let closing = self.expect(TokenKind::RightBrace, "to close the match expression")?;
+        Some(Expression {
+            span: self.cover(keyword.span, closing.span),
+            kind: ExpressionKind::Match {
+                scrutinee: Box::new(scrutinee),
+                arms,
+            },
+        })
+    }
+
+    fn parse_enum_pattern(&mut self) -> Option<EnumPattern> {
+        let enumeration = self.parse_name("as a match pattern qualifier")?;
+        self.expect(
+            TokenKind::ColonColon,
+            "after the enum type name in a pattern",
+        )?;
+        let variant = self.parse_name("after `::` in a pattern")?;
+        let (binding, end) = if self.consume(TokenKind::LeftParen).is_some() {
+            let binding = self.parse_name("as the variant payload binding")?;
+            let closing = self.expect(TokenKind::RightParen, "after the payload binding")?;
+            (Some(binding), closing.span)
+        } else {
+            (None, variant.span)
+        };
+        Some(EnumPattern {
+            span: self.cover(enumeration.span, end),
+            enumeration,
+            variant,
+            binding,
+        })
+    }
+
     fn parse_nested_if_expression(&mut self) -> Option<Expression> {
         if self.expression_depth >= MAX_EXPRESSION_DEPTH {
             if !self.depth_diagnostic_emitted {
@@ -683,7 +817,11 @@ impl<'source> Parser<'source> {
     }
 
     fn recover_top_level(&mut self) {
-        while !self.at(TokenKind::Fn) && !self.at(TokenKind::Record) && !self.at(TokenKind::Eof) {
+        while !self.at(TokenKind::Fn)
+            && !self.at(TokenKind::Record)
+            && !self.at(TokenKind::Enum)
+            && !self.at(TokenKind::Eof)
+        {
             self.bump();
         }
     }
@@ -693,6 +831,7 @@ impl<'source> Parser<'source> {
             && !self.at(TokenKind::RightBrace)
             && !self.at(TokenKind::Fn)
             && !self.at(TokenKind::Record)
+            && !self.at(TokenKind::Enum)
             && !self.at(TokenKind::Eof)
         {
             self.bump();
@@ -892,6 +1031,101 @@ fn f() -> Int {
             &function.body.tail.as_deref().expect("tail").kind,
             ExpressionKind::FieldAccess { field, .. } if field.text == "left"
         ));
+    }
+
+    #[test]
+    fn parses_enum_construction_and_match_with_exact_pattern_spans() {
+        let text = "enum Maybe { None, Some(Int), }\n\
+                    fn main() -> Int {\n\
+                        let value = Maybe::Some(42);\n\
+                        match value { Maybe::None => 0, Maybe::Some(inner) => inner, }\n\
+                    }";
+        let (source, parsed) = parse_text(text);
+        assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
+        assert_eq!(parsed.program.enums.len(), 1);
+        assert_eq!(parsed.program.enums[0].name.text, "Maybe");
+        assert_eq!(parsed.program.enums[0].variants.len(), 2);
+        assert!(parsed.program.enums[0].variants[0].payload.is_none());
+        assert_eq!(
+            parsed.program.enums[0].variants[1]
+                .payload
+                .as_ref()
+                .map(|payload| payload.name.text.as_str()),
+            Some("Int")
+        );
+
+        let function = &parsed.program.functions[0];
+        let StatementKind::Binding { initializer, .. } = &function.body.statements[0].kind else {
+            panic!("expected enum constructor binding");
+        };
+        assert!(matches!(
+            &initializer.kind,
+            ExpressionKind::EnumConstructor {
+                enumeration,
+                variant,
+                payload: Some(_),
+            } if enumeration.text == "Maybe" && variant.text == "Some"
+        ));
+
+        let tail = function.body.tail.as_deref().expect("match tail");
+        let ExpressionKind::Match { arms, .. } = &tail.kind else {
+            panic!("expected match expression");
+        };
+        assert_eq!(arms.len(), 2);
+        assert_eq!(source.slice(arms[0].pattern.span), Some("Maybe::None"));
+        assert_eq!(
+            source.slice(arms[1].pattern.span),
+            Some("Maybe::Some(inner)")
+        );
+        assert_eq!(
+            arms[1]
+                .pattern
+                .binding
+                .as_ref()
+                .map(|binding| binding.text.as_str()),
+            Some("inner")
+        );
+    }
+
+    #[test]
+    fn rejects_empty_enums_and_empty_payload_parentheses() {
+        let (_, empty) = parse_text("enum Empty {} fn main() -> Int { 0 }");
+        assert!(empty.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "N2001" && diagnostic.message == "expected an enum variant"
+        }));
+
+        let (_, empty_payload) =
+            parse_text("enum Maybe { None } fn main() -> Maybe { Maybe::None() }");
+        assert!(
+            empty_payload
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "N2002"),
+            "{:?}",
+            empty_payload.diagnostics
+        );
+    }
+
+    #[test]
+    fn malformed_match_recovery_consumes_input_and_reaches_later_declarations() {
+        let (_, parsed) = parse_text(
+            "enum Maybe { None, Some(Int) }\n\
+             fn broken(value: Maybe) -> Int {\n\
+                 match value { Maybe::Some( => 1, Maybe::None => 0, }\n\
+             }\n\
+             fn good() -> Int { 2 }",
+        );
+        assert!(!parsed.is_success());
+        assert!(parsed.diagnostics.len() < 10, "{:?}", parsed.diagnostics);
+        assert!(
+            parsed
+                .program
+                .functions
+                .iter()
+                .any(|function| function.name.text == "good"),
+            "later declaration was lost: {:?}",
+            parsed.program
+        );
     }
 
     #[test]

@@ -31,6 +31,33 @@ pub struct RecordType {
     pub name: String,
 }
 
+/// Stable source-order identifier for one top-level enum in a HIR program.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct EnumId(usize);
+
+impl EnumId {
+    /// Creates an identifier from its source-order index among enums.
+    #[must_use]
+    pub const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    /// Returns the source-order index among enums.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0
+    }
+}
+
+/// Nominal enum identity carried by semantic types.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EnumType {
+    /// Stable enum identity.
+    pub id: EnumId,
+    /// Declared spelling used in diagnostics and debug output.
+    pub name: String,
+}
+
 /// Semantic type assigned to a resolved Nova expression or binding.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
@@ -40,6 +67,8 @@ pub enum Type {
     Bool,
     /// Nominal user-defined record type.
     Record(RecordType),
+    /// Nominal user-defined enum type.
+    Enum(EnumType),
     /// Internal type of a value-less block. There is no surface `Unit` type yet.
     Unit,
     /// Internal bottom type for expressions or blocks that cannot complete normally.
@@ -70,6 +99,7 @@ impl fmt::Display for Type {
             Self::Int => formatter.write_str("Int"),
             Self::Bool => formatter.write_str("Bool"),
             Self::Record(record) => formatter.write_str(&record.name),
+            Self::Enum(enumeration) => formatter.write_str(&enumeration.name),
             Self::Unit => formatter.write_str("()"),
             Self::Never => formatter.write_str("!"),
             Self::Error => formatter.write_str("<error>"),
@@ -137,9 +167,35 @@ impl BindingId {
 pub struct Program {
     /// Records in source order among record declarations.
     pub records: Vec<Record>,
+    /// Enums in source order among enum declarations.
+    pub enums: Vec<Enum>,
     /// Functions in source order, including declarations diagnosed as duplicates.
     pub functions: Vec<Function>,
     /// Range covering the source file.
+    pub span: Span,
+}
+
+/// A resolved nominal enum declaration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Enum {
+    /// Stable source-order identity among enums.
+    pub id: EnumId,
+    /// Declared spelling.
+    pub name: String,
+    /// Variants in declaration order.
+    pub variants: Vec<EnumVariant>,
+    /// Complete declaration range.
+    pub span: Span,
+}
+
+/// One resolved enum variant.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EnumVariant {
+    /// Declared variant spelling.
+    pub name: String,
+    /// Optional single payload type.
+    pub payload: Option<Type>,
+    /// Complete variant declaration range.
     pub span: Span,
 }
 
@@ -262,6 +318,19 @@ pub struct RecordFieldValue {
     pub value: Expression,
 }
 
+/// One resolved arm in an exhaustive enum match.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MatchArm {
+    /// Zero-based variant slot in declaration order.
+    pub variant_index: usize,
+    /// Optional immutable payload binding.
+    pub binding: Option<Binding>,
+    /// Typed arm value.
+    pub value: Expression,
+    /// Complete arm range.
+    pub span: Span,
+}
+
 /// A typed, resolved expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Expression {
@@ -290,6 +359,15 @@ pub enum ExpressionKind {
         record: RecordId,
         /// Typed field initializers in source evaluation order.
         fields: Vec<RecordFieldValue>,
+    },
+    /// Nominal enum variant construction.
+    EnumConstructor {
+        /// Resolved nominal enum identity.
+        enumeration: EnumId,
+        /// Zero-based variant slot in declaration order.
+        variant_index: usize,
+        /// Optional typed payload expression.
+        payload: Option<Box<Expression>>,
     },
     /// Resolved record field projection.
     FieldAccess {
@@ -333,6 +411,15 @@ pub enum ExpressionKind {
         then_branch: Block,
         /// Branch selected by `false`.
         else_branch: Box<Expression>,
+    },
+    /// Exhaustive nominal enum match.
+    Match {
+        /// Typed scrutinee evaluated exactly once.
+        scrutinee: Box<Expression>,
+        /// Resolved nominal enum identity.
+        enumeration: EnumId,
+        /// Arms in written source order.
+        arms: Vec<MatchArm>,
     },
     /// Placeholder for an expression already rejected by semantic analysis.
     Error,

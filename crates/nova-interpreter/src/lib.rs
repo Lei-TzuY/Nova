@@ -3,7 +3,7 @@
 use nova_diagnostics::Diagnostic;
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::hir::{
-    BindingId, Block, Expression, ExpressionKind, Function, FunctionId, Program, RecordId,
+    BindingId, Block, EnumId, Expression, ExpressionKind, Function, FunctionId, Program, RecordId,
     Statement, StatementKind, Type,
 };
 use std::collections::BTreeMap;
@@ -26,6 +26,15 @@ pub enum Value {
         /// Field values in declaration order.
         fields: Vec<Value>,
     },
+    /// Nominal enum value with an optional single payload.
+    Enum {
+        /// Stable nominal enum identity.
+        enumeration: EnumId,
+        /// Variant slot in declaration order.
+        variant_index: usize,
+        /// Optional boxed payload.
+        payload: Option<Box<Value>>,
+    },
     /// First-class reference to a top-level function.
     Function(FunctionId),
     /// Internal value for a block with no tail expression.
@@ -38,6 +47,11 @@ impl fmt::Display for Value {
             Self::Int(value) => write!(formatter, "{value}"),
             Self::Bool(value) => write!(formatter, "{value}"),
             Self::Record { record, .. } => write!(formatter, "<record:{}>", record.index()),
+            Self::Enum {
+                enumeration,
+                variant_index,
+                ..
+            } => write!(formatter, "<enum:{}:{variant_index}>", enumeration.index()),
             Self::Function(id) => write!(formatter, "<function:{}>", id.index()),
             Self::Unit => formatter.write_str("()"),
         }
@@ -346,6 +360,55 @@ impl<'program> Interpreter<'program> {
                     fields: values,
                 }))
             }
+            ExpressionKind::EnumConstructor {
+                enumeration,
+                variant_index,
+                payload,
+            } => {
+                let Some(definition) = self.program.enums.get(enumeration.index()) else {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!(
+                            "resolved enum id {} is outside the program",
+                            enumeration.index()
+                        ),
+                    ));
+                };
+                if definition.id != *enumeration {
+                    return Err(self.invariant(
+                        expression.span,
+                        "enum declaration index does not match its resolved identity",
+                    ));
+                }
+                let Some(variant) = definition.variants.get(*variant_index) else {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!(
+                            "variant slot {variant_index} is outside enum `{}`",
+                            definition.name
+                        ),
+                    ));
+                };
+                if variant.payload.is_some() != payload.is_some() {
+                    return Err(self.invariant(
+                        expression.span,
+                        "resolved enum constructor payload arity does not match its variant",
+                    ));
+                }
+                let payload = if let Some(payload) = payload {
+                    match self.eval_expression(payload, frame)? {
+                        Flow::Value(value) => Some(Box::new(value)),
+                        Flow::Return(value) => return Ok(Flow::Return(value)),
+                    }
+                } else {
+                    None
+                };
+                Ok(Flow::Value(Value::Enum {
+                    enumeration: *enumeration,
+                    variant_index: *variant_index,
+                    payload,
+                }))
+            }
             ExpressionKind::FieldAccess {
                 base,
                 record,
@@ -434,6 +497,95 @@ impl<'program> Interpreter<'program> {
                         "semantically accepted `if` condition was not Bool",
                     )),
                 }
+            }
+            ExpressionKind::Match {
+                scrutinee,
+                enumeration,
+                arms,
+            } => {
+                let Some(definition) = self.program.enums.get(enumeration.index()) else {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!(
+                            "resolved enum id {} is outside the program",
+                            enumeration.index()
+                        ),
+                    ));
+                };
+                if definition.id != *enumeration || arms.len() != definition.variants.len() {
+                    return Err(self.invariant(
+                        expression.span,
+                        "resolved match is not exhaustive for its enum declaration",
+                    ));
+                }
+                let mut covered = vec![false; definition.variants.len()];
+                for arm in arms {
+                    let Some(slot) = covered.get_mut(arm.variant_index) else {
+                        return Err(self.invariant(
+                            arm.span,
+                            "resolved match arm targets a variant outside its enum",
+                        ));
+                    };
+                    if *slot {
+                        return Err(self.invariant(
+                            arm.span,
+                            "resolved match contains a duplicate variant arm",
+                        ));
+                    }
+                    *slot = true;
+                    let declared = &definition.variants[arm.variant_index];
+                    if declared.payload.is_some() != arm.binding.is_some() {
+                        return Err(self.invariant(
+                            arm.span,
+                            "resolved match binding arity does not match its variant",
+                        ));
+                    }
+                }
+
+                let scrutinee = match self.eval_expression(scrutinee, frame)? {
+                    Flow::Value(value) => value,
+                    Flow::Return(value) => return Ok(Flow::Return(value)),
+                };
+                let Value::Enum {
+                    enumeration: actual_enum,
+                    variant_index,
+                    payload,
+                } = scrutinee
+                else {
+                    return Err(self.invariant(
+                        expression.span,
+                        "semantically accepted match did not evaluate to an enum",
+                    ));
+                };
+                if actual_enum != *enumeration {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!(
+                            "match expected enum {}, found enum {}",
+                            enumeration.index(),
+                            actual_enum.index()
+                        ),
+                    ));
+                }
+                let Some(arm) = arms.iter().find(|arm| arm.variant_index == variant_index) else {
+                    return Err(self.invariant(
+                        expression.span,
+                        "exhaustive match has no arm for the runtime variant",
+                    ));
+                };
+                match (&arm.binding, payload) {
+                    (Some(binding), Some(payload)) => {
+                        frame.insert(binding.id, Some(*payload));
+                    }
+                    (None, None) => {}
+                    _ => {
+                        return Err(self.invariant(
+                            arm.span,
+                            "runtime enum payload arity does not match the selected arm",
+                        ));
+                    }
+                }
+                self.eval_expression(&arm.value, frame)
             }
             ExpressionKind::Error => Err(self.invariant(
                 expression.span,
@@ -597,7 +749,7 @@ mod tests {
     use super::{Value, execute};
     use nova_lexer::lex;
     use nova_parser::parse;
-    use nova_sema::analyze;
+    use nova_sema::{analyze, hir::ExpressionKind};
     use nova_source::{SourceFile, SourceId};
 
     fn execute_text(text: &str) -> Result<Value, nova_diagnostics::Diagnostic> {
@@ -620,6 +772,84 @@ mod tests {
         )
         .expect("program executes");
         assert_eq!(value, Value::Int(42));
+    }
+
+    #[test]
+    fn executes_recursive_enums_and_payload_matching() {
+        let value = execute_text(
+            "enum Nat { Zero, Succ(Nat) }\n\
+             fn to_int(number: Nat) -> Int {\n\
+                 match number {\n\
+                     Nat::Zero => 0,\n\
+                     Nat::Succ(previous) => 1 + to_int(previous),\n\
+                 }\n\
+             }\n\
+             fn main() -> Int { to_int(Nat::Succ(Nat::Succ(Nat::Zero))) }",
+        )
+        .expect("recursive enum program should execute");
+        assert_eq!(value, Value::Int(2));
+    }
+
+    #[test]
+    fn match_evaluates_only_the_selected_arm_and_propagates_return() {
+        let selected = execute_text(
+            "enum Choice { Safe, Dangerous }\n\
+             fn main() -> Int {\n\
+                 match Choice::Safe {\n\
+                     Choice::Safe => 42,\n\
+                     Choice::Dangerous => 1 / 0,\n\
+                 }\n\
+             }",
+        )
+        .expect("unselected arm must not execute");
+        assert_eq!(selected, Value::Int(42));
+
+        let returned = execute_text(
+            "enum Choice { Early, Later }\n\
+             fn choose(value: Choice) -> Int {\n\
+                 match value {\n\
+                     Choice::Early => { return 7; },\n\
+                     Choice::Later => 9,\n\
+                 }\n\
+             }\n\
+             fn main() -> Int { choose(Choice::Early) }",
+        )
+        .expect("return should propagate through a selected match arm");
+        assert_eq!(returned, Value::Int(7));
+
+        let scrutinee_return = execute_text(
+            "enum Choice { A, B }\n\
+             fn main() -> Int {\n\
+                 match { return 5; } { Choice::A => 1, Choice::B => 2, }\n\
+             }",
+        )
+        .expect("return should propagate while evaluating a match scrutinee");
+        assert_eq!(scrutinee_return, Value::Int(5));
+    }
+
+    #[test]
+    fn malformed_non_exhaustive_match_hir_fails_closed() {
+        let source = SourceFile::new(
+            SourceId::new(0),
+            "test.nv",
+            "enum Choice { A, B } fn main() -> Int { match Choice::A { Choice::A => 1, Choice::B => 2, } }",
+        );
+        let lexed = lex(&source);
+        let parsed = parse(&source, &lexed.tokens);
+        let mut analyzed = analyze(&parsed.program);
+        assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
+        let tail = analyzed.program.functions[0]
+            .body
+            .tail
+            .as_deref_mut()
+            .expect("match tail");
+        let ExpressionKind::Match { arms, .. } = &mut tail.kind else {
+            panic!("expected match HIR");
+        };
+        arms.pop();
+
+        let diagnostic = execute(&analyzed.program).expect_err("malformed HIR must fail");
+        assert_eq!(diagnostic.code, "N4005");
     }
 
     #[test]

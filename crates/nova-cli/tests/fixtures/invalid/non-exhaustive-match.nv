@@ -1,0 +1,10 @@
+enum Result {
+    Empty,
+    Value(Int),
+}
+
+fn unwrap(result: Result) -> Int {
+    match result {
+        Result::Value(value) => value,
+    }
+}
