@@ -1,0 +1,5 @@
+fn broken() -> Int {
+    break;
+    continue;
+    0
+}
