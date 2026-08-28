@@ -1,0 +1,149 @@
+name: Sync literal match semantic docs
+
+on:
+  push:
+    branches:
+      - feat/literal-match-dataflow
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/literal-match-dataflow
+      - name: Update semantic contracts
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def block(lines):
+              return "\n".join(lines) + "\n"
+
+          def patch(path, old, new):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          patch(
+              "README.md",
+              block([
+                  "it. The same intersection rule applies across all arms of a valid exhaustive",
+                  "match. A branch or arm that returns, breaks, or continues does not constrain the",
+                  "surviving path. Unreachable code is still analyzed for deterministic diagnostics,",
+                  "but its assignments cannot manufacture reachable definite-initialization facts.",
+              ]),
+              block([
+                  "it. For a valid exhaustive match with a dynamic scrutinee, the same intersection",
+                  "rule applies across every arm that can continue. When the scrutinee is a direct,",
+                  "successfully resolved enum constructor, its variant is already known: only the",
+                  "selected arm may contribute definite-initialization, non-continuation, or loop-exit",
+                  "facts. Non-selected arms are still fully checked for pattern validity, static",
+                  "diagnostics, exhaustiveness, and arm type compatibility. A branch or reachable arm",
+                  "that returns, breaks, or continues does not constrain a surviving continuation.",
+                  "Unreachable code is still analyzed for deterministic diagnostics, but its",
+                  "assignments cannot manufacture reachable definite-initialization facts.",
+              ]),
+          )
+
+          patch(
+              "docs/language-constitution.md",
+              block([
+                  "Each match payload binding is immutable and scoped to one arm. A valid",
+                  "exhaustive match merges definite-initialization state by intersecting every arm",
+                  "that can continue; non-continuing arms are excluded. Invalid or non-exhaustive",
+                  "matches establish no arm-derived initialization facts during diagnostic",
+                  "recovery.",
+              ]),
+              block([
+                  "Each match payload binding is immutable and scoped to one arm. A valid exhaustive",
+                  "match with a dynamic scrutinee merges definite-initialization state by intersecting",
+                  "every arm that can continue; non-continuing arms are excluded. If the scrutinee is",
+                  "a direct, successfully resolved enum constructor, the bootstrap analyzer knows its",
+                  "variant and only that selected arm contributes reachable initialization,",
+                  "non-continuation, and loop-exit facts. Non-selected arms remain subject to pattern,",
+                  "name, type, exhaustiveness, and arm-compatibility diagnostics, but their flow",
+                  "mutations are discarded. Invalid or non-exhaustive matches establish no arm-derived",
+                  "initialization facts during diagnostic recovery. This is direct-constructor",
+                  "reachability, not propagation of enum values through locals, calls, or general",
+                  "constant evaluation.",
+              ]),
+          )
+
+          patch(
+              "docs/enums-and-patterns.md",
+              block([
+                  "Each arm starts from the post-scrutinee initialization state. For a valid,",
+                  "exhaustive match, a pre-existing local is definitely initialized afterward only",
+                  "if every arm that can continue initializes it. Arms that cannot continue because",
+                  "of `return`, `break`, or `continue` are excluded from that intersection. If all",
+                  "arms cannot continue, the match itself has type `!`.",
+              ]),
+              block([
+                  "Each arm starts from the post-scrutinee initialization state. For a valid,",
+                  "exhaustive match whose scrutinee is dynamic, a pre-existing local is definitely",
+                  "initialized afterward only if every arm that can continue initializes it. Arms",
+                  "that cannot continue because of `return`, `break`, or `continue` are excluded from",
+                  "that intersection. If all reachable arms cannot continue, the match itself has type",
+                  "`!`.",
+                  "",
+                  "A direct, successfully resolved enum constructor is a narrower bootstrap",
+                  "reachability case. Because its variant is known after the constructor payload has",
+                  "been evaluated, only the corresponding arm contributes reachable initialization,",
+                  "non-continuation, and enclosing-loop transfer facts. Every non-selected arm is still",
+                  "resolved and type checked, still participates in exhaustiveness and result-type",
+                  "compatibility, and can still emit diagnostics; only its runtime flow facts are",
+                  "discarded. Values flowing through locals, parameters, calls, or other expressions",
+                  "do not receive this refinement.",
+              ]),
+          )
+
+          roadmap = Path("docs/roadmap.md")
+          text = roadmap.read_text()
+          old_status = "**Status: nine vertical slices implemented; broader type-system work remains.**"
+          new_status = "**Status: ten vertical slices implemented; broader type-system work remains.**"
+          if text.count(old_status) != 1:
+              raise SystemExit("roadmap status marker mismatch")
+          text = text.replace(old_status, new_status, 1)
+          marker = block([
+              "The next Phase 2 slices should address semantic depth rather than widen syntax",
+              "prematurely. In particular:",
+          ])
+          tenth = block([
+              "Implemented in the tenth Phase 2 slice:",
+              "",
+              "- a direct, successfully resolved enum constructor used as a `match` scrutinee now",
+              "  supplies its known variant to semantic reachability analysis without introducing",
+              "  general constant propagation;",
+              "- only the selected constructor arm contributes definite-initialization,",
+              "  non-continuation, and enclosing-loop exit facts;",
+              "- non-selected arms are lowered in diagnostic-only mode so assignments and loop",
+              "  transfers cannot leak into reachable state;",
+              "- every arm still participates in nominal pattern validation, exhaustiveness, static",
+              "  diagnostics, and result-type compatibility, preserving fail-closed checking;",
+              "- dynamic enum scrutinees retain the conservative intersection across all continuing",
+              "  exhaustive arms; and",
+              "- analyzer adversarial tests plus CLI check/run fixtures lock selected-arm payload,",
+              "  initialization, return, continue, break, and dead-arm diagnostic behavior.",
+              "",
+          ])
+          if text.count(marker) != 1:
+              raise SystemExit("roadmap insertion marker mismatch")
+          roadmap.write_text(text.replace(marker, tenth + marker, 1))
+          PY
+      - name: Commit docs and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/literal-match-docs.yml
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git add -A
+          git commit -m "docs: specify direct constructor match reachability"
+          git push origin HEAD:feat/literal-match-dataflow
