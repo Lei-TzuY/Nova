@@ -45,6 +45,14 @@ fn direct_match_selects_definite_initialization_from_the_live_arm() {
 }
 
 #[test]
+fn direct_match_payload_variant_selects_the_live_arm() {
+    let output = analyze_text(
+        "enum Result { Empty, Value(Int) } fn f() -> Int { var value: Int; match Result::Value(41) { Result::Empty => 0, Result::Value(payload) => { value = payload + 1; 0 }, }; value }",
+    );
+    assert!(output.is_success(), "{:?}", output.diagnostics);
+}
+
+#[test]
 fn direct_match_dead_breaks_do_not_create_guaranteed_loop_exits() {
     let output = analyze_text(&format!(
         "{CHOICE} fn f() -> Int {{ while true {{ match Choice::A {{ Choice::A => {{ continue; }}, Choice::B => {{ break; }}, }}; }} }}"
