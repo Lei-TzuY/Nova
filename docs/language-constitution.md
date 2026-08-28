@@ -147,11 +147,17 @@ binding is definitely initialized afterward only when both continuing paths
 initialize it; a branch that cannot continue because it returns, breaks, or
 continues does not constrain the surviving path.
 
-Each match payload binding is immutable and scoped to one arm. A valid
-exhaustive match merges definite-initialization state by intersecting every arm
-that can continue; non-continuing arms are excluded. Invalid or non-exhaustive
-matches establish no arm-derived initialization facts during diagnostic
-recovery.
+Each match payload binding is immutable and scoped to one arm. A valid exhaustive
+match with a dynamic scrutinee merges definite-initialization state by intersecting
+every arm that can continue; non-continuing arms are excluded. If the scrutinee is
+a direct, successfully resolved enum constructor, the bootstrap analyzer knows its
+variant and only that selected arm contributes reachable initialization,
+non-continuation, and loop-exit facts. Non-selected arms remain subject to pattern,
+name, type, exhaustiveness, and arm-compatibility diagnostics, but their flow
+mutations are discarded. Invalid or non-exhaustive matches establish no arm-derived
+initialization facts during diagnostic recovery. This is direct-constructor
+reachability, not propagation of enum values through locals, calls, or general
+constant evaluation.
 
 The bootstrap `while` form is a pre-test statement. For an ordinary condition,
 the body may execute zero times. Initialization facts established while
