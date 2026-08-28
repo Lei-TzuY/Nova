@@ -19,29 +19,7 @@ jobs:
         with:
           components: rustfmt,clippy
       - name: Apply focused refactor
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("scripts/apply_type_rules_refactor.py")
-          text = path.read_text()
-          old = '''patch(
-              "crates/nova-sema/src/type_rules.rs",
-              "use crate::hir::{RecordId, RecordType, Type};\\n",
-              "use crate::hir::Type;\\n",
-          )
-          '''
-          new = '''type_rules = Path("crates/nova-sema/src/type_rules.rs")
-          type_rules_text = type_rules.read_text()
-          old_import = "use crate::hir::{RecordId, RecordType, Type};\\n"
-          if not type_rules_text.startswith(old_import):
-              raise SystemExit("type_rules production import is not in the expected position")
-          type_rules.write_text(type_rules_text.replace(old_import, "use crate::hir::Type;\\n", 1))
-          '''
-          if text.count(old) != 1:
-              raise SystemExit("type-rules import patch block did not match exactly once")
-          path.write_text(text.replace(old, new, 1))
-          PY
-          python3 scripts/apply_type_rules_refactor.py
+        run: python3 scripts/apply_type_rules_refactor.py
       - name: Validate semantic crate
         run: |
           cargo fmt --all
