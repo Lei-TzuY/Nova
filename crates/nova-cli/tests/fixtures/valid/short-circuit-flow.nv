@@ -1,0 +1,8 @@
+fn main() -> Int {
+    var value = 0;
+    false && { value = 1; true };
+    true || { value = 2; false };
+    true && { value = value + 40; true };
+    false || { value = value + 2; true };
+    value
+}
