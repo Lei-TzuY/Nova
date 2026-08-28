@@ -109,7 +109,7 @@ defaulting, conversions, or overflow policy for future backends.
 - the algebraic data-type and pattern-matching model beyond records; and
 - the boundary between language, standard library, and target-specific types.
 
-## 5. Bindings and mutability
+## 5. Bindings, mutability, and local control flow
 
 **Decided.** `let` introduces an immutable binding and `var` introduces a
 mutable binding. Mutability belongs to a binding or explicitly mutable view; it
@@ -132,8 +132,8 @@ is read-only in the bootstrap subset; `record.field = value` is not an accepted
 assignment form. Definite-initialization state is propagated through lexical
 blocks and merged across `if` branches. If both branches can continue, a
 binding is definitely initialized afterward only when both continuing paths
-initialize it; a branch that cannot continue because it returns does not
-constrain the surviving path.
+initialize it; a branch that cannot continue because it returns, breaks, or
+continues does not constrain the surviving path.
 
 The bootstrap `while` form is a pre-test statement. Its condition executes
 before the loop can exit, while its body may execute zero times. Therefore
@@ -142,13 +142,23 @@ the loop, but facts established only in the body cannot by themselves prove a
 binding initialized after the loop. This conservative rule prevents a zero-run
 loop from manufacturing definite-assignment evidence.
 
-Chained assignment, arbitrary lvalues, field mutation, indexing, and general
-uninitialized storage remain unsupported.
+`break;` and `continue;` are statement-only transfers with no value. They apply
+to the nearest lexically enclosing `while` body: `break` exits that loop and
+`continue` begins its next iteration by re-evaluating the condition. The
+condition expression itself is not inside the control-transfer scope. Either
+keyword outside an enclosing loop body is rejected with semantic diagnostic
+`N3013`. Source after a non-continuing transfer may still be analyzed for
+stable diagnostics, but unreachable declarations and assignments must not
+change facts used by reachable code.
 
-**Research.** Broader flow-sensitive facts, `break`, `continue`, labelled loops,
-pattern bindings, partial aggregate initialization, mutable aggregate views,
-ownership interactions, and diagnostics for more complex control-flow graphs
-require implementation evidence before their rules are frozen.
+Chained assignment, arbitrary lvalues, field mutation, indexing, value-carrying
+`break`, labelled loop control, and general uninitialized storage remain
+unsupported.
+
+**Research.** Broader flow-sensitive facts, labelled loops, value-producing
+loops, pattern bindings, partial aggregate initialization, mutable aggregate
+views, ownership interactions, and diagnostics for more complex control-flow
+graphs require implementation evidence before their rules are frozen.
 
 ## 6. Names, modules, and packages
 
@@ -242,11 +252,18 @@ semantics.
 **Provisional bootstrap decisions.** `nova run` executes only after lexical,
 syntactic, name-resolution, type, and definite-assignment validation succeeds.
 The interpreter consumes typed HIR directly and supports the implemented
-function, call, record construction/projection, block, `if`, `while`, return,
-binding, assignment, Boolean, and integer subset. Evaluation order is
-left-to-right; named record initializers do not reorder their expressions when
-resolved to declaration slots. `&&` and `||` short-circuit. The entry point is a
-zero-argument top-level `main` returning `Int` or `Bool`.
+function, call, record construction/projection, block, `if`, `while`, `break`,
+`continue`, return, binding, assignment, Boolean, and integer subset. Evaluation
+order is left-to-right; named record initializers do not reorder their
+expressions when resolved to declaration slots. `&&` and `||` short-circuit. The
+entry point is a zero-argument top-level `main` returning `Int` or `Bool`.
+
+Runtime loop control is represented as structured interpreter flow rather than
+an ad-hoc mutation of an instruction pointer. `break` and `continue` propagate
+through nested blocks and expressions until the nearest active `while` consumes
+them; `return` continues to propagate to the current function call. A transfer
+that reaches a boundary semantic analysis should have rejected is an
+interpreter invariant failure rather than silently changing meaning.
 
 Runtime record values carry nominal identity and declaration-order field slots
 inside the interpreter. That representation is an executable semantic oracle,
@@ -259,8 +276,9 @@ interpretation is not the intended final backend ABI.
 
 **Research.** HIR and MIR forms, verification rules, optimization contracts,
 debug information, incremental compilation, monomorphization, backend
-selection, stable entry-point conventions, richer loop-control semantics,
-aggregate lowering/layout, and cross-backend execution conformance remain open.
+selection, stable entry-point conventions, labelled/value-producing loop
+semantics, aggregate lowering/layout, and cross-backend execution conformance
+remain open.
 
 ## 12. Diagnostics and tooling contracts
 
@@ -273,8 +291,9 @@ diagnostics must be deterministic for identical input and compiler version.
 byte spans and exposes human and JSON Lines rendering across lexical, syntactic,
 semantic, and runtime diagnostics. Record diagnostics distinguish duplicate,
 unknown, missing, and mistyped fields while preserving source-qualified labels.
-Diagnostic code meaning is documented by tests but codes are not yet covered by
-the language compatibility promise.
+Loop-control misuse is reported semantically as `N3013`. Diagnostic code meaning
+is documented by tests but codes are not yet covered by the language
+compatibility promise.
 
 Semantic introspection for editors and AI systems must ultimately expose
 resolved symbols, types, effects, ownership facts, nominal type identities, and
@@ -313,12 +332,16 @@ Every compiler and execution stage must uphold these constraints:
    must be proven on every reachable continuing path before the read.
 10. Pre-test loop analysis must not treat body-only effects as facts that hold
     after a loop which may execute zero times.
-11. Nominal type identity must not silently collapse to structural field shape.
-12. Resolved field slots must preserve source semantics and must not be mistaken
+11. A non-continuing path caused by return, break, or continue must not constrain
+    facts on a different path that remains reachable.
+12. Unreachable source may still produce deterministic diagnostics, but it must
+    not manufacture reachable name or definite-assignment facts.
+13. Nominal type identity must not silently collapse to structural field shape.
+14. Resolved field slots must preserve source semantics and must not be mistaken
     for a stabilized memory-layout or ABI guarantee.
-13. Optimization must preserve specified behavior and later operate on verified
+15. Optimization must preserve specified behavior and later operate on verified
     IR rather than repair invalid earlier output.
-14. Roadmap documents distinguish implemented, provisional, and researched
+16. Roadmap documents distinguish implemented, provisional, and researched
     properties; benchmarks and safety claims require reproducible evidence.
 
 ## 15. Current unresolved research register
