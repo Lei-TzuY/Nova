@@ -1,0 +1,8 @@
+enum Result {
+    Empty,
+    Value(Int),
+}
+
+fn broken() -> Result {
+    Result::Value
+}

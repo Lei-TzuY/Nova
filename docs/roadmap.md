@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: four vertical slices implemented; broader type-system work remains.**
+**Status: five vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -98,6 +98,22 @@ Implemented in the fourth Phase 2 slice:
 - record types integrated with function signatures, local inference,
   annotations, assignment type preservation, returns, and branch type joining.
 
+Implemented in the fifth Phase 2 slice:
+
+- top-level nominal `enum` declarations with stable source-order `EnumId`
+  identities and zero-or-one explicitly typed payloads per variant;
+- one deterministic type namespace shared by records, enums, and reserved
+  primitive names, with all nominal names collected before member types resolve;
+- qualified `Enum::Variant` construction with variant and payload-arity/type
+  checking, including recursive enum payload references;
+- qualified single-variant patterns with immutable, arm-local payload bindings;
+- exhaustive match checking that rejects missing, duplicate, unknown, and
+  differently qualified variants without wildcard approximation;
+- continuing-arm type joining that respects the internal non-continuing `!`
+  type; and
+- definite-assignment merging by intersection across every continuing arm of a
+  valid exhaustive match, while invalid matches establish no flow facts.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
@@ -105,8 +121,8 @@ prematurely. In particular:
   implementation evidence accumulates;
 - define language-level numeric types, defaulting, conversions, and overflow
   behavior beyond the provisional interpreter contract;
-- add enums only with stable nominal identity and deterministic diagnostics;
-- introduce exhaustive pattern checking after algebraic data types exist;
+- deepen the pattern model only with a specified usefulness and diagnostic
+  strategy rather than adding ad-hoc wildcard or guard behavior;
 - specify aggregate mutation/ownership and layout semantics before field mutation
   or ABI claims are added;
 - define a versioned semantic-introspection schema rather than exposing debug
@@ -119,7 +135,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: three vertical slices implemented; execution surface remains small.**
+**Status: four vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -166,23 +182,38 @@ Implemented in the third Phase 3 slice:
 - CLI end-to-end fixtures for record checking/execution plus negative missing-
   field diagnostics.
 
+Implemented in the fourth Phase 3 slice:
+
+- executable nominal enum values carrying `EnumId`, a declaration-order variant
+  slot, and an optional boxed bootstrap payload;
+- source semantics in which a match evaluates its scrutinee exactly once and
+  evaluates only the selected arm;
+- payload binding and explicit-return propagation through selected arms;
+- recursive enum values and recursive matching functions under the existing
+  call-depth and execution-step guards;
+- interpreter verification that accepted match HIR is exhaustive, non-duplicated,
+  in range, and payload-compatible before dispatch; and
+- CLI check/run fixtures plus semantic and runtime tests for successful and
+  rejected enum/match programs.
+
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
 
 - introduce richer control flow such as `break`/`continue` only with an explicit
   CFG/dataflow story rather than ad-hoc interpreter behavior;
-- execute enums and exhaustive pattern matching only after their semantic model
-  and exhaustiveness checking exist;
+- consider richer patterns only after their usefulness, binding, dataflow, and
+  execution contracts can remain deterministic;
 - decide whether aggregate update/mutation requires a dedicated semantic model
   rather than extending the current identifier-only assignment form;
 - introduce a small explicit execution IR if interpreter complexity begins to
   leak backend concerns into HIR; and
 - keep runtime diagnostics source-qualified and reproducible.
 
-Record runtime slots are interpreter implementation evidence, not source-level
-layout or ABI guarantees. Native code generation is not implied by the bootstrap
-interpreter. Backend work remains a later phase and must consume verified shared
-IR rather than reimplement source semantics independently.
+Record runtime slots and boxed enum payloads are interpreter implementation
+evidence, not source-level layout, allocation, ownership, or ABI guarantees.
+Native code generation is not implied by the bootstrap interpreter. Backend work
+remains a later phase and must consume verified shared IR rather than reimplement
+source semantics independently.
 
 ## Phase 4 — Typed errors and effects
 

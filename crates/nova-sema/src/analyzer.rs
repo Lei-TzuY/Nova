@@ -1,6 +1,6 @@
 use crate::hir::{
-    self, BindingId, ExpressionKind, FunctionId, FunctionType, RecordFieldValue, RecordId,
-    RecordType, StatementKind, Type,
+    self, BindingId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType, MatchArm,
+    RecordFieldValue, RecordId, RecordType, StatementKind, Type,
 };
 use nova_diagnostics::{Diagnostic, LabelStyle};
 use nova_parser::ast::{self, BinaryOperator, UnaryOperator};
@@ -28,13 +28,18 @@ impl AnalysisOutput {
 #[must_use]
 pub fn analyze(program: &ast::Program) -> AnalysisOutput {
     let mut analyzer = Analyzer::new();
-    analyzer.collect_record_definitions(program);
+    analyzer.collect_type_definitions(program);
     analyzer.collect_function_signatures(program);
 
     let records = analyzer
         .record_definitions
         .iter()
         .map(RecordDefinition::to_hir)
+        .collect();
+    let enums = analyzer
+        .enum_definitions
+        .iter()
+        .map(EnumDefinition::to_hir)
         .collect();
     let functions = program
         .functions
@@ -47,6 +52,7 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
     AnalysisOutput {
         program: hir::Program {
             records,
+            enums,
             functions,
             span: program.span,
         },
@@ -94,6 +100,44 @@ impl RecordDefinition {
 }
 
 #[derive(Clone, Debug)]
+struct EnumDefinition {
+    id: EnumId,
+    name: String,
+    variants: Vec<hir::EnumVariant>,
+    span: Span,
+}
+
+impl EnumDefinition {
+    fn enum_type(&self) -> EnumType {
+        EnumType {
+            id: self.id,
+            name: self.name.clone(),
+        }
+    }
+
+    fn to_hir(&self) -> hir::Enum {
+        hir::Enum {
+            id: self.id,
+            name: self.name.clone(),
+            variants: self.variants.clone(),
+            span: self.span,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum TypeDefinition {
+    Record(RecordId),
+    Enum(EnumId),
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TypeSymbol {
+    definition: TypeDefinition,
+    span: Span,
+}
+
+#[derive(Clone, Debug)]
 struct SignatureRecord {
     parameters: Vec<Type>,
     return_type: Type,
@@ -127,7 +171,8 @@ struct LocalSymbol {
 struct Analyzer {
     diagnostics: Vec<Diagnostic>,
     record_definitions: Vec<RecordDefinition>,
-    records: BTreeMap<String, RecordId>,
+    enum_definitions: Vec<EnumDefinition>,
+    types: BTreeMap<String, TypeSymbol>,
     signatures: Vec<SignatureRecord>,
     functions: BTreeMap<String, FunctionSymbol>,
     scopes: Vec<BTreeMap<String, LocalSymbol>>,
@@ -139,7 +184,8 @@ impl Analyzer {
         Self {
             diagnostics: Vec::new(),
             record_definitions: Vec::new(),
-            records: BTreeMap::new(),
+            enum_definitions: Vec::new(),
+            types: BTreeMap::new(),
             signatures: Vec::new(),
             functions: BTreeMap::new(),
             scopes: Vec::new(),
@@ -147,7 +193,7 @@ impl Analyzer {
         }
     }
 
-    fn collect_record_definitions(&mut self, program: &ast::Program) {
+    fn collect_type_definitions(&mut self, program: &ast::Program) {
         self.record_definitions = program
             .records
             .iter()
@@ -160,29 +206,72 @@ impl Analyzer {
             })
             .collect();
 
-        for (index, record) in program.records.iter().enumerate() {
-            let id = RecordId::new(index);
-            if matches!(record.name.text.as_str(), "Int" | "Bool") {
+        self.enum_definitions = program
+            .enums
+            .iter()
+            .enumerate()
+            .map(|(index, enumeration)| EnumDefinition {
+                id: EnumId::new(index),
+                name: enumeration.name.text.clone(),
+                variants: Vec::new(),
+                span: enumeration.span,
+            })
+            .collect();
+
+        let mut declarations = program
+            .records
+            .iter()
+            .enumerate()
+            .map(|(index, record)| {
+                (
+                    record.name.span.start(),
+                    &record.name,
+                    TypeDefinition::Record(RecordId::new(index)),
+                )
+            })
+            .chain(
+                program
+                    .enums
+                    .iter()
+                    .enumerate()
+                    .map(|(index, enumeration)| {
+                        (
+                            enumeration.name.span.start(),
+                            &enumeration.name,
+                            TypeDefinition::Enum(EnumId::new(index)),
+                        )
+                    }),
+            )
+            .collect::<Vec<_>>();
+        declarations.sort_by_key(|(start, _, _)| *start);
+
+        for (_, name, definition) in declarations {
+            if matches!(name.text.as_str(), "Int" | "Bool") {
                 self.diagnostics.push(
                     Diagnostic::error("N3002", "duplicate type definition").with_primary(
-                        record.name.span,
-                        format!("`{}` is a built-in type name", record.name.text),
+                        name.span,
+                        format!("`{}` is a built-in type name", name.text),
                     ),
                 );
                 continue;
             }
-            if let Some(previous_id) = self.records.get(&record.name.text).copied() {
-                let previous = &self.record_definitions[previous_id.index()];
+            if let Some(previous) = self.types.get(&name.text).copied() {
                 self.diagnostics.push(
                     Diagnostic::error("N3002", "duplicate type definition")
                         .with_primary(
-                            record.name.span,
-                            format!("record `{}` is defined more than once", record.name.text),
+                            name.span,
+                            format!("type `{}` is defined more than once", name.text),
                         )
-                        .with_secondary(previous.span, "first record definition is here"),
+                        .with_secondary(previous.span, "first type definition is here"),
                 );
             } else {
-                self.records.insert(record.name.text.clone(), id);
+                self.types.insert(
+                    name.text.clone(),
+                    TypeSymbol {
+                        definition,
+                        span: name.span,
+                    },
+                );
             }
         }
 
@@ -210,6 +299,38 @@ impl Analyzer {
                 });
             }
             self.record_definitions[index].fields = fields;
+        }
+
+        for (index, enumeration) in program.enums.iter().enumerate() {
+            let mut seen_variants = BTreeMap::<String, Span>::new();
+            let mut variants = Vec::with_capacity(enumeration.variants.len());
+            for variant in &enumeration.variants {
+                let payload = variant
+                    .payload
+                    .as_ref()
+                    .map(|reference| self.resolve_type_ref(reference));
+                if let Some(previous) = seen_variants.get(&variant.name.text).copied() {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3020", "duplicate enum variant")
+                            .with_primary(
+                                variant.name.span,
+                                format!(
+                                    "variant `{}` is declared more than once",
+                                    variant.name.text
+                                ),
+                            )
+                            .with_secondary(previous, "first variant declaration is here"),
+                    );
+                } else {
+                    seen_variants.insert(variant.name.text.clone(), variant.name.span);
+                }
+                variants.push(hir::EnumVariant {
+                    name: variant.name.text.clone(),
+                    payload,
+                    span: variant.span,
+                });
+            }
+            self.enum_definitions[index].variants = variants;
         }
     }
 
@@ -255,17 +376,23 @@ impl Analyzer {
             "Int" => Type::Int,
             "Bool" => Type::Bool,
             unknown => {
-                if let Some(id) = self.records.get(unknown).copied() {
-                    return Type::Record(RecordType {
-                        id,
-                        name: unknown.to_owned(),
-                    });
+                if let Some(symbol) = self.types.get(unknown).copied() {
+                    return match symbol.definition {
+                        TypeDefinition::Record(id) => Type::Record(RecordType {
+                            id,
+                            name: unknown.to_owned(),
+                        }),
+                        TypeDefinition::Enum(id) => Type::Enum(EnumType {
+                            id,
+                            name: unknown.to_owned(),
+                        }),
+                    };
                 }
                 self.diagnostics.push(
                     Diagnostic::error("N3001", "unknown type")
                         .with_primary(reference.span, format!("unknown type `{unknown}`"))
                         .with_note(
-                            "the bootstrap semantic core recognizes Int, Bool, and declared record names",
+                            "the bootstrap semantic core recognizes Int, Bool, and declared record or enum names",
                         ),
                 );
                 Type::Error
@@ -505,6 +632,11 @@ impl Analyzer {
             ast::ExpressionKind::RecordLiteral { name, fields } => {
                 self.lower_record_literal(name, fields, return_type, expression.span)
             }
+            ast::ExpressionKind::EnumConstructor {
+                enumeration,
+                variant,
+                payload,
+            } => self.lower_enum_constructor(enumeration, variant, payload.as_deref(), return_type),
             ast::ExpressionKind::FieldAccess { base, field } => {
                 self.lower_field_access(base, field, return_type)
             }
@@ -599,6 +731,9 @@ impl Analyzer {
                     ty,
                 )
             }
+            ast::ExpressionKind::Match { scrutinee, arms } => {
+                self.lower_match(scrutinee, arms, return_type, expression.span)
+            }
         };
 
         hir::Expression {
@@ -615,13 +750,27 @@ impl Analyzer {
         return_type: &Type,
         _span: Span,
     ) -> (ExpressionKind, Type) {
-        let Some(record_id) = self.records.get(&name.text).copied() else {
+        let Some(symbol) = self.types.get(&name.text).copied() else {
             for field in fields {
                 self.lower_expression(&field.value, return_type);
             }
             self.diagnostics.push(
                 Diagnostic::error("N3001", "unknown type")
                     .with_primary(name.span, format!("unknown record type `{}`", name.text)),
+            );
+            return (ExpressionKind::Error, Type::Error);
+        };
+        let TypeDefinition::Record(record_id) = symbol.definition else {
+            for field in fields {
+                self.lower_expression(&field.value, return_type);
+            }
+            self.diagnostics.push(
+                Diagnostic::error("N3004", "type mismatch")
+                    .with_primary(
+                        name.span,
+                        format!("`{}` is an enum, not a record", name.text),
+                    )
+                    .with_secondary(symbol.span, "enum declared here"),
             );
             return (ExpressionKind::Error, Type::Error);
         };
@@ -710,6 +859,388 @@ impl Analyzer {
                 },
                 ty,
             )
+        }
+    }
+
+    fn lower_enum_constructor(
+        &mut self,
+        enumeration: &ast::Name,
+        variant: &ast::Name,
+        payload: Option<&ast::Expression>,
+        return_type: &Type,
+    ) -> (ExpressionKind, Type) {
+        let payload =
+            payload.map(|expression| Box::new(self.lower_expression(expression, return_type)));
+        let payload_never = payload
+            .as_deref()
+            .is_some_and(|expression| expression.ty.is_never());
+        let payload_error = payload
+            .as_deref()
+            .is_some_and(|expression| expression.ty.is_error());
+
+        let Some(symbol) = self.types.get(&enumeration.text).copied() else {
+            self.diagnostics.push(
+                Diagnostic::error("N3021", "unknown enum")
+                    .with_primary(
+                        enumeration.span,
+                        format!("cannot resolve enum `{}`", enumeration.text),
+                    )
+                    .with_note("enum constructors use `Enum::Variant` qualification"),
+            );
+            return (
+                ExpressionKind::Error,
+                if payload_never {
+                    Type::Never
+                } else {
+                    Type::Error
+                },
+            );
+        };
+        let TypeDefinition::Enum(enum_id) = symbol.definition else {
+            self.diagnostics.push(
+                Diagnostic::error("N3021", "invalid enum constructor")
+                    .with_primary(
+                        enumeration.span,
+                        format!("`{}` is a record, not an enum", enumeration.text),
+                    )
+                    .with_secondary(symbol.span, "record declared here"),
+            );
+            return (
+                ExpressionKind::Error,
+                if payload_never {
+                    Type::Never
+                } else {
+                    Type::Error
+                },
+            );
+        };
+        let definition = self.enum_definitions[enum_id.index()].clone();
+        let Some(variant_index) = definition
+            .variants
+            .iter()
+            .position(|declared| declared.name == variant.text)
+        else {
+            self.diagnostics.push(
+                Diagnostic::error("N3021", "unknown enum variant")
+                    .with_primary(
+                        variant.span,
+                        format!(
+                            "enum `{}` has no variant named `{}`",
+                            definition.name, variant.text
+                        ),
+                    )
+                    .with_secondary(definition.span, "enum declared here"),
+            );
+            return (
+                ExpressionKind::Error,
+                if payload_never {
+                    Type::Never
+                } else {
+                    Type::Error
+                },
+            );
+        };
+
+        let declared = &definition.variants[variant_index];
+        let arity_matches = match (&declared.payload, payload.as_deref()) {
+            (Some(expected), Some(actual)) => {
+                self.require_type(&actual.ty, expected, actual.span, "enum variant payload");
+                true
+            }
+            (None, None) => true,
+            (Some(_), None) => {
+                self.diagnostics.push(
+                    Diagnostic::error("N3022", "missing enum variant payload")
+                        .with_primary(
+                            variant.span,
+                            format!("variant `{}` requires one payload", declared.name),
+                        )
+                        .with_secondary(declared.span, "variant declared with a payload here"),
+                );
+                false
+            }
+            (None, Some(actual)) => {
+                self.diagnostics.push(
+                    Diagnostic::error("N3022", "unexpected enum variant payload")
+                        .with_primary(
+                            actual.span,
+                            format!("variant `{}` does not accept a payload", declared.name),
+                        )
+                        .with_secondary(declared.span, "payload-free variant declared here"),
+                );
+                false
+            }
+        };
+
+        let ty = if payload_never {
+            Type::Never
+        } else if payload_error || !arity_matches {
+            Type::Error
+        } else {
+            Type::Enum(definition.enum_type())
+        };
+        if arity_matches {
+            (
+                ExpressionKind::EnumConstructor {
+                    enumeration: enum_id,
+                    variant_index,
+                    payload,
+                },
+                ty,
+            )
+        } else {
+            (ExpressionKind::Error, ty)
+        }
+    }
+
+    fn lower_match(
+        &mut self,
+        scrutinee: &ast::Expression,
+        arms: &[ast::MatchArm],
+        return_type: &Type,
+        span: Span,
+    ) -> (ExpressionKind, Type) {
+        let scrutinee = self.lower_expression(scrutinee, return_type);
+        let mut scrutinee_enum = match &scrutinee.ty {
+            Type::Enum(enumeration) => Some(enumeration.clone()),
+            Type::Error | Type::Never => None,
+            actual => {
+                self.diagnostics.push(
+                    Diagnostic::error("N3025", "match requires an enum value").with_primary(
+                        scrutinee.span,
+                        format!("cannot match a value of type {actual}"),
+                    ),
+                );
+                None
+            }
+        };
+        let entry_scopes = self.scopes.clone();
+        let mut seen = BTreeMap::<usize, Span>::new();
+        let mut lowered_arms = Vec::with_capacity(arms.len());
+        let mut branch_states = Vec::with_capacity(arms.len());
+        let mut branch_types = Vec::with_capacity(arms.len());
+        let mut structural_error = scrutinee_enum.is_none() && !scrutinee.ty.is_never();
+
+        for arm in arms {
+            self.scopes = entry_scopes.clone();
+            self.scopes.push(BTreeMap::new());
+            let mut valid_pattern = true;
+            let mut resolved_index = None;
+            let mut payload_binding = None;
+
+            let symbol = self.types.get(&arm.pattern.enumeration.text).copied();
+            let pattern_enum_id = match symbol {
+                Some(TypeSymbol {
+                    definition: TypeDefinition::Enum(id),
+                    ..
+                }) => Some(id),
+                Some(symbol) => {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3021", "invalid enum pattern")
+                            .with_primary(
+                                arm.pattern.enumeration.span,
+                                format!(
+                                    "`{}` is a record, not an enum",
+                                    arm.pattern.enumeration.text
+                                ),
+                            )
+                            .with_secondary(symbol.span, "record declared here"),
+                    );
+                    valid_pattern = false;
+                    None
+                }
+                None => {
+                    self.diagnostics
+                        .push(Diagnostic::error("N3021", "unknown enum").with_primary(
+                            arm.pattern.enumeration.span,
+                            format!("cannot resolve enum `{}`", arm.pattern.enumeration.text),
+                        ));
+                    valid_pattern = false;
+                    None
+                }
+            };
+
+            if let Some(pattern_enum_id) = pattern_enum_id {
+                let definition = self.enum_definitions[pattern_enum_id.index()].clone();
+                if scrutinee.ty.is_never() && scrutinee_enum.is_none() {
+                    scrutinee_enum = Some(definition.enum_type());
+                }
+                if let Some(expected) = &scrutinee_enum {
+                    if expected.id != pattern_enum_id {
+                        self.diagnostics.push(
+                            Diagnostic::error("N3025", "pattern enum does not match scrutinee")
+                                .with_primary(
+                                    arm.pattern.enumeration.span,
+                                    format!(
+                                        "pattern names `{}`, but the scrutinee has type {}",
+                                        arm.pattern.enumeration.text, expected.name
+                                    ),
+                                ),
+                        );
+                        valid_pattern = false;
+                    }
+                }
+
+                if let Some(variant_index) = definition
+                    .variants
+                    .iter()
+                    .position(|declared| declared.name == arm.pattern.variant.text)
+                {
+                    let declared = &definition.variants[variant_index];
+                    resolved_index = Some(variant_index);
+                    match (&declared.payload, &arm.pattern.binding) {
+                        (Some(payload_type), Some(binding_name)) => {
+                            let binding =
+                                self.new_binding(binding_name, payload_type.clone(), false);
+                            self.insert_local(&binding, true);
+                            payload_binding = Some(binding);
+                        }
+                        (None, None) => {}
+                        (Some(_), None) => {
+                            self.diagnostics.push(
+                                Diagnostic::error("N3022", "missing pattern payload binding")
+                                    .with_primary(
+                                        arm.pattern.variant.span,
+                                        format!("variant `{}` carries one payload", declared.name),
+                                    )
+                                    .with_secondary(
+                                        declared.span,
+                                        "variant declared with a payload here",
+                                    ),
+                            );
+                            valid_pattern = false;
+                        }
+                        (None, Some(binding_name)) => {
+                            self.diagnostics.push(
+                                Diagnostic::error("N3022", "unexpected pattern payload binding")
+                                    .with_primary(
+                                        binding_name.span,
+                                        format!(
+                                            "variant `{}` does not carry a payload",
+                                            declared.name
+                                        ),
+                                    )
+                                    .with_secondary(
+                                        declared.span,
+                                        "payload-free variant declared here",
+                                    ),
+                            );
+                            valid_pattern = false;
+                        }
+                    }
+                } else {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3021", "unknown enum variant")
+                            .with_primary(
+                                arm.pattern.variant.span,
+                                format!(
+                                    "enum `{}` has no variant named `{}`",
+                                    definition.name, arm.pattern.variant.text
+                                ),
+                            )
+                            .with_secondary(definition.span, "enum declared here"),
+                    );
+                    valid_pattern = false;
+                }
+            }
+
+            if payload_binding.is_none() {
+                if let Some(binding_name) = &arm.pattern.binding {
+                    let binding = self.new_binding(binding_name, Type::Error, false);
+                    self.insert_local(&binding, true);
+                    payload_binding = Some(binding);
+                }
+            }
+
+            if valid_pattern {
+                if let (Some(expected), Some(index)) = (&scrutinee_enum, resolved_index) {
+                    if let Some(previous) = seen.get(&index).copied() {
+                        self.diagnostics.push(
+                            Diagnostic::error("N3024", "duplicate match variant")
+                                .with_primary(
+                                    arm.pattern.span,
+                                    format!(
+                                        "variant `{}::{}` is matched more than once",
+                                        expected.name, arm.pattern.variant.text
+                                    ),
+                                )
+                                .with_secondary(previous, "first matching arm is here"),
+                        );
+                        valid_pattern = false;
+                    } else {
+                        seen.insert(index, arm.pattern.span);
+                    }
+                }
+            }
+
+            let value = self.lower_expression(&arm.value, return_type);
+            let popped = self.scopes.pop();
+            debug_assert!(popped.is_some());
+            branch_states.push((self.scopes.clone(), value.ty.is_never()));
+            branch_types.push((value.ty.clone(), value.span));
+
+            if let Some(variant_index) = resolved_index {
+                lowered_arms.push(MatchArm {
+                    variant_index,
+                    binding: payload_binding,
+                    value,
+                    span: arm.span,
+                });
+            }
+            structural_error |= !valid_pattern;
+        }
+
+        if scrutinee.ty.is_never() && scrutinee_enum.is_none() {
+            self.diagnostics.push(
+                Diagnostic::error("N3025", "cannot determine matched enum").with_primary(
+                    span,
+                    "a match with a non-continuing scrutinee still needs a qualified variant arm",
+                ),
+            );
+            structural_error = true;
+        }
+
+        if let Some(enumeration) = &scrutinee_enum {
+            let definition = &self.enum_definitions[enumeration.id.index()];
+            let missing = definition
+                .variants
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| !seen.contains_key(index))
+                .map(|(_, variant)| variant.name.as_str())
+                .collect::<Vec<_>>();
+            if !missing.is_empty() {
+                self.diagnostics.push(
+                    Diagnostic::error("N3023", "non-exhaustive match")
+                        .with_primary(span, format!("missing variant(s): {}", missing.join(", ")))
+                        .with_secondary(definition.span, "enum variants declared here"),
+                );
+                structural_error = true;
+            }
+        }
+
+        let joined_type = self.join_match_arm_types(&branch_types);
+        let ty = if scrutinee.ty.is_never() {
+            self.scopes = entry_scopes;
+            Type::Never
+        } else if structural_error {
+            self.scopes = entry_scopes;
+            Type::Error
+        } else {
+            self.merge_match_initialization(&entry_scopes, &branch_states);
+            joined_type
+        };
+
+        match (structural_error, scrutinee_enum) {
+            (false, Some(enumeration)) => (
+                ExpressionKind::Match {
+                    scrutinee: Box::new(scrutinee),
+                    enumeration: enumeration.id,
+                    arms: lowered_arms,
+                },
+                ty,
+            ),
+            _ => (ExpressionKind::Error, ty),
         }
     }
 
@@ -832,6 +1363,36 @@ impl Analyzer {
                     (false, true) => then_initialized,
                     (false, false) => then_initialized && else_initialized,
                 };
+                if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
+                    symbol.initialized = initialized;
+                }
+            }
+        }
+    }
+
+    fn merge_match_initialization(
+        &mut self,
+        entry_scopes: &[BTreeMap<String, LocalSymbol>],
+        branches: &[(Vec<BTreeMap<String, LocalSymbol>>, bool)],
+    ) {
+        self.scopes = entry_scopes.to_vec();
+        let continuing = branches
+            .iter()
+            .filter(|(_, never)| !never)
+            .map(|(scopes, _)| scopes)
+            .collect::<Vec<_>>();
+        if continuing.is_empty() {
+            return;
+        }
+
+        for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
+            for name in entry_scope.keys() {
+                let initialized = continuing.iter().all(|branch_scopes| {
+                    branch_scopes
+                        .get(scope_index)
+                        .and_then(|scope| scope.get(name))
+                        .is_some_and(|symbol| symbol.initialized)
+                });
                 if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
                     symbol.initialized = initialized;
                 }
@@ -1048,6 +1609,48 @@ impl Analyzer {
                 .with_secondary(then_span, format!("then branch has type {then_type}")),
         );
         Type::Error
+    }
+
+    fn join_match_arm_types(&mut self, arms: &[(Type, Span)]) -> Type {
+        let mut expected = None::<(Type, Span)>;
+        let mut saw_error = false;
+        let mut mismatch = false;
+
+        for (ty, span) in arms {
+            if ty.is_never() {
+                continue;
+            }
+            if ty.is_error() {
+                saw_error = true;
+                continue;
+            }
+            if let Some((expected_type, expected_span)) = &expected {
+                if ty != expected_type {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3004", "type mismatch")
+                            .with_primary(
+                                *span,
+                                format!("match arm has type {ty}, expected {expected_type}"),
+                            )
+                            .with_secondary(
+                                *expected_span,
+                                format!("first continuing arm has type {expected_type}"),
+                            ),
+                    );
+                    mismatch = true;
+                }
+            } else {
+                expected = Some((ty.clone(), *span));
+            }
+        }
+
+        if mismatch || (expected.is_none() && saw_error) {
+            Type::Error
+        } else if let Some((ty, _)) = expected {
+            ty
+        } else {
+            Type::Never
+        }
     }
 
     fn require_type(&mut self, actual: &Type, expected: &Type, span: Span, context: &str) {
@@ -1423,5 +2026,170 @@ mod tests {
              }",
         );
         assert_eq!(codes(&output), vec!["N3004", "N3005"]);
+    }
+
+    #[test]
+    fn resolves_nominal_enums_constructors_payload_bindings_and_recursive_types() {
+        let output = analyze_text(
+            "enum Nat { Zero, Succ(Nat) }\n\
+             fn value(number: Nat) -> Int {\n\
+                 match number { Nat::Zero => 0, Nat::Succ(previous) => value(previous), }\n\
+             }\n\
+             fn one() -> Nat { Nat::Succ(Nat::Zero) }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        assert_eq!(output.program.enums.len(), 1);
+        assert!(matches!(
+            output.program.enums[0].variants[1].payload,
+            Some(Type::Enum(_))
+        ));
+        assert!(matches!(
+            output.program.functions[0].parameters[0].ty,
+            Type::Enum(_)
+        ));
+
+        let tail = output.program.functions[0]
+            .body
+            .tail
+            .as_deref()
+            .expect("match tail");
+        let ExpressionKind::Match {
+            enumeration, arms, ..
+        } = &tail.kind
+        else {
+            panic!("expected match HIR: {tail:?}");
+        };
+        assert_eq!(enumeration.index(), 0);
+        assert_eq!(arms.len(), 2);
+        assert!(arms[0].binding.is_none());
+        assert_eq!(
+            arms[1]
+                .binding
+                .as_ref()
+                .map(|binding| binding.name.as_str()),
+            Some("previous")
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_enum_variants_and_cross_kind_type_definitions() {
+        let output = analyze_text(
+            "enum Choice { A, A }\n\
+             record Clash { value: Int }\n\
+             enum Clash { Empty }\n\
+             enum Bool { False }\n\
+             fn main() -> Int { 0 }",
+        );
+        assert!(codes(&output).contains(&"N3020"));
+        assert_eq!(
+            codes(&output)
+                .into_iter()
+                .filter(|code| *code == "N3002")
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn checks_enum_constructor_variant_payload_arity_and_type() {
+        let output = analyze_text(
+            "enum Maybe { None, Some(Int) }\n\
+             fn extra() -> Maybe { Maybe::None(1) }\n\
+             fn missing() -> Maybe { Maybe::Some }\n\
+             fn wrong() -> Maybe { Maybe::Some(true) }\n\
+             fn unknown() -> Maybe { Maybe::Absent }",
+        );
+        assert_eq!(codes(&output), vec!["N3022", "N3022", "N3004", "N3021"]);
+    }
+
+    #[test]
+    fn checks_match_exhaustiveness_duplicates_nominal_identity_and_arm_types() {
+        let non_exhaustive = analyze_text(
+            "enum Maybe { None, Some(Int) }\n\
+             fn f(value: Maybe) -> Int { match value { Maybe::None => 0, } }",
+        );
+        assert_eq!(codes(&non_exhaustive), vec!["N3023"]);
+
+        let duplicate = analyze_text(
+            "enum Maybe { None, Some(Int) }\n\
+             fn f(value: Maybe) -> Int {\n\
+                 match value { Maybe::None => 0, Maybe::Some(x) => x, Maybe::None => 2, }\n\
+             }",
+        );
+        assert_eq!(codes(&duplicate), vec!["N3024"]);
+
+        let wrong_enum = analyze_text(
+            "enum A { X } enum B { X }\n\
+             fn f(value: A) -> Int { match value { B::X => 0, } }",
+        );
+        assert!(codes(&wrong_enum).contains(&"N3025"));
+        assert!(codes(&wrong_enum).contains(&"N3023"));
+
+        let wrong_type = analyze_text(
+            "enum Flag { Off, On }\n\
+             fn f(value: Flag) -> Int { match value { Flag::Off => 0, Flag::On => true, } }",
+        );
+        assert_eq!(codes(&wrong_type), vec!["N3004"]);
+    }
+
+    #[test]
+    fn match_merges_definite_assignment_across_only_continuing_arms() {
+        let complete = analyze_text(
+            "enum Flag { Off, On }\n\
+             fn f(flag: Flag) -> Int {\n\
+                 var value: Int;\n\
+                 match flag {\n\
+                     Flag::Off => { value = 1; 0 },\n\
+                     Flag::On => { value = 2; 0 },\n\
+                 };\n\
+                 value\n\
+             }",
+        );
+        assert!(complete.is_success(), "{:?}", complete.diagnostics);
+
+        let continuing_only = analyze_text(
+            "enum Flag { Off, On }\n\
+             fn f(flag: Flag) -> Int {\n\
+                 var value: Int;\n\
+                 match flag {\n\
+                     Flag::Off => { return 0; },\n\
+                     Flag::On => { value = 2; 0 },\n\
+                 };\n\
+                 value\n\
+             }",
+        );
+        assert!(
+            continuing_only.is_success(),
+            "{:?}",
+            continuing_only.diagnostics
+        );
+
+        let incomplete = analyze_text(
+            "enum Flag { Off, On }\n\
+             fn f(flag: Flag) -> Int {\n\
+                 var value: Int;\n\
+                 match flag { Flag::Off => { value = 1; 0 }, Flag::On => 0, };\n\
+                 value\n\
+             }",
+        );
+        assert_eq!(codes(&incomplete), vec!["N3009"]);
+    }
+
+    #[test]
+    fn qualified_patterns_type_a_match_with_a_noncontinuing_scrutinee() {
+        let output = analyze_text(
+            "enum Choice { A, B }\n\
+             fn f() -> Int {\n\
+                 match { return 5; } { Choice::A => 1, Choice::B => 2, }\n\
+             }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        let tail = output.program.functions[0]
+            .body
+            .tail
+            .as_deref()
+            .expect("match tail");
+        assert!(tail.ty.is_never());
+        assert!(matches!(tail.kind, ExpressionKind::Match { .. }));
     }
 }

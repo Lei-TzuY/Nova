@@ -20,21 +20,22 @@ interpreter slices. The toolchain is written in Rust and can:
 
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
-- parse functions, nominal records, explicit record construction, field
-  projection, initialized bindings, typed delayed `var` initialization, narrow
-  assignments, expressions, blocks, calls, `if` expressions, and pre-test
-  `while` loops;
+- parse functions, nominal records and enums, explicit aggregate construction,
+  exhaustive enum matching, field projection, initialized bindings, typed
+  delayed `var` initialization, narrow assignments, expressions, blocks, calls,
+  `if` expressions, and pre-test `while` loops;
 - lower accepted syntax into a resolved, typed HIR with stable function,
-  binding, and record identities;
-- resolve top-level functions and record types, parameters, lexical local
-  bindings, and record field slots;
-- check bootstrap `Int`, `Bool`, and nominal record types, function signatures,
+  binding, record, and enum identities;
+- resolve top-level functions and nominal types, parameters, lexical local
+  bindings, record field slots, enum variant slots, and match payload bindings;
+- check bootstrap `Int`, `Bool`, and nominal aggregate types, function signatures,
   local inference and annotations, calls, operators, block tails, branches,
-  returns, loop conditions, record construction/projection, assignment
-  mutability/type constraints, and definite initialization;
+  returns, loop conditions, record construction/projection, enum construction,
+  match exhaustiveness and arm types, assignment mutability/type constraints,
+  and definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
-  interpreter with function calls, recursion, records, mutation, blocks,
-  conditionals, and bounded loops;
+  interpreter with function calls, recursion, records, enums, pattern matching,
+  mutation, blocks, conditionals, and bounded loops;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
   text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
@@ -48,27 +49,33 @@ record layout, ABI, or backend is stable.
 The implemented syntax is intentionally small:
 
 ```nova
-record Pair {
-    left: Int,
-    right: Int,
+enum Result {
+    Empty,
+    Value(Int),
 }
 
 fn main() -> Int {
-    let pair = new Pair { right: 2, left: 40 };
-    pair.left + pair.right
+    let result = Result::Value(42);
+    match result {
+        Result::Empty => 0,
+        Result::Value(value) => value,
+    }
 }
 ```
 
 See [the implemented grammar](docs/grammar.md) for the normative frontend
-subset and [the language constitution](docs/language-constitution.md) for
-decisions that extend beyond it.
+subset, [the enum and pattern semantics](docs/enums-and-patterns.md) for this
+slice's semantic contract, and
+[the language constitution](docs/language-constitution.md) for decisions that
+extend beyond it.
 
 ## Current semantic rules
 
 The Phase 2 bootstrap checker predeclares function signatures and nominal record
-identities, so forward calls, recursion, and forward record type references
-resolve deterministically. A local initializer is checked before its new
-binding enters scope, preventing accidental self-reference. Duplicate names in
+and enum identities, so forward calls, recursion, forward aggregate type
+references, and recursive enum payload types resolve deterministically. A local
+initializer is checked before its new binding enters scope, preventing
+accidental self-reference. Duplicate names in
 the same lexical scope are rejected; nested lexical blocks may shadow outer
 bindings in this slice. Function parameters and a function body's outermost
 bindings share one scope.
@@ -83,6 +90,14 @@ record identity and declaration-order field slot without reordering evaluation.
 `value.field` is read-only field projection in this slice. Record equality,
 field assignment, layout, and ABI guarantees are not implemented.
 
+`enum Name { Empty, Value(Type) }` declares a nominal sum type whose variants
+carry zero or one payload in this slice. Construction is explicitly qualified as
+`Name::Empty` or `Name::Value(expression)`. A `match` scrutinee must have an enum
+type, every pattern must name a variant of that same nominal enum, and every
+variant must occur exactly once. Payload bindings are immutable and scoped to
+one arm. Wildcards, guards, nested patterns, multi-payload variants, enum
+equality, layout, and ABI guarantees are not implemented.
+
 `let` bindings and function parameters are immutable. `var` bindings may be
 assigned with the narrow statement form `name = expression;`. The target must
 resolve to a lexical `var`; functions, unknown names, `let` bindings, and
@@ -93,9 +108,10 @@ cannot be chained or embedded in another expression.
 A mutable local may also be declared as `var name: Type;` and initialized by a
 later assignment. The explicit type is required. Reading such a binding before
 it is definitely initialized is diagnostic `N3009`. For `if` expressions,
-analysis evaluates the two branch states independently and keeps a binding
+analysis evaluates the branch states independently and keeps a binding
 initialized afterward only when every branch that can continue has initialized
-it. A branch that returns does not constrain the surviving path.
+it. The same intersection rule applies across all arms of a valid exhaustive
+match. A branch or arm that returns does not constrain the surviving path.
 
 `while condition { body }` is a pre-test statement. The condition must be
 `Bool`. Because its first condition test always happens but its body may execute
@@ -104,13 +120,15 @@ condition may survive the loop; facts established only in the body do not make
 a delayed binding definitely initialized afterward. This prevents a zero-run
 loop from manufacturing initialization evidence.
 
-`Int`, `Bool`, and declared nominal records are recognized surface types today.
+`Int`, `Bool`, and declared nominal records and enums are recognized surface
+types today.
 Arithmetic and ordered comparisons require `Int`; boolean operators require
 `Bool`; equality currently accepts only matching `Int` or matching `Bool`;
 calls require a function value with matching arity and argument types. `if`
 conditions require `Bool`, its two branches must have compatible nominal or
-primitive value types, explicit `return` expressions are checked against the
-function signature, and a function cannot fall through without a value.
+primitive value types, and all continuing match arms must likewise agree on one
+type. Explicit `return` expressions are checked against the function signature,
+and a function cannot fall through without a value.
 Internal HIR uses `()` and `!` only to model value-less and non-continuing
 control flow; neither is a surface type in the current grammar.
 
@@ -123,8 +141,9 @@ mutation, control-flow, aggregate, and shadowing policies are frozen.
 `Bool` return type. It evaluates expressions left to right. Record initializer
 expressions follow the same rule even when named fields are written out of
 declaration order. `&&` and `||` are short-circuiting, so a skipped right operand
-performs no mutation or call. Explicit `return` propagates through nested blocks,
-expressions, and loop bodies to the current function call.
+performs no mutation or call. A match evaluates its scrutinee exactly once and
+then only its selected arm. Explicit `return` propagates through nested blocks,
+expressions, match arms, and loop bodies to the current function call.
 
 For deterministic execution while the numeric design remains provisional, the
 bootstrap interpreter represents `Int` as signed 64-bit at runtime and uses
@@ -132,9 +151,11 @@ checked arithmetic. Overflow produces `N4002`; division or remainder by zero
 produces `N4003`. Recursive execution is guarded by a finite active-call budget
 and reports `N4004`. All statement/expression evaluation also shares a finite
 execution-step budget; a nonterminating loop therefore reports `N4006` instead
-of hanging indefinitely. Missing or invalid `main` is `N4001`. Record values are
-currently interpreter-owned nominal values with declaration-order slots; that
-representation is not a stabilized source layout or ABI contract.
+of hanging indefinitely. Missing or invalid `main` is `N4001`. Record values
+currently use declaration-order slots; enum values use a variant slot and an
+optional boxed payload. Those interpreter-owned nominal representations are not
+stabilized source layouts, allocation promises, ownership rules, or ABI
+contracts.
 
 ## Build and use
 
@@ -198,7 +219,7 @@ language semantics.
   locations when rendered.
 - Runtime arithmetic is checked; host build mode never decides Nova results.
 - Observable evaluation order is explicit; named record fields do not reorder
-  their initializer expressions.
+  their initializer expressions, and a match evaluates only its selected arm.
 - Potentially nonterminating bootstrap execution is bounded and fails with a
   structured diagnostic rather than intentionally hanging the host.
 - CI checks Rust 1.85 compatibility, rejects formatting and Clippy warnings on

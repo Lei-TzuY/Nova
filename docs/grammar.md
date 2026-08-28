@@ -18,8 +18,9 @@ identifier      = (letter | "_") , { letter | digit | "_" } ;
 integer         = digit , { [ "_" ] , digit } ;
 ```
 
-Keywords are `fn`, `record`, `new`, `let`, `var`, `if`, `else`, `while`,
-`return`, `true`, and `false`. A keyword cannot be used as an identifier.
+Keywords are `fn`, `record`, `enum`, `new`, `let`, `var`, `if`, `else`,
+`match`, `while`, `return`, `true`, and `false`. A keyword cannot be used as an
+identifier.
 
 Integer separators cannot lead, trail, or repeat. The frontend checks decimal
 conversion and rejects magnitudes above `9223372036854775807`; it never wraps or
@@ -33,11 +34,15 @@ nested block comment. An unterminated block comment is an error.
 
 ```ebnf
 program             = { declaration } , end_of_file ;
-declaration         = record_declaration | function ;
+declaration         = record_declaration | enum_declaration | function ;
 
 record_declaration  = "record" , identifier , "{" , [ record_fields ] , "}" ;
 record_fields       = record_field , { "," , record_field } , [ "," ] ;
 record_field        = identifier , ":" , type_name ;
+
+enum_declaration    = "enum" , identifier , "{" , enum_variants , "}" ;
+enum_variants       = enum_variant , { "," , enum_variant } , [ "," ] ;
+enum_variant        = identifier , [ "(" , type_name , ")" ] ;
 
 function            = "fn" , identifier , "(" , [ parameters ] , ")" ,
                       "->" , type_name , block ;
@@ -77,14 +82,23 @@ primary             = integer
                     | "false"
                     | identifier
                     | record_literal
+                    | enum_constructor
                     | "(" , expression , ")"
                     | block
-                    | if_expression ;
+                    | if_expression
+                    | match_expression ;
 record_literal      = "new" , identifier , "{" , [ record_initializers ] , "}" ;
 record_initializers = record_initializer , { "," , record_initializer } , [ "," ] ;
 record_initializer  = identifier , ":" , expression ;
+enum_constructor    = identifier , "::" , identifier ,
+                      [ "(" , expression , [ "," ] , ")" ] ;
 if_expression       = "if" , expression , block , "else" ,
                       (block | if_expression) ;
+match_expression    = "match" , expression , "{" , [ match_arms ] , "}" ;
+match_arms          = match_arm , { "," , match_arm } , [ "," ] ;
+match_arm           = enum_pattern , "=>" , expression ;
+enum_pattern        = identifier , "::" , identifier ,
+                      [ "(" , identifier , ")" ] ;
 ```
 
 A block may end in one expression without a semicolon; that expression is its
@@ -106,6 +120,29 @@ would be syntactically ambiguous with the block that follows conditions such as
 `if value { ... }` and `while value { ... }`; the bootstrap grammar keeps that
 boundary deterministic rather than relying on capitalization or semantic
 feedback during parsing.
+
+Enums are nominal top-level types and must declare at least one variant. A
+variant carries either no payload or exactly one explicitly typed payload.
+`Enum::Variant` constructs a payload-free variant; `Enum::Variant(expression)`
+constructs a payload variant. Empty `()` is not an alternate spelling for a
+payload-free constructor. Declared enum names and record names share one type
+namespace, and recursive enum payload types are accepted. This does not define a
+stable runtime layout, size, allocation strategy, or ABI for enums.
+
+`match` accepts only qualified enum-variant patterns in this slice. A
+payload-carrying variant must bind exactly one immutable name, while a
+payload-free variant must not bind one. Every arm is a separate lexical scope.
+All variants of the scrutinee's nominal enum must appear exactly once; missing,
+duplicate, unknown, or differently qualified variants are errors. Wildcards,
+guards, nested patterns, alternatives, literals, and record destructuring are
+not accepted. Continuing arm values must have one compatible type; arms that
+cannot continue because they return do not constrain that result type.
+
+The scrutinee is evaluated once before arm selection, and only the selected arm
+is evaluated. Definite-assignment state after a valid exhaustive match is the
+intersection of every arm that can continue. A non-continuing arm does not
+constrain the surviving paths, and an invalid or non-exhaustive match contributes
+no initialization evidence.
 
 `var name: Type;` declares a mutable binding whose first value is supplied by a
 later assignment. The explicit type is mandatory, while uninitialized `let`
@@ -153,8 +190,8 @@ limit, not a promise that deeply nested source will remain portable unchanged.
 
 ## Deliberate limitations
 
-The implemented grammar has no strings, floating-point literals, arrays, enums,
-pattern matching, field assignment, `break`, `continue`, `for`, methods,
-modules, imports, generics, traits, effects, async syntax, ownership syntax,
-unsafe blocks, or attributes. Encountering such syntax is an error, not an
-approximation.
+The implemented grammar has no strings, floating-point literals, arrays,
+wildcard or guarded patterns, multi-payload variants, record destructuring,
+field assignment, `break`, `continue`, `for`, methods, modules, imports,
+generics, traits, effects, async syntax, ownership syntax, unsafe blocks, or
+attributes. Encountering such syntax is an error, not an approximation.
