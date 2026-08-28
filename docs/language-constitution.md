@@ -73,14 +73,19 @@ reference-like type. Algebraic data types and exhaustive pattern matching are
 core language directions, not library conventions.
 
 **Provisional bootstrap decisions.** The current semantic core recognizes the
-surface types `Int`, `Bool`, and declared nominal record and enum types. Aggregate
+surface types `Int`, `Bool`, `Unit`, and declared nominal record and enum types.
+The sole Unit literal is `()`, and a value-less block also produces Unit. Aggregate
 identity comes from the declaration rather than shape: separately declared
 types remain different even when their fields or variants have identical names
 and types. The checker resolves explicitly typed function signatures, infers
 initialized local binding types, and checks the implemented operators, calls,
 branches, loops, loop-control legality, returns, assignments, aggregate
 construction, field projection, exhaustive enum matching, and definite
-initialization.
+initialization. A function declared to return `Unit` may complete through a body
+with no tail expression; `return ();` is the explicit Unit return. Functions with
+other return types still require a compatible value on every continuing path.
+`Unit` is reserved alongside `Int` and `Bool` and cannot be redefined as a nominal
+record or enum. Unit equality is not part of this bootstrap operator subset.
 
 A bootstrap record declares explicitly typed, uniquely named fields.
 `new Record { field: expression, ... }` must initialize every declared field
@@ -310,8 +315,9 @@ semantics.
 syntactic, name-resolution, type, and definite-assignment validation succeeds.
 The interpreter consumes typed HIR directly and supports the implemented
 function, call, record construction/projection, enum construction/matching,
-block, `if`, `while`, `break`, `continue`, return, binding, assignment, Boolean,
-and integer subset. Evaluation order is left-to-right; named record initializers
+block, `if`, `while`, `break`, `continue`, return, binding, assignment, Unit,
+Boolean, and integer subset. Unit helpers may return explicit `()` or fall through
+a value-less body. Evaluation order is left-to-right; named record initializers
 do not reorder their expressions when resolved to declaration slots. A match
 evaluates its scrutinee once and only its selected arm. `&&` and `||`
 short-circuit, and semantic dataflow models that same conditional RHS execution

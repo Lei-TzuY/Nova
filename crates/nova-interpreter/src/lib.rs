@@ -37,7 +37,7 @@ pub enum Value {
     },
     /// First-class reference to a top-level function.
     Function(FunctionId),
-    /// Internal value for a block with no tail expression.
+    /// Unit value produced by `()` or a value-less block.
     Unit,
 }
 
@@ -296,6 +296,7 @@ impl<'program> Interpreter<'program> {
         match &expression.kind {
             ExpressionKind::Integer(value) => Ok(Flow::Value(Value::Int(*value))),
             ExpressionKind::Boolean(value) => Ok(Flow::Value(Value::Bool(*value))),
+            ExpressionKind::Unit => Ok(Flow::Value(Value::Unit)),
             ExpressionKind::Binding(binding) => {
                 let Some(slot) = frame.get(binding) else {
                     return Err(self.invariant(

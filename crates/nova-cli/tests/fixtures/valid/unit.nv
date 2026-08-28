@@ -1,0 +1,30 @@
+record UnitBox {
+    value: Unit,
+}
+
+enum MaybeUnit {
+    Empty,
+    Value(Unit),
+}
+
+fn noop() -> Unit {
+}
+
+fn explicit() -> Unit {
+    return ();
+}
+
+fn pass(value: Unit) -> Unit {
+    value
+}
+
+fn main() -> Int {
+    noop();
+    let marker: Unit = pass(explicit());
+    let boxed = new UnitBox { value: marker };
+    let wrapped = MaybeUnit::Value(boxed.value);
+    match wrapped {
+        MaybeUnit::Empty => 0,
+        MaybeUnit::Value(inner) => { pass(inner); 42 },
+    }
+}

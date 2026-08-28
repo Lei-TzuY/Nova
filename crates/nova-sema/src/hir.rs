@@ -69,7 +69,7 @@ pub enum Type {
     Record(RecordType),
     /// Nominal user-defined enum type.
     Enum(EnumType),
-    /// Internal type of a value-less block. There is no surface `Unit` type yet.
+    /// Unit type, produced by `()` and value-less blocks.
     Unit,
     /// Internal bottom type for expressions or blocks that cannot complete normally.
     Never,
@@ -100,7 +100,7 @@ impl fmt::Display for Type {
             Self::Bool => formatter.write_str("Bool"),
             Self::Record(record) => formatter.write_str(&record.name),
             Self::Enum(enumeration) => formatter.write_str(&enumeration.name),
-            Self::Unit => formatter.write_str("()"),
+            Self::Unit => formatter.write_str("Unit"),
             Self::Never => formatter.write_str("!"),
             Self::Error => formatter.write_str("<error>"),
             Self::Function(signature) => {
@@ -353,6 +353,8 @@ pub enum ExpressionKind {
     Integer(i64),
     /// Boolean literal.
     Boolean(bool),
+    /// Unit literal.
+    Unit,
     /// Reference to a local binding or parameter.
     Binding(BindingId),
     /// Reference to a top-level function.
