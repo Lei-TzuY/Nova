@@ -1,0 +1,13 @@
+fn noop() -> Unit {
+}
+
+fn explicit() -> Unit {
+    return ();
+}
+
+fn main() -> Int {
+    noop();
+    let marker: Unit = explicit();
+    marker;
+    42
+}
