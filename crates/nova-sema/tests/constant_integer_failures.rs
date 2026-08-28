@@ -70,6 +70,18 @@ fn dynamic_equivalents_remain_runtime_checked() {
 }
 
 #[test]
+fn diagnostic_only_unreachable_arithmetic_does_not_create_execution_failures() {
+    for text in [
+        "fn main() -> Int { if true { 1 } else { 10 / 0 } }",
+        "fn main() -> Int { if false { 9223372036854775807 + 1 } else { 1 } }",
+        "enum Choice { A, B } fn main() -> Int { match Choice::A { Choice::A => 1, Choice::B => 10 % 0, } }",
+    ] {
+        let output = analyze_text(text);
+        assert!(output.is_success(), "source: {text}; diagnostics: {:?}", output.diagnostics);
+    }
+}
+
+#[test]
 fn successful_constant_arithmetic_is_validated_but_not_folded() {
     let output = analyze_text("fn main() -> Int { (20 + 22) * 1 }");
     assert!(output.is_success(), "{:?}", output.diagnostics);
