@@ -742,8 +742,12 @@ impl Analyzer {
                 self.lower_field_access(base, field, return_type)
             }
             ast::ExpressionKind::Unary { operator, operand } => {
+                let operator_entry_state = self.capture_reachable_state();
                 let operand = self.lower_expression(operand, return_type);
                 let ty = self.check_unary(*operator, &operand, expression.span);
+                if ty.is_error() {
+                    self.restore_reachable_state(operator_entry_state);
+                }
                 (
                     ExpressionKind::Unary {
                         operator: *operator,
@@ -757,6 +761,7 @@ impl Analyzer {
                 left,
                 right,
             } => {
+                let operator_entry_state = self.capture_reachable_state();
                 let left = self.lower_expression(left, return_type);
                 let left_scopes = self.scopes.clone();
                 let left_literal = match &left.kind {
@@ -790,6 +795,9 @@ impl Analyzer {
                 }
 
                 let ty = self.check_binary(*operator, &left, &right, expression.span);
+                if ty.is_error() {
+                    self.restore_reachable_state(operator_entry_state);
+                }
                 (
                     ExpressionKind::Binary {
                         operator: *operator,
@@ -1809,14 +1817,14 @@ impl Analyzer {
             | BinaryOperator::Divide
             | BinaryOperator::Remainder => {
                 self.require_binary_operands(left, right, &Type::Int, span, "arithmetic operator");
-                strict_binary_result_type(&left.ty, &right.ty, Type::Int)
+                strict_binary_result_type(&left.ty, &right.ty, &Type::Int, Type::Int)
             }
             BinaryOperator::Less
             | BinaryOperator::LessEqual
             | BinaryOperator::Greater
             | BinaryOperator::GreaterEqual => {
                 self.require_binary_operands(left, right, &Type::Int, span, "comparison operator");
-                strict_binary_result_type(&left.ty, &right.ty, Type::Bool)
+                strict_binary_result_type(&left.ty, &right.ty, &Type::Int, Type::Bool)
             }
             BinaryOperator::And | BinaryOperator::Or => {
                 self.check_short_circuit_binary(operator, left, right, span)
@@ -1839,6 +1847,11 @@ impl Analyzer {
             return Type::Never;
         }
         if left.ty.is_error() || right.ty.is_error() {
+            return Type::Error;
+        }
+        if !expected_type_compatible(&left.ty, &Type::Bool)
+            || !expected_type_compatible(&right.ty, &Type::Bool)
+        {
             return Type::Error;
         }
         let left_literal = match &left.kind {
