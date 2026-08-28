@@ -141,7 +141,8 @@ statement rather than an expression, its target must resolve to a lexical
 Function parameters and `let` bindings are immutable. Record field projection
 is read-only in the bootstrap subset; `record.field = value` is not an accepted
 assignment form. Definite-initialization state is propagated through lexical
-blocks and merged across `if` branches. If both branches can continue, a
+blocks and merged across `if` branches whose condition is not a direct Boolean
+literal. If both branches can continue, a
 binding is definitely initialized afterward only when both continuing paths
 initialize it; a branch that cannot continue because it returns, breaks, or
 continues does not constrain the surviving path.
@@ -192,6 +193,14 @@ that returns or otherwise cannot continue therefore does not make the whole
 Boolean expression non-continuing, while a reachable RHS `break` remains a
 possible exit from its enclosing loop.
 
+A direct Boolean-literal `if` is another provisional reachability refinement.
+For `if true`, only the then branch contributes reachable flow facts; for
+`if false`, only the else branch does. The unselected branch remains fully
+subject to name and type diagnostics, including branch type compatibility, but
+its assignments, returns, and loop transfers cannot affect reachable continuation
+state. Computed and block-valued Boolean conditions keep the ordinary two-branch
+merge; this rule is not general constant folding.
+
 Chained assignment, arbitrary lvalues, field mutation, indexing, and general
 uninitialized storage remain unsupported.
 
@@ -199,7 +208,7 @@ uninitialized storage remain unsupported.
 breaks or loop expressions, nested and refutable binding forms, partial
 aggregate initialization, mutable aggregate views, ownership interactions,
 loop fixed-point analysis, path-sensitive Boolean reasoning beyond direct
-short-circuit literals, and diagnostics for more complex control-flow graphs
+Boolean literals, and diagnostics for more complex control-flow graphs
 require implementation evidence before their rules are frozen.
 
 ## 6. Names, modules, and packages
@@ -382,11 +391,12 @@ Every compiler and execution stage must uphold these constraints:
     post-loop facts only from reachable `break` exits targeting that exact loop.
 11. `break` and `continue` target only the nearest enclosing `while` body; a
     loop's condition is not inside that control-transfer scope.
-12. Unreachable statements, strict-expression suffixes, and statically skipped
-    short-circuit operands may still produce diagnostics but must not change
-    definite-initialization or loop-exit facts observed by reachable continuation
-    paths. Dynamic short-circuit operands contribute only facts valid on both
-    possible continuing paths.
+12. Unreachable statements, strict-expression suffixes, statically skipped
+    short-circuit operands, and unselected direct-literal `if` branches may still
+    produce diagnostics but must not change definite-initialization or loop-exit
+    facts observed by reachable continuation paths. Dynamic short-circuit operands
+    and non-literal `if` branches contribute only facts valid on their possible
+    continuing paths.
 13. Nominal type identity must not silently collapse to structural field shape.
 14. Resolved field slots must preserve source semantics and must not be mistaken
     for a stabilized memory-layout or ABI guarantee.

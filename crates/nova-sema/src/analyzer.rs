@@ -813,33 +813,90 @@ impl Analyzer {
                 let condition = self.lower_expression(condition, return_type);
                 self.require_type(&condition.ty, &Type::Bool, condition.span, "if condition");
 
+                let condition_literal = match &condition.kind {
+                    ExpressionKind::Boolean(value) => Some(*value),
+                    _ => None,
+                };
                 let entry_scopes = self.scopes.clone();
                 let post_condition_loop_stack = self.loop_stack.clone();
-                let then_branch = self.lower_block(then_branch, return_type, true);
-                let then_scopes = self.scopes.clone();
 
-                self.scopes = entry_scopes.clone();
-                let else_branch = self.lower_expression(else_branch, return_type);
-                let else_scopes = self.scopes.clone();
+                let (then_branch, then_scopes, else_branch, else_scopes) = match condition_literal {
+                    Some(true) => {
+                        let then_branch = self.lower_block(then_branch, return_type, true);
+                        let then_scopes = self.scopes.clone();
+                        let then_loop_stack = self.loop_stack.clone();
 
+                        self.scopes = entry_scopes.clone();
+                        self.loop_stack = post_condition_loop_stack.clone();
+                        let else_branch =
+                            self.lower_expression_for_diagnostics(else_branch, return_type);
+                        let else_scopes = self.scopes.clone();
+
+                        self.scopes = then_scopes.clone();
+                        self.loop_stack = then_loop_stack;
+                        (then_branch, then_scopes, else_branch, else_scopes)
+                    }
+                    Some(false) => {
+                        let then_branch =
+                            self.lower_block_for_diagnostics(then_branch, return_type, true);
+                        let then_scopes = self.scopes.clone();
+
+                        self.scopes = entry_scopes.clone();
+                        self.loop_stack = post_condition_loop_stack.clone();
+                        let else_branch = self.lower_expression(else_branch, return_type);
+                        let else_scopes = self.scopes.clone();
+                        (then_branch, then_scopes, else_branch, else_scopes)
+                    }
+                    None => {
+                        let then_branch = self.lower_block(then_branch, return_type, true);
+                        let then_scopes = self.scopes.clone();
+
+                        self.scopes = entry_scopes.clone();
+                        let else_branch = self.lower_expression(else_branch, return_type);
+                        let else_scopes = self.scopes.clone();
+                        (then_branch, then_scopes, else_branch, else_scopes)
+                    }
+                };
+
+                let joined_type = self.join_branch_types(
+                    &then_branch.ty,
+                    then_branch.span,
+                    &else_branch.ty,
+                    else_branch.span,
+                );
                 let ty = if condition.ty.is_never() {
                     self.scopes = entry_scopes;
                     self.loop_stack = post_condition_loop_stack;
                     Type::Never
                 } else {
-                    self.merge_branch_initialization(
-                        &entry_scopes,
-                        &then_scopes,
-                        then_branch.ty.is_never(),
-                        &else_scopes,
-                        else_branch.ty.is_never(),
-                    );
-                    self.join_branch_types(
-                        &then_branch.ty,
-                        then_branch.span,
-                        &else_branch.ty,
-                        else_branch.span,
-                    )
+                    match condition_literal {
+                        Some(true) => {
+                            self.scopes = then_scopes;
+                            if joined_type.is_error() {
+                                Type::Error
+                            } else {
+                                then_branch.ty.clone()
+                            }
+                        }
+                        Some(false) => {
+                            self.scopes = else_scopes;
+                            if joined_type.is_error() {
+                                Type::Error
+                            } else {
+                                else_branch.ty.clone()
+                            }
+                        }
+                        None => {
+                            self.merge_branch_initialization(
+                                &entry_scopes,
+                                &then_scopes,
+                                then_branch.ty.is_never(),
+                                &else_scopes,
+                                else_branch.ty.is_never(),
+                            );
+                            joined_type
+                        }
+                    }
                 };
                 (
                     ExpressionKind::If {
@@ -870,6 +927,20 @@ impl Analyzer {
         let reachable_scopes = self.scopes.clone();
         let reachable_loop_stack = self.loop_stack.clone();
         let lowered = self.lower_expression(expression, return_type);
+        self.scopes = reachable_scopes;
+        self.loop_stack = reachable_loop_stack;
+        lowered
+    }
+
+    fn lower_block_for_diagnostics(
+        &mut self,
+        block: &ast::Block,
+        return_type: &Type,
+        push_scope: bool,
+    ) -> hir::Block {
+        let reachable_scopes = self.scopes.clone();
+        let reachable_loop_stack = self.loop_stack.clone();
+        let lowered = self.lower_block(block, return_type, push_scope);
         self.scopes = reachable_scopes;
         self.loop_stack = reachable_loop_stack;
         lowered
