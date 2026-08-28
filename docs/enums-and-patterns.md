@@ -62,8 +62,10 @@ without sharing identity.
 
 The result type is determined from all arms that can continue. Continuing arms
 must agree on one type. An arm whose expression has the internal bottom type `!`
-because it always returns does not constrain the result type. `!` and `()`
-remain internal HIR types and have no source spelling in this subset.
+because it returns, breaks, or continues does not constrain the result type.
+`break` and `continue` are legal here only when the match expression itself is
+inside an enclosing `while` body. `!` and `()` remain internal HIR types and
+have no source spelling in this subset.
 
 The scrutinee is evaluated exactly once before selection. Only the selected arm
 is evaluated. Written arm order does not change selection because duplicate
@@ -74,13 +76,15 @@ and diagnostics.
 
 Each arm starts from the post-scrutinee initialization state. For a valid,
 exhaustive match, a pre-existing local is definitely initialized afterward only
-if every arm that can continue initializes it. Arms that cannot continue are
-excluded from that intersection. If all arms cannot continue, the match itself
-has type `!`.
+if every arm that can continue initializes it. Arms that cannot continue because
+of `return`, `break`, or `continue` are excluded from that intersection. If all
+arms cannot continue, the match itself has type `!`.
 
 An invalid or non-exhaustive match never establishes an initialization fact.
 This fail-closed rule prevents a rejected control-flow shape from making a later
-read appear safe during diagnostic recovery.
+read appear safe during diagnostic recovery. Likewise, unreachable assignments
+after a loop-control transfer are still diagnosed but do not become reachable
+initialization evidence.
 
 ## Bootstrap HIR and execution
 
@@ -90,6 +94,12 @@ string lookup. Runtime enum values carry the `EnumId`, variant slot, and an
 optional boxed payload. Before executing a match, the interpreter verifies the
 resolved arms are exhaustive, non-duplicated, in range, and payload-compatible;
 malformed HIR produces runtime invariant diagnostic `N4005`.
+
+A selected match arm propagates structured control flow unchanged. Therefore a
+`return` reaches the current function, while `break` or `continue` reaches only
+the nearest enclosing `while`, where it is consumed. A loop-control transfer
+that somehow escapes its lexical loop in malformed HIR fails closed with
+`N4005` rather than crossing a function boundary.
 
 The boxed interpreter payload is a bootstrap implementation detail. It is not a
 source-level allocation guarantee, object representation, stable layout,
@@ -101,13 +111,14 @@ serialization format, ownership rule, or ABI.
 |---|---|
 | `N3002` | duplicate or reserved type definition |
 | `N3004` | constructor payload or match-arm type mismatch |
+| `N3013` | `break` or `continue` without an enclosing `while` body |
 | `N3020` | duplicate variant within one enum declaration |
 | `N3021` | unknown enum/variant or a non-enum qualifier |
 | `N3022` | constructor or pattern payload arity mismatch |
 | `N3023` | non-exhaustive match |
 | `N3024` | duplicate variant arm |
 | `N3025` | non-enum scrutinee or pattern from another nominal enum |
-| `N4005` | invalid resolved enum/match HIR reached the interpreter |
+| `N4005` | invalid resolved enum/match/control-flow HIR reached the interpreter |
 
 Diagnostic codes remain bootstrap tooling contracts rather than a post-1.0
 compatibility promise.
