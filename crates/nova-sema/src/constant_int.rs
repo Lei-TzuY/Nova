@@ -13,9 +13,9 @@ pub(crate) fn evaluate_unary(
 ) -> Option<Result<i64, ConstantIntError>> {
     let operand = evaluate(operand)?;
     match operator {
-        UnaryOperator::Negate => Some(operand.and_then(|value| {
-            value.checked_neg().ok_or(ConstantIntError::Overflow)
-        })),
+        UnaryOperator::Negate => {
+            Some(operand.and_then(|value| value.checked_neg().ok_or(ConstantIntError::Overflow)))
+        }
         UnaryOperator::Not => None,
     }
 }
@@ -57,11 +57,7 @@ fn evaluate(expression: &Expression) -> Option<Result<i64, ConstantIntError>> {
     }
 }
 
-fn apply_binary(
-    operator: BinaryOperator,
-    left: i64,
-    right: i64,
-) -> Result<i64, ConstantIntError> {
+fn apply_binary(operator: BinaryOperator, left: i64, right: i64) -> Result<i64, ConstantIntError> {
     match operator {
         BinaryOperator::Add => left.checked_add(right).ok_or(ConstantIntError::Overflow),
         BinaryOperator::Subtract => left.checked_sub(right).ok_or(ConstantIntError::Overflow),

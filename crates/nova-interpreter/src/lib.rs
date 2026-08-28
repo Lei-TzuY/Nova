@@ -1010,15 +1010,24 @@ mod tests {
 
     #[test]
     fn rejects_checked_integer_overflow() {
-        let error = execute_text("fn main() -> Int { 9223372036854775807 + 1 }")
-            .expect_err("overflow must fail");
-        assert_eq!(error.code, "N4002");
+        for text in [
+            "fn one() -> Int { 1 } fn main() -> Int { 9223372036854775807 + one() }",
+            "fn minimum() -> Int { -9223372036854775808 } fn main() -> Int { -minimum() }",
+            "fn minimum() -> Int { -9223372036854775808 } fn minus_one() -> Int { -1 } fn main() -> Int { minimum() / minus_one() }",
+            "fn minimum() -> Int { -9223372036854775808 } fn minus_one() -> Int { -1 } fn main() -> Int { minimum() % minus_one() }",
+        ] {
+            let error = execute_text(text).expect_err("dynamic overflow must fail at runtime");
+            assert_eq!(error.code, "N4002");
+        }
     }
 
     #[test]
     fn rejects_zero_divisor() {
-        for text in ["fn main() -> Int { 10 / 0 }", "fn main() -> Int { 10 % 0 }"] {
-            let error = execute_text(text).expect_err("zero divisor must fail");
+        for text in [
+            "fn zero() -> Int { 0 } fn main() -> Int { 10 / zero() }",
+            "fn zero() -> Int { 0 } fn main() -> Int { 10 % zero() }",
+        ] {
+            let error = execute_text(text).expect_err("dynamic zero divisor must fail at runtime");
             assert_eq!(error.code, "N4003");
         }
     }

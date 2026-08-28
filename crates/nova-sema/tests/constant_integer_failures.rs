@@ -6,9 +6,17 @@ use nova_source::{SourceFile, SourceId};
 fn analyze_text(text: &str) -> nova_sema::AnalysisOutput {
     let source = SourceFile::new(SourceId::new(0), "test.nv", text);
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
-    assert!(parsed.is_success(), "parse diagnostics: {:?}", parsed.diagnostics);
+    assert!(
+        parsed.is_success(),
+        "parse diagnostics: {:?}",
+        parsed.diagnostics
+    );
     analyze(&parsed.program)
 }
 
@@ -31,7 +39,10 @@ fn rejects_closed_literal_arithmetic_overflow_during_semantic_analysis() {
         "fn main() -> Int { -9223372036854775808 % -1 }",
     ] {
         let actual = codes(text);
-        assert!(actual.contains(&"N3031".to_owned()), "source: {text}; codes: {actual:?}");
+        assert!(
+            actual.contains(&"N3031".to_owned()),
+            "source: {text}; codes: {actual:?}"
+        );
     }
 }
 
@@ -42,7 +53,10 @@ fn rejects_closed_literal_zero_divisors_during_semantic_analysis() {
         "fn main() -> Int { 10 % (2 - 2) }",
     ] {
         let actual = codes(text);
-        assert!(actual.contains(&"N3032".to_owned()), "source: {text}; codes: {actual:?}");
+        assert!(
+            actual.contains(&"N3032".to_owned()),
+            "source: {text}; codes: {actual:?}"
+        );
     }
 }
 
@@ -65,7 +79,11 @@ fn dynamic_equivalents_remain_runtime_checked() {
         "fn min() -> Int { -9223372036854775808 } fn minus_one() -> Int { -1 } fn main() -> Int { min() % minus_one() }",
     ] {
         let output = analyze_text(text);
-        assert!(output.is_success(), "source: {text}; diagnostics: {:?}", output.diagnostics);
+        assert!(
+            output.is_success(),
+            "source: {text}; diagnostics: {:?}",
+            output.diagnostics
+        );
     }
 }
 
@@ -77,7 +95,11 @@ fn diagnostic_only_unreachable_arithmetic_does_not_create_execution_failures() {
         "enum Choice { A, B } fn main() -> Int { match Choice::A { Choice::A => 1, Choice::B => 10 % 0, } }",
     ] {
         let output = analyze_text(text);
-        assert!(output.is_success(), "source: {text}; diagnostics: {:?}", output.diagnostics);
+        assert!(
+            output.is_success(),
+            "source: {text}; diagnostics: {:?}",
+            output.diagnostics
+        );
     }
 }
 

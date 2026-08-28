@@ -117,13 +117,19 @@ The bootstrap interpreter provisionally executes `Int` as signed 64-bit values
 with checked arithmetic. Signed division truncates toward zero. The associated
 remainder has the dividend's sign when non-zero, has magnitude smaller than the
 divisor's magnitude, and satisfies `a = (a / b) * b + (a % b)` whenever the
-operation succeeds. `Int::MIN / -1` and `Int::MIN % -1` are both overflow; zero
-divisors are a separate runtime failure class. Arithmetic overflow, division by
-zero, and remainder by zero fail with structured runtime diagnostics, and the
-interpreter routes these through a pure arithmetic contract rather than relying
-on host debug/release behavior or undocumented edge cases. This is implementation
-evidence for the numeric design, not yet a stable language-wide promise about
-numeric widths, defaulting, conversions, or overflow policy for future backends.
+operation succeeds. `Int::MIN / -1` and `Int::MIN % -1` are both overflow.
+Semantic analysis preflights only reachable closed arithmetic trees composed entirely
+of `Int` literals and arithmetic operators: a provable overflow is `N3031`, while a
+provable zero divisor is `N3032`. Source lowered only for diagnostics on a statically
+unreachable path is excluded from these execution-failure diagnostics. Successful
+trees are deliberately not folded, and names, calls, blocks, or other dynamic
+operands stop this preflight rather than triggering general constant propagation.
+Dynamic arithmetic remains checked by the
+interpreter: overflow is `N4002`, and division or remainder by zero is `N4003`.
+Both layers use explicit arithmetic contracts rather than relying on host
+debug/release behavior or undocumented edge cases. This is implementation evidence
+for the numeric design, not yet a stable language-wide promise about numeric widths,
+defaulting, conversions, or overflow policy for future backends.
 
 **Research.** The project must decide, with implementation evidence:
 
