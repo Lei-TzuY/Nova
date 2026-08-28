@@ -22,19 +22,19 @@ interpreter slices. The toolchain is written in Rust and can:
 - lex the documented v0.1 subset with byte-exact source spans;
 - parse functions, nominal records, explicit record construction, field
   projection, initialized bindings, typed delayed `var` initialization, narrow
-  assignments, expressions, blocks, calls, `if` expressions, and pre-test
-  `while` loops;
+  assignments, expressions, blocks, calls, `if` expressions, pre-test `while`
+  loops, and statement-only `break`/`continue` loop control;
 - lower accepted syntax into a resolved, typed HIR with stable function,
   binding, and record identities;
 - resolve top-level functions and record types, parameters, lexical local
   bindings, and record field slots;
 - check bootstrap `Int`, `Bool`, and nominal record types, function signatures,
   local inference and annotations, calls, operators, block tails, branches,
-  returns, loop conditions, record construction/projection, assignment
+  returns, loop conditions/control, record construction/projection, assignment
   mutability/type constraints, and definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
   interpreter with function calls, recursion, records, mutation, blocks,
-  conditionals, and bounded loops;
+  conditionals, bounded loops, and structured loop transfer;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
   text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
@@ -95,7 +95,8 @@ later assignment. The explicit type is required. Reading such a binding before
 it is definitely initialized is diagnostic `N3009`. For `if` expressions,
 analysis evaluates the two branch states independently and keeps a binding
 initialized afterward only when every branch that can continue has initialized
-it. A branch that returns does not constrain the surviving path.
+it. A branch that returns, breaks, or continues does not constrain the surviving
+path because control does not reach the following statement through that branch.
 
 `while condition { body }` is a pre-test statement. The condition must be
 `Bool`. Because its first condition test always happens but its body may execute
@@ -103,6 +104,14 @@ zero times, definite-assignment facts established while evaluating the
 condition may survive the loop; facts established only in the body do not make
 a delayed binding definitely initialized afterward. This prevents a zero-run
 loop from manufacturing initialization evidence.
+
+`break;` exits the nearest lexically enclosing `while` body and `continue;`
+starts that loop's next iteration, re-evaluating its condition first. Both are
+statement-only and carry no value. Diagnostic `N3013` rejects either form when
+there is no enclosing loop body; the `while` condition expression itself is not
+inside that control-transfer scope. Source after a non-continuing transfer is
+still checked for deterministic diagnostics, but unreachable assignments or
+bindings cannot change the definite-assignment facts used by reachable code.
 
 `Int`, `Bool`, and declared nominal records are recognized surface types today.
 Arithmetic and ordered comparisons require `Int`; boolean operators require
@@ -124,7 +133,10 @@ mutation, control-flow, aggregate, and shadowing policies are frozen.
 expressions follow the same rule even when named fields are written out of
 declaration order. `&&` and `||` are short-circuiting, so a skipped right operand
 performs no mutation or call. Explicit `return` propagates through nested blocks,
-expressions, and loop bodies to the current function call.
+expressions, and loop bodies to the current function call. `break` and
+`continue` likewise propagate through nested expressions until the nearest
+active `while` consumes them; `break` exits that loop and `continue` re-enters
+its condition test.
 
 For deterministic execution while the numeric design remains provisional, the
 bootstrap interpreter represents `Int` as signed 64-bit at runtime and uses
@@ -199,6 +211,8 @@ language semantics.
 - Runtime arithmetic is checked; host build mode never decides Nova results.
 - Observable evaluation order is explicit; named record fields do not reorder
   their initializer expressions.
+- Unreachable source may still be diagnosed, but it must not manufacture
+  reachable name-resolution or definite-assignment facts.
 - Potentially nonterminating bootstrap execution is bounded and fails with a
   structured diagnostic rather than intentionally hanging the host.
 - CI checks Rust 1.85 compatibility, rejects formatting and Clippy warnings on
