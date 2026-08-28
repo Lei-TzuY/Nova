@@ -7,9 +7,17 @@ use nova_source::{SourceFile, SourceId};
 fn analyze_text(text: &str) -> AnalysisOutput {
     let source = SourceFile::new(SourceId::new(0), "integer-boundaries.nv", text);
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
-    assert!(parsed.is_success(), "parse diagnostics: {:?}", parsed.diagnostics);
+    assert!(
+        parsed.is_success(),
+        "parse diagnostics: {:?}",
+        parsed.diagnostics
+    );
     analyze(&parsed.program)
 }
 

@@ -215,8 +215,8 @@ pub struct Expression {
 /// Implemented expression forms.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExpressionKind {
-    /// Checked decimal integer value.
-    Integer(i64),
+    /// Checked decimal integer magnitude. Signed Int meaning is assigned semantically.
+    Integer(u64),
     /// Boolean value.
     Boolean(bool),
     /// Unit value written as `()`.

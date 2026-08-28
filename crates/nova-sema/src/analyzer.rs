@@ -187,6 +187,8 @@ struct ReachableState {
     loop_stack: Vec<LoopContext>,
 }
 
+const SIGNED_INT_MIN_MAGNITUDE: u64 = 1_u64 << 63;
+
 struct Analyzer {
     diagnostics: Vec<Diagnostic>,
     record_definitions: Vec<RecordDefinition>,
@@ -730,7 +732,9 @@ impl Analyzer {
         return_type: &Type,
     ) -> hir::Expression {
         let (kind, ty) = match &expression.kind {
-            ast::ExpressionKind::Integer(value) => (ExpressionKind::Integer(*value), Type::Int),
+            ast::ExpressionKind::Integer(value) => {
+                self.lower_integer_literal(*value, expression.span)
+            }
             ast::ExpressionKind::Boolean(value) => (ExpressionKind::Boolean(*value), Type::Bool),
             ast::ExpressionKind::Unit => (ExpressionKind::Unit, Type::Unit),
             ast::ExpressionKind::Name(name) => self.lower_name(name),
@@ -744,6 +748,16 @@ impl Analyzer {
             } => self.lower_enum_constructor(enumeration, variant, payload.as_deref(), return_type),
             ast::ExpressionKind::FieldAccess { base, field } => {
                 self.lower_field_access(base, field, return_type)
+            }
+            ast::ExpressionKind::Unary {
+                operator: UnaryOperator::Negate,
+                operand,
+            } if matches!(
+                operand.kind,
+                ast::ExpressionKind::Integer(SIGNED_INT_MIN_MAGNITUDE)
+            ) =>
+            {
+                (ExpressionKind::Integer(i64::MIN), Type::Int)
             }
             ast::ExpressionKind::Unary { operator, operand } => {
                 let operator_entry_state = self.capture_reachable_state();
@@ -960,6 +974,24 @@ impl Analyzer {
             ty,
             span: expression.span,
         }
+    }
+
+    fn lower_integer_literal(&mut self, magnitude: u64, span: Span) -> (ExpressionKind, Type) {
+        if magnitude <= i64::MAX as u64 {
+            return (ExpressionKind::Integer(magnitude as i64), Type::Int);
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error("N3030", "integer literal is outside signed Int range")
+                .with_primary(
+                    span,
+                    "a positive Int literal cannot exceed 9223372036854775807",
+                )
+                .with_note(
+                    "write `-9223372036854775808` for the minimum signed 64-bit bootstrap Int",
+                ),
+        );
+        (ExpressionKind::Error, Type::Error)
     }
 
     fn lower_expression_for_diagnostics(

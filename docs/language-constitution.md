@@ -106,9 +106,12 @@ scrutinee runs once and only the selected arm runs. These rules establish a
 small executable algebraic-data-type core without selecting wildcard, guard,
 nested-pattern, usefulness, layout, or ownership semantics prematurely.
 
-Accepted integer literal magnitude is currently `0..=2^63-1`; unary `-` is a
-separate expression, so the most-negative signed 64-bit value has no literal
-spelling in this subset.
+The bootstrap frontend preserves decimal integer magnitudes through parsing and
+assigns signed meaning during semantic lowering. Positive `Int` literals are
+`0..=2^63-1`; the magnitude `2^63` is reserved for prefix negation, so
+`-9223372036854775808` denotes the exact signed 64-bit minimum. A positive `2^63`
+expression is rejected as semantic diagnostic `N3030`, and larger magnitudes are
+rejected lexically as `N1004`. No literal is wrapped or truncated.
 
 The bootstrap interpreter provisionally executes `Int` as signed 64-bit values
 with checked arithmetic. Arithmetic overflow, division by zero, and remainder
