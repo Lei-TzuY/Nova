@@ -45,8 +45,13 @@ fn function<'a>(output: &'a AnalysisOutput, name: &str) -> &'a nova_sema::hir::F
         .unwrap_or_else(|| panic!("missing function {name}"))
 }
 
-fn expression_statement_type(output: &AnalysisOutput, function_name: &str, index: usize) -> &Type {
-    let StatementKind::Expression(expression) = &function(output, function_name).body.statements[index].kind
+fn expression_statement_type<'a>(
+    output: &'a AnalysisOutput,
+    function_name: &str,
+    index: usize,
+) -> &'a Type {
+    let StatementKind::Expression(expression) =
+        &function(output, function_name).body.statements[index].kind
     else {
         panic!("expected expression statement");
     };
