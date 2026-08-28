@@ -113,13 +113,27 @@ it. The same intersection rule applies across all arms of a valid exhaustive
 match. A branch or arm that returns, breaks, or continues does not constrain the
 surviving path. Unreachable code is still analyzed for deterministic diagnostics,
 but its assignments cannot manufacture reachable definite-initialization facts.
+For strict left-to-right expression forms, once an earlier subexpression cannot
+continue, later operands, call arguments, or record initializers are likewise
+lowered only for diagnostics and cannot create reachable scope or loop-exit
+facts.
 
 `while condition { body }` is a pre-test statement. The condition must be
-`Bool`. Because its first condition test always happens but its body may execute
-zero times, definite-assignment facts established while evaluating the
-condition may survive the loop; facts established only in the body do not make
-a delayed binding definitely initialized afterward. This prevents a zero-run
-loop from manufacturing initialization evidence.
+`Bool`. For an ordinary condition, the body may execute zero times, so
+definite-assignment facts established while evaluating the mandatory first
+condition test may survive the loop while facts established only inside the body
+do not. This preserves the zero-iteration exit rather than manufacturing
+initialization evidence.
+
+A direct literal `while true { body }` is the one bootstrap exception because it
+has no condition-false exit. The checker treats it as guaranteed-entry and
+records only reachable `break` transfers that target that exact loop. If there
+are such exits, a pre-existing binding is definitely initialized afterward only
+when it is initialized at every reachable break exit. If there is no reachable
+break, the loop is non-continuing. A `break` consumed by a nested loop does not
+count as an exit from an outer loop. This is deliberately not constant folding:
+`while { true }`, computed booleans, and other equivalent-looking conditions keep
+the ordinary conservative rule.
 
 `break;` and `continue;` are legal only inside an enclosing `while` body. The
 condition expression is intentionally outside that loop-control scope. `break;`
@@ -234,8 +248,8 @@ language semantics.
 - Runtime arithmetic is checked; host build mode never decides Nova results.
 - Observable evaluation order is explicit; named record fields do not reorder
   their initializer expressions, and a match evaluates only its selected arm.
-- Non-continuing control-flow paths cannot contribute definite-assignment facts
-  to code they cannot reach.
+- Non-continuing control-flow paths cannot contribute definite-assignment or loop-
+  exit facts to code they cannot reach.
 - Potentially nonterminating bootstrap execution is bounded and fails with a
   structured diagnostic rather than intentionally hanging the host.
 - CI checks Rust 1.85 compatibility, rejects formatting and Clippy warnings on
