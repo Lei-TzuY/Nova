@@ -1,3 +1,4 @@
+use crate::constant_int::{self, ConstantIntError};
 use crate::flow_rules::InitializationJoin;
 use crate::hir::{
     self, BindingId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType, MatchArm,
@@ -199,6 +200,7 @@ struct Analyzer {
     scopes: ScopeState,
     next_binding: usize,
     loop_stack: Vec<LoopContext>,
+    diagnostic_only_depth: usize,
 }
 
 impl Analyzer {
@@ -213,6 +215,7 @@ impl Analyzer {
             scopes: Vec::new(),
             next_binding: 0,
             loop_stack: Vec::new(),
+            diagnostic_only_depth: 0,
         }
     }
 
@@ -1000,7 +1003,9 @@ impl Analyzer {
         return_type: &Type,
     ) -> hir::Expression {
         let reachable_state = self.capture_reachable_state();
+        self.diagnostic_only_depth += 1;
         let lowered = self.lower_expression(expression, return_type);
+        self.diagnostic_only_depth -= 1;
         self.restore_reachable_state(reachable_state);
         lowered
     }
@@ -1012,7 +1017,9 @@ impl Analyzer {
         push_scope: bool,
     ) -> hir::Block {
         let reachable_state = self.capture_reachable_state();
+        self.diagnostic_only_depth += 1;
         let lowered = self.lower_block(block, return_type, push_scope);
+        self.diagnostic_only_depth -= 1;
         self.restore_reachable_state(reachable_state);
         lowered
     }
@@ -1820,6 +1827,42 @@ impl Analyzer {
         }
     }
 
+    fn constant_int_failure(
+        &mut self,
+        result: Option<Result<i64, ConstantIntError>>,
+        span: Span,
+    ) -> bool {
+        if self.diagnostic_only_depth > 0 {
+            return false;
+        }
+        let Some(Err(error)) = result else {
+            return false;
+        };
+        match error {
+            ConstantIntError::Overflow => self.diagnostics.push(
+                Diagnostic::error("N3031", "constant Int arithmetic overflow")
+                    .with_primary(
+                        span,
+                        "this closed literal arithmetic expression cannot produce a signed 64-bit Int",
+                    )
+                    .with_note(
+                        "successful constant arithmetic is validated but not folded; dynamic overflow remains runtime N4002",
+                    ),
+            ),
+            ConstantIntError::ZeroDivisor => self.diagnostics.push(
+                Diagnostic::error("N3032", "constant zero divisor")
+                    .with_primary(
+                        span,
+                        "this closed literal arithmetic expression divides or takes remainder by zero",
+                    )
+                    .with_note(
+                        "dynamic zero divisors remain runtime N4003",
+                    ),
+            ),
+        }
+        true
+    }
+
     fn check_unary(
         &mut self,
         operator: UnaryOperator,
@@ -1837,7 +1880,11 @@ impl Analyzer {
         if operand.ty.is_error() {
             Type::Error
         } else if expected_type_compatible(&operand.ty, &expected) {
-            expected
+            if self.constant_int_failure(constant_int::evaluate_unary(operator, operand), span) {
+                Type::Error
+            } else {
+                expected
+            }
         } else {
             Type::Error
         }
@@ -1857,7 +1904,17 @@ impl Analyzer {
             | BinaryOperator::Divide
             | BinaryOperator::Remainder => {
                 self.require_binary_operands(left, right, &Type::Int, span, "arithmetic operator");
-                strict_binary_result_type(&left.ty, &right.ty, &Type::Int, Type::Int)
+                let ty = strict_binary_result_type(&left.ty, &right.ty, &Type::Int, Type::Int);
+                if ty == Type::Int
+                    && self.constant_int_failure(
+                        constant_int::evaluate_binary(operator, left, right),
+                        span,
+                    )
+                {
+                    Type::Error
+                } else {
+                    ty
+                }
             }
             BinaryOperator::Less
             | BinaryOperator::LessEqual

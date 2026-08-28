@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty-one vertical slices implemented; broader type-system work remains.**
+**Status: twenty-two vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -353,12 +353,33 @@ Implemented in the twenty-first Phase 2 slice:
   deterministic `N1004` errors and no wrapping or truncation;
 - semantic lowering accepts positive magnitudes only through `i64::MAX`, reports
   `N3030` for positive `2^63`, and normalizes prefix `-2^63` to exact `i64::MIN`;
-- outer operations remain explicit HIR, so negating the minimum again still reaches
-  the interpreter's checked arithmetic and reports runtime `N4002`;
+- outer operations remain explicit HIR rather than being folded; subsequent semantic
+  preflight may reject a provably failing closed operation while preserving that HIR
+  shape for recovery and keeping dynamic equivalents runtime checked;
 - CLI fixtures cover both signed endpoints, semantic-vs-lexical overflow separation,
   and minimum-value negation end to end; and
 - the change remains a bootstrap signed-64 contract, not a decision on future numeric
   families, conversions, literal suffixes, or backend-wide overflow policy.
+
+Implemented in the twenty-second Phase 2 slice:
+
+- semantic analysis preflights reachable closed `Int` arithmetic trees made only from
+  literal values and arithmetic operators, without introducing name propagation,
+  function evaluation, block evaluation, or a general constant folder;
+- statically certain signed-64 overflow is rejected as `N3031`, while a statically
+  certain division/remainder zero divisor is rejected as `N3032`;
+- successful constant arithmetic preserves its original unary/binary HIR so semantic
+  validation does not change runtime evaluation shape or execution-step accounting;
+- statically unreachable source lowered only for deterministic diagnostics suppresses
+  `N3031`/`N3032`, preserving established literal-if, direct-match, short-circuit, and
+  post-noncontinuation reachability semantics;
+- dynamic operands stop preflight and retain the interpreter's `N4002` overflow and
+  `N4003` zero-divisor checks, keeping compile-time and runtime failure boundaries
+  independently exercised;
+- constant failures become Error-typed through the existing operator fail-closed
+  recovery path, so rejected source cannot export reachable flow facts; and
+- semantic integration tests plus CLI static/runtime fixtures lock overflow, zero
+  divisors, extreme signed edges, non-folding, and dynamic deferral end to end.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

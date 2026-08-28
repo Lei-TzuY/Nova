@@ -62,17 +62,18 @@ fn rejects_positive_two_to_the_sixty_third_semantically() {
 }
 
 #[test]
-fn double_negation_of_min_remains_a_runtime_expression() {
+fn double_negation_of_min_is_preflighted_without_folding_hir() {
     let output = analyze_text("fn main() -> Int { --9223372036854775808 }");
-    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert_eq!(output.diagnostics.len(), 1, "{:?}", output.diagnostics);
+    assert_eq!(output.diagnostics[0].code, "N3031");
     let tail = function(&output, "main")
         .body
         .tail
         .as_deref()
-        .expect("main should have a tail");
-    assert_eq!(tail.ty, Type::Int);
+        .expect("main should retain recovery HIR");
+    assert_eq!(tail.ty, Type::Error);
     let ExpressionKind::Unary { operand, .. } = &tail.kind else {
-        panic!("outer negation should remain explicit HIR");
+        panic!("preflight must not fold the outer negation");
     };
     assert_eq!(operand.kind, ExpressionKind::Integer(i64::MIN));
 }

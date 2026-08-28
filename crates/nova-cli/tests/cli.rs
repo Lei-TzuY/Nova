@@ -143,6 +143,8 @@ fn rejects_negative_fixtures_with_stable_codes() {
         ("invalid/unterminated-comment.nv", "N1003"),
         ("invalid/integer-overflow.nv", "N3030"),
         ("invalid/integer-magnitude-overflow.nv", "N1004"),
+        ("invalid/constant-overflow.nv", "N3031"),
+        ("invalid/constant-zero-divisor.nv", "N3032"),
         ("invalid/missing-else.nv", "N2006"),
         ("invalid/unknown-name.nv", "N3003"),
         ("invalid/type-mismatch.nv", "N3004"),
