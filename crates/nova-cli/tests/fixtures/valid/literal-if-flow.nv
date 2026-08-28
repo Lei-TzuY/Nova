@@ -1,0 +1,6 @@
+fn main() -> Int {
+    var value: Int;
+    if true { value = 40; 0 } else { value = 1; 0 };
+    if false { value = 0; 0 } else { value = value + 2; 0 };
+    value
+}
