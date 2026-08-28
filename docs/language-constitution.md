@@ -181,13 +181,25 @@ expression evaluation: operands, call arguments, and record initializers after
 an earlier non-continuing subexpression are lowered for diagnostics only and
 cannot manufacture reachable scope or loop-exit facts.
 
+Short-circuit Boolean operators are the deliberate non-strict exception.
+`false && rhs` and `true || rhs` do not execute their RHS; the checker still
+lowers that RHS for deterministic static diagnostics but discards its mutation,
+definite-initialization, and loop-exit facts. `true && rhs` and `false || rhs`
+execute the RHS normally. With a non-literal Boolean LHS, both the short-circuit
+continuation and the RHS continuation remain possible, so definite-initialized
+state after the expression is their intersection. An optionally executed RHS
+that returns or otherwise cannot continue therefore does not make the whole
+Boolean expression non-continuing, while a reachable RHS `break` remains a
+possible exit from its enclosing loop.
+
 Chained assignment, arbitrary lvalues, field mutation, indexing, and general
 uninitialized storage remain unsupported.
 
 **Research.** Broader flow-sensitive facts, labelled loops, value-carrying
 breaks or loop expressions, nested and refutable binding forms, partial
 aggregate initialization, mutable aggregate views, ownership interactions,
-loop fixed-point analysis, and diagnostics for more complex control-flow graphs
+loop fixed-point analysis, path-sensitive Boolean reasoning beyond direct
+short-circuit literals, and diagnostics for more complex control-flow graphs
 require implementation evidence before their rules are frozen.
 
 ## 6. Names, modules, and packages
@@ -287,8 +299,9 @@ block, `if`, `while`, `break`, `continue`, return, binding, assignment, Boolean,
 and integer subset. Evaluation order is left-to-right; named record initializers
 do not reorder their expressions when resolved to declaration slots. A match
 evaluates its scrutinee once and only its selected arm. `&&` and `||`
-short-circuit. The entry point is a zero-argument top-level `main` returning
-`Int` or `Bool`.
+short-circuit, and semantic dataflow models that same conditional RHS execution
+rather than granting facts from code the interpreter may skip. The entry point
+is a zero-argument top-level `main` returning `Int` or `Bool`.
 
 The interpreter propagates `return`, `break`, and `continue` as structured
 control flow through nested expressions and selected match arms. A `while`
@@ -369,9 +382,11 @@ Every compiler and execution stage must uphold these constraints:
     post-loop facts only from reachable `break` exits targeting that exact loop.
 11. `break` and `continue` target only the nearest enclosing `while` body; a
     loop's condition is not inside that control-transfer scope.
-12. Unreachable statements and strict-expression suffixes may still produce
-    diagnostics but must not change definite-initialization or loop-exit facts
-    observed by reachable continuation paths.
+12. Unreachable statements, strict-expression suffixes, and statically skipped
+    short-circuit operands may still produce diagnostics but must not change
+    definite-initialization or loop-exit facts observed by reachable continuation
+    paths. Dynamic short-circuit operands contribute only facts valid on both
+    possible continuing paths.
 13. Nominal type identity must not silently collapse to structural field shape.
 14. Resolved field slots must preserve source semantics and must not be mistaken
     for a stabilized memory-layout or ABI guarantee.
