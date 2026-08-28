@@ -91,6 +91,12 @@ first, but a continuing non-record base or unknown field yields Error HIR and ca
 export flow facts produced only inside the rejected access. A base that is already
 non-continuing keeps `!` without a secondary field-type cascade.
 
+Rejected unary and binary operators are also fail-closed. Concrete operand type
+mismatches produce Error HIR rather than a nominal success type, and flow facts from
+a continuing rejected operator are rolled back. Non-continuation from an operand that
+must be evaluated keeps `!` precedence; short-circuit operators retain their existing
+conditional right-hand evaluation rules.
+
 `record Name { field: Type, ... }` declares a nominal type: two separately
 declared records are distinct even if their fields have the same shape. Field
 names must be unique. `new Name { field: expression, ... }` must initialize every

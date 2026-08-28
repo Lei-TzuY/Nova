@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: eighteen vertical slices implemented; broader type-system work remains.**
+**Status: nineteen vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -313,6 +313,22 @@ Implemented in the eighteenth Phase 2 slice:
   transactional policy for every erroneous expression category; and
 - red-to-green adversarial tests lock definite-initialization, conditional break,
   unknown-field, recovery typing, and non-continuation behavior.
+
+Implemented in the nineteenth Phase 2 slice:
+
+- unary and binary lowering snapshot reachable state so a continuing rejected
+  operator cannot export assignments or loop-exit facts from its operands;
+- strict arithmetic and comparison result typing now validates concrete operand
+  types in the pure `type_rules` contract instead of returning a nominal success
+  type after N3004;
+- boolean `&&`/`||` likewise become Error-typed on concrete Bool mismatches while
+  retaining existing short-circuit reachability for valid Bool operands;
+- definitely evaluated `!` operands keep non-continuation precedence over recovery
+  errors, while optional short-circuit RHS non-continuation remains path-sensitive;
+- equality already produced Error on concrete mismatches and now gains the same
+  flow rollback at the shared binary lowering boundary; and
+- red-to-green adversarial tests lock typing, definite-initialization, loop-exit,
+  strict non-continuation, and short-circuit behavior.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

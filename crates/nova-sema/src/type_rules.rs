@@ -12,10 +12,15 @@ pub(crate) fn expected_type_compatible(actual: &Type, expected: &Type) -> bool {
 ///
 /// A non-continuing operand dominates recovery errors because runtime control cannot reach a
 /// result value. Otherwise an error-recovery operand makes the expression erroneous.
-pub(crate) fn strict_binary_result_type(left: &Type, right: &Type, success: Type) -> Type {
+pub(crate) fn strict_binary_result_type(
+    left: &Type,
+    right: &Type,
+    expected: &Type,
+    success: Type,
+) -> Type {
     if left.is_never() || right.is_never() {
         Type::Never
-    } else if left.is_error() || right.is_error() {
+    } else if left.is_error() || right.is_error() || left != expected || right != expected {
         Type::Error
     } else {
         success
@@ -112,15 +117,19 @@ mod tests {
     #[test]
     fn strict_binary_result_gives_noncontinuation_precedence_over_recovery_error() {
         assert_eq!(
-            strict_binary_result_type(&Type::Int, &Type::Int, Type::Bool),
+            strict_binary_result_type(&Type::Int, &Type::Int, &Type::Int, Type::Bool),
             Type::Bool
         );
         assert_eq!(
-            strict_binary_result_type(&Type::Error, &Type::Int, Type::Bool),
+            strict_binary_result_type(&Type::Bool, &Type::Int, &Type::Int, Type::Bool),
             Type::Error
         );
         assert_eq!(
-            strict_binary_result_type(&Type::Error, &Type::Never, Type::Bool),
+            strict_binary_result_type(&Type::Error, &Type::Int, &Type::Int, Type::Bool),
+            Type::Error
+        );
+        assert_eq!(
+            strict_binary_result_type(&Type::Error, &Type::Never, &Type::Int, Type::Bool),
             Type::Never
         );
     }

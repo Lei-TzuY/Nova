@@ -177,6 +177,13 @@ for deterministic diagnostics, but its assignments and loop-exit facts do not be
 post-access facts. A base expression that is already `!` remains non-continuing and
 does not acquire a secondary record-type diagnostic.
 
+A continuing unary or binary operator rejected by operand typing is fail-closed for
+flow recovery as well. Concrete mismatches yield `<error>` rather than retaining the
+operator's nominal result type, and assignments or loop-exit facts created only while
+lowering that rejected operator are discarded. A definitely evaluated operand that
+is already `!` retains non-continuation precedence; `&&` and `||` continue to model
+conditional right-hand evaluation rather than treating every lowered RHS as reachable.
+
 Continuing record or enum construction that is itself rejected by type-head,
 structural, or payload/field type validation is fail-closed for flow recovery:
 assignments and
