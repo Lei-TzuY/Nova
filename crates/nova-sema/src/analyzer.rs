@@ -177,6 +177,12 @@ struct LoopContext {
     break_states: Vec<ScopeState>,
 }
 
+#[derive(Clone, Debug)]
+struct ReachableState {
+    scopes: ScopeState,
+    loop_stack: Vec<LoopContext>,
+}
+
 struct Analyzer {
     diagnostics: Vec<Diagnostic>,
     record_definitions: Vec<RecordDefinition>,
@@ -202,6 +208,18 @@ impl Analyzer {
             next_binding: 0,
             loop_stack: Vec::new(),
         }
+    }
+
+    fn capture_reachable_state(&self) -> ReachableState {
+        ReachableState {
+            scopes: self.scopes.clone(),
+            loop_stack: self.loop_stack.clone(),
+        }
+    }
+
+    fn restore_reachable_state(&mut self, state: ReachableState) {
+        self.scopes = state.scopes;
+        self.loop_stack = state.loop_stack;
     }
 
     fn collect_type_definitions(&mut self, program: &ast::Program) {
@@ -474,25 +492,21 @@ impl Analyzer {
         let mut terminated = false;
         let mut statements = Vec::with_capacity(block.statements.len());
         for statement in &block.statements {
-            let reachable_scopes = self.scopes.clone();
-            let reachable_loop_stack = self.loop_stack.clone();
+            let reachable_state = self.capture_reachable_state();
             let (statement, diverges) = self.lower_statement(statement, return_type);
             statements.push(statement);
             if terminated {
-                self.scopes = reachable_scopes;
-                self.loop_stack = reachable_loop_stack;
+                self.restore_reachable_state(reachable_state);
             } else if diverges {
                 terminated = true;
             }
         }
 
         let tail = block.tail.as_deref().map(|expression| {
-            let reachable_scopes = self.scopes.clone();
-            let reachable_loop_stack = self.loop_stack.clone();
+            let reachable_state = self.capture_reachable_state();
             let expression = Box::new(self.lower_expression(expression, return_type));
             if terminated {
-                self.scopes = reachable_scopes;
-                self.loop_stack = reachable_loop_stack;
+                self.restore_reachable_state(reachable_state);
             }
             expression
         });
@@ -924,11 +938,9 @@ impl Analyzer {
         expression: &ast::Expression,
         return_type: &Type,
     ) -> hir::Expression {
-        let reachable_scopes = self.scopes.clone();
-        let reachable_loop_stack = self.loop_stack.clone();
+        let reachable_state = self.capture_reachable_state();
         let lowered = self.lower_expression(expression, return_type);
-        self.scopes = reachable_scopes;
-        self.loop_stack = reachable_loop_stack;
+        self.restore_reachable_state(reachable_state);
         lowered
     }
 
@@ -938,11 +950,9 @@ impl Analyzer {
         return_type: &Type,
         push_scope: bool,
     ) -> hir::Block {
-        let reachable_scopes = self.scopes.clone();
-        let reachable_loop_stack = self.loop_stack.clone();
+        let reachable_state = self.capture_reachable_state();
         let lowered = self.lower_block(block, return_type, push_scope);
-        self.scopes = reachable_scopes;
-        self.loop_stack = reachable_loop_stack;
+        self.restore_reachable_state(reachable_state);
         lowered
     }
 

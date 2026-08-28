@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: ten vertical slices implemented; broader type-system work remains.**
+**Status: eleven vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -200,6 +200,21 @@ Implemented in the tenth Phase 2 slice:
   exhaustive arms; and
 - analyzer adversarial tests plus CLI check/run fixtures lock selected-arm payload,
   initialization, return, continue, break, and dead-arm diagnostic behavior.
+
+Implemented in the eleventh Phase 2 slice:
+
+- semantic rollback now has an explicit internal `ReachableState` that bundles
+  lexical scope/definite-initialization state with enclosing loop contexts;
+- diagnostic-only expression/block lowering captures and restores that state
+  atomically instead of cloning the two components independently;
+- unreachable statement suffixes and block tails use the same state contract,
+  preventing dead assignments or loop transfers from leaking reachable facts;
+- binding identity allocation and diagnostics intentionally remain outside the
+  rollback snapshot, preserving deterministic HIR identities and error reporting;
+- scope-only merges for dynamic branches, matches, and optional short-circuit RHS
+  remain separate because reachable loop exits from those paths must accumulate; and
+- dedicated regression tests plus the existing adversarial semantic suite lock the
+  refactor to behavior-preserving state restoration.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
