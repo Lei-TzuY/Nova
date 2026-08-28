@@ -14,11 +14,12 @@ def patch(path, old, new):
     file.write_text(text.replace(old, new, 1))
 
 
-patch(
-    "crates/nova-sema/src/type_rules.rs",
-    "use crate::hir::{RecordId, RecordType, Type};\n",
-    "use crate::hir::Type;\n",
-)
+type_rules = Path("crates/nova-sema/src/type_rules.rs")
+type_rules_text = type_rules.read_text()
+old_import = "use crate::hir::{RecordId, RecordType, Type};\n"
+if not type_rules_text.startswith(old_import):
+    raise SystemExit("type_rules production import is not in the expected position")
+type_rules.write_text(type_rules_text.replace(old_import, "use crate::hir::Type;\n", 1))
 patch(
     "crates/nova-sema/src/lib.rs",
     "mod analyzer;\n\npub mod hir;\n",
@@ -211,8 +212,10 @@ for result in ("Int", "Bool"):
     if old_call not in text:
         raise SystemExit(f"missing binary result call for {result}")
     text = text.replace(old_call, new_call)
-if "types_compatible(" in text or "binary_result_type(" in text:
-    raise SystemExit("legacy helper reference remains")
+if "fn types_compatible(" in text or "fn binary_result_type(" in text:
+    raise SystemExit("legacy helper definition remains")
+if "binary_result_type(left, right," in text:
+    raise SystemExit("legacy binary result call remains")
 analyzer.write_text(text)
 
 roadmap = "docs/roadmap.md"
