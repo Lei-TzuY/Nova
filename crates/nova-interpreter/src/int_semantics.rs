@@ -59,34 +59,25 @@ fn classify_divisor(left: i64, right: i64) -> Result<(), IntArithmeticError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        IntArithmeticError, add, divide, multiply, negate, remainder, subtract,
-    };
+    use super::{IntArithmeticError, add, divide, multiply, negate, remainder, subtract};
 
     #[test]
     fn division_truncates_toward_zero_for_every_sign_pair() {
-        for (left, right, expected) in [
-            (7, 3, 2),
-            (-7, 3, -2),
-            (7, -3, -2),
-            (-7, -3, 2),
-        ] {
+        for (left, right, expected) in [(7, 3, 2), (-7, 3, -2), (7, -3, -2), (-7, -3, 2)] {
             assert_eq!(divide(left, right), Ok(expected));
         }
     }
 
     #[test]
     fn remainder_follows_the_dividend_sign_and_division_identity() {
-        for (left, right, expected) in [
-            (7, 3, 1),
-            (-7, 3, -1),
-            (7, -3, 1),
-            (-7, -3, -1),
-        ] {
+        for (left, right, expected) in [(7, 3, 1), (-7, 3, -1), (7, -3, 1), (-7, -3, -1)] {
             let quotient = divide(left, right).expect("sample quotient is representable");
             let actual = remainder(left, right).expect("sample remainder is representable");
             assert_eq!(actual, expected);
-            assert_eq!(i128::from(left), i128::from(quotient) * i128::from(right) + i128::from(actual));
+            assert_eq!(
+                i128::from(left),
+                i128::from(quotient) * i128::from(right) + i128::from(actual)
+            );
             assert!(actual == 0 || actual.signum() == left.signum());
             assert!(i128::from(actual).abs() < i128::from(right).abs());
         }

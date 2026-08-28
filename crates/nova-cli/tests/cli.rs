@@ -33,6 +33,7 @@ fn accepts_positive_fixtures() {
         "valid/records.nv",
         "valid/enums-match.nv",
         "valid/int-boundaries.nv",
+        "valid/int-division.nv",
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
@@ -59,6 +60,7 @@ fn run_command_executes_checked_program() {
         ("valid/records.nv", "42\n"),
         ("valid/enums-match.nv", "42\n"),
         ("valid/int-boundaries.nv", "-9223372036854775808\n"),
+        ("valid/int-division.nv", "-21\n"),
     ] {
         let path = fixture(relative);
         let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
@@ -78,7 +80,10 @@ fn run_command_reports_runtime_failures() {
     for (relative, code) in [
         ("runtime/overflow.nv", "N4002"),
         ("runtime/min-negate-overflow.nv", "N4002"),
+        ("runtime/min-divide-overflow.nv", "N4002"),
+        ("runtime/min-remainder-overflow.nv", "N4002"),
         ("runtime/divide-by-zero.nv", "N4003"),
+        ("runtime/remainder-by-zero.nv", "N4003"),
         ("runtime/invalid-main.nv", "N4001"),
         ("runtime/unit-main.nv", "N4001"),
         ("runtime/nonterminating-loop.nv", "N4006"),
