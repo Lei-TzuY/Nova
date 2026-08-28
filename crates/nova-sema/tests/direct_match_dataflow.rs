@@ -67,7 +67,8 @@ fn direct_match_uses_the_live_arm_for_noncontinuation() {
         "{CHOICE} fn f() -> Int {{ match Choice::A {{ Choice::A => {{ return 1; }}, Choice::B => 2, }}; 3 }}"
     ));
     assert!(output.is_success(), "{:?}", output.diagnostics);
-    let StatementKind::Expression(expression) = &output.program.functions[0].body.statements[0].kind
+    let StatementKind::Expression(expression) =
+        &output.program.functions[0].body.statements[0].kind
     else {
         panic!("expected match expression statement");
     };

@@ -1229,6 +1229,12 @@ impl Analyzer {
     ) -> (ExpressionKind, Type) {
         let scrutinee = self.lower_expression(scrutinee, return_type);
         let post_scrutinee_loop_stack = self.loop_stack.clone();
+        let selected_variant = match (&scrutinee.kind, &scrutinee.ty) {
+            (ExpressionKind::EnumConstructor { variant_index, .. }, Type::Enum(_)) => {
+                Some(*variant_index)
+            }
+            _ => None,
+        };
         let mut scrutinee_enum = match &scrutinee.ty {
             Type::Enum(enumeration) => Some(enumeration.clone()),
             Type::Error | Type::Never => None,
@@ -1247,6 +1253,7 @@ impl Analyzer {
         let mut lowered_arms = Vec::with_capacity(arms.len());
         let mut branch_states = Vec::with_capacity(arms.len());
         let mut branch_types = Vec::with_capacity(arms.len());
+        let mut selected_branch = None::<(ScopeState, Type)>;
         let mut structural_error = scrutinee_enum.is_none() && !scrutinee.ty.is_never();
 
         for arm in arms {
@@ -1401,11 +1408,21 @@ impl Analyzer {
                 }
             }
 
-            let value = self.lower_expression(&arm.value, return_type);
+            let selected_arm = selected_variant
+                .is_some_and(|selected| valid_pattern && resolved_index == Some(selected));
+            let value = if selected_variant.is_some() && !selected_arm {
+                self.lower_expression_for_diagnostics(&arm.value, return_type)
+            } else {
+                self.lower_expression(&arm.value, return_type)
+            };
             let popped = self.scopes.pop();
             debug_assert!(popped.is_some());
-            branch_states.push((self.scopes.clone(), value.ty.is_never()));
+            let branch_state = self.scopes.clone();
+            branch_states.push((branch_state.clone(), value.ty.is_never()));
             branch_types.push((value.ty.clone(), value.span));
+            if selected_arm {
+                selected_branch = Some((branch_state, value.ty.clone()));
+            }
 
             if let Some(variant_index) = resolved_index {
                 lowered_arms.push(MatchArm {
@@ -1456,6 +1473,15 @@ impl Analyzer {
             self.scopes = entry_scopes;
             self.loop_stack = post_scrutinee_loop_stack;
             Type::Error
+        } else if selected_variant.is_some() {
+            let (selected_scopes, selected_type) = selected_branch
+                .expect("a valid exhaustive match must contain the constructed variant");
+            self.scopes = selected_scopes;
+            if joined_type.is_error() {
+                Type::Error
+            } else {
+                selected_type
+            }
         } else {
             self.merge_match_initialization(&entry_scopes, &branch_states);
             joined_type
