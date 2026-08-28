@@ -1,0 +1,13 @@
+enum Choice {
+    A,
+    B,
+}
+
+fn main() -> Int {
+    var value: Int;
+    match Choice::A {
+        Choice::A => 0,
+        Choice::B => { value = 1; 0 },
+    };
+    value
+}
