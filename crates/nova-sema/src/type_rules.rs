@@ -1,4 +1,4 @@
-use crate::hir::{RecordId, RecordType, Type};
+use crate::hir::Type;
 
 /// Recovery-aware compatibility used whenever a value is checked against an expected type.
 ///
@@ -130,7 +130,10 @@ mod tests {
         let mut join = TypeJoin::default();
         assert_eq!(join.observe(&Type::Never), JoinObservation::Never);
         assert_eq!(join.observe(&Type::Error), JoinObservation::Error);
-        assert_eq!(join.observe(&Type::Unit), JoinObservation::Anchor(Type::Unit));
+        assert_eq!(
+            join.observe(&Type::Unit),
+            JoinObservation::Anchor(Type::Unit)
+        );
         assert_eq!(join.observe(&Type::Unit), JoinObservation::Compatible);
         assert_eq!(join.finish(), Type::Unit);
 
