@@ -81,6 +81,19 @@ fn invalid_enum_arity_does_not_initialize_outer_binding() {
 }
 
 #[test]
+fn invalid_aggregate_rollback_discards_conditional_break_exits() {
+    for text in [
+        "record Box { value: Bool } fn f(flag: Bool) -> Int { while true { new Box { value: if flag { break; } else { 0 } }; } }",
+        "enum Choice { Value(Bool) } fn f(flag: Bool) -> Int { while true { Choice::Value(if flag { break; } else { 0 }); } }",
+    ] {
+        let output = analyze_text(text);
+        let actual = codes(&output);
+        assert!(actual.contains(&"N3004"), "{text}: {actual:?}");
+        assert!(!actual.contains(&"N3007"), "{text}: {actual:?}");
+    }
+}
+
+#[test]
 fn noncontinuing_valid_aggregate_inputs_keep_their_never_flow() {
     for text in [
         "record Box { value: Bool } fn f() -> Int { new Box { value: { return 1; false } }; }",
