@@ -1984,7 +1984,8 @@ mod tests {
              }",
         );
         assert!(output.is_success(), "{:?}", output.diagnostics);
-        let StatementKind::While { body, .. } = &output.program.functions[0].body.statements[0].kind
+        let StatementKind::While { body, .. } =
+            &output.program.functions[0].body.statements[0].kind
         else {
             panic!("expected while HIR");
         };
