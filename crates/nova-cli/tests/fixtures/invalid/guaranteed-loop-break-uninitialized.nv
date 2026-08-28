@@ -1,0 +1,7 @@
+fn choose(flag: Bool) -> Int {
+    var value: Int;
+    while true {
+        if flag { value = 1; break; } else { break; }
+    }
+    value
+}
