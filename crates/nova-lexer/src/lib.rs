@@ -9,8 +9,8 @@ use std::fmt;
 pub enum TokenKind {
     /// An ASCII identifier.
     Identifier,
-    /// A checked decimal integer literal.
-    Integer(i64),
+    /// A checked decimal integer magnitude. Signed meaning is assigned later.
+    Integer(u64),
     /// `fn`.
     Fn,
     /// `record`.
@@ -387,12 +387,14 @@ impl<'source> Lexer<'source> {
             return;
         }
 
+        const MAX_SIGNED_INT_MAGNITUDE: u64 = 1_u64 << 63;
         let value = text
             .bytes()
             .filter(|byte| *byte != b'_')
-            .try_fold(0_i64, |value, byte| {
-                value.checked_mul(10)?.checked_add(i64::from(byte - b'0'))
-            });
+            .try_fold(0_u64, |value, byte| {
+                value.checked_mul(10)?.checked_add(u64::from(byte - b'0'))
+            })
+            .filter(|value| *value <= MAX_SIGNED_INT_MAGNITUDE);
 
         if let Some(value) = value {
             self.tokens.push(Token {
@@ -401,13 +403,13 @@ impl<'source> Lexer<'source> {
             });
         } else {
             self.diagnostics.push(
-                Diagnostic::error("N1004", "integer literal is out of range")
+                Diagnostic::error("N1004", "integer literal magnitude is out of range")
                     .with_primary(
                         self.span(start, self.offset),
-                        "the current frontend accepts magnitudes up to 9223372036854775807",
+                        "the bootstrap frontend accepts decimal magnitudes up to 9223372036854775808",
                     )
                     .with_note(
-                        "integer widths and overflow semantics are provisional in Nova v0.1",
+                        "the largest accepted magnitude is reserved for the signed Int minimum under prefix `-`",
                     ),
             );
         }
@@ -522,17 +524,25 @@ mod tests {
             assert_eq!(output.diagnostics[0].code, "N1002", "source: {text}");
         }
 
-        let valid = lex(&source("9_223_372_036_854_775_807"));
-        assert_eq!(valid.tokens[0].kind, TokenKind::Integer(i64::MAX));
-        assert!(valid.diagnostics.is_empty());
+        let max = lex(&source("9_223_372_036_854_775_807"));
+        assert_eq!(max.tokens[0].kind, TokenKind::Integer(i64::MAX as u64));
+        assert!(max.diagnostics.is_empty());
 
-        let overflow = lex(&source("9223372036854775808"));
+        let min_magnitude = lex(&source("9_223_372_036_854_775_808"));
+        assert_eq!(
+            min_magnitude.tokens[0].kind,
+            TokenKind::Integer(1_u64 << 63)
+        );
+        assert!(min_magnitude.diagnostics.is_empty());
+
+        let overflow_source = source("9223372036854775809");
+        let overflow = lex(&overflow_source);
         assert_eq!(overflow.diagnostics[0].code, "N1004");
         assert_eq!(
             overflow.tokens,
             vec![super::Token {
                 kind: TokenKind::Eof,
-                span: source("9223372036854775808").eof_span(),
+                span: overflow_source.eof_span(),
             }]
         );
     }

@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty vertical slices implemented; broader type-system work remains.**
+**Status: twenty-one vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -344,6 +344,21 @@ Implemented in the twentieth Phase 2 slice:
   pre-test initialization and ordinary branch merging remain unchanged; and
 - red-to-green adversarial tests lock condition-side initialization, branch flow,
   nested break exits, Error typing, valid pre-test facts, and `!` behavior.
+
+Implemented in the twenty-first Phase 2 slice:
+
+- lexer and AST integer tokens preserve checked unsigned decimal magnitude through
+  parsing instead of prematurely forcing every literal through positive `i64`;
+- the bootstrap lexical ceiling becomes `2^63`, with larger magnitudes remaining
+  deterministic `N1004` errors and no wrapping or truncation;
+- semantic lowering accepts positive magnitudes only through `i64::MAX`, reports
+  `N3030` for positive `2^63`, and normalizes prefix `-2^63` to exact `i64::MIN`;
+- outer operations remain explicit HIR, so negating the minimum again still reaches
+  the interpreter's checked arithmetic and reports runtime `N4002`;
+- CLI fixtures cover both signed endpoints, semantic-vs-lexical overflow separation,
+  and minimum-value negation end to end; and
+- the change remains a bootstrap signed-64 contract, not a decision on future numeric
+  families, conversions, literal suffixes, or backend-wide overflow policy.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

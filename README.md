@@ -230,8 +230,12 @@ loop or cross a function boundary, execution fails closed with invariant
 diagnostic `N4005` rather than guessing a target.
 
 For deterministic execution while the numeric design remains provisional, the
-bootstrap interpreter represents `Int` as signed 64-bit at runtime and uses
-checked arithmetic. Overflow produces `N4002`; division or remainder by zero
+bootstrap frontend now covers the complete signed 64-bit literal endpoints: positive
+literals end at `9223372036854775807`, while `-9223372036854775808` is normalized
+during semantic lowering to the exact minimum `Int`. Positive `9223372036854775808`
+is `N3030`; any larger decimal magnitude is lexical `N1004`. The interpreter
+represents `Int` as signed 64-bit at runtime and uses checked arithmetic.
+Overflow produces `N4002`; division or remainder by zero
 produces `N4003`. Recursive execution is guarded by a finite active-call budget
 and reports `N4004`. All statement/expression evaluation also shares a finite
 execution-step budget; a nonterminating loop therefore reports `N4006` instead

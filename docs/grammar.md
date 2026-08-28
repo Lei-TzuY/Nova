@@ -22,9 +22,12 @@ Keywords are `fn`, `record`, `enum`, `new`, `let`, `var`, `if`, `else`,
 `match`, `while`, `break`, `continue`, `return`, `true`, and `false`. A keyword
 cannot be used as an identifier.
 
-Integer separators cannot lead, trail, or repeat. The frontend checks decimal
-conversion and rejects magnitudes above `9223372036854775807`; it never wraps or
-truncates a literal.
+Integer separators cannot lead, trail, or repeat. Lexing preserves a checked decimal
+magnitude and rejects magnitudes above `9223372036854775808`; it never wraps or
+truncates. Semantic lowering interprets `Int` as signed for this bootstrap slice:
+positive literals end at `9223372036854775807`, while the otherwise-reserved
+`9223372036854775808` magnitude is accepted only under prefix `-`, giving the exact
+minimum value `-9223372036854775808`.
 
 Spaces, tabs, carriage returns, and newlines separate tokens. Newline has no
 statement-ending meaning. `//` begins a line comment. `/*` and `*/` delimit a

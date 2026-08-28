@@ -32,6 +32,7 @@ fn accepts_positive_fixtures() {
         "valid/unit.nv",
         "valid/records.nv",
         "valid/enums-match.nv",
+        "valid/int-boundaries.nv",
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
@@ -57,6 +58,7 @@ fn run_command_executes_checked_program() {
         ("valid/unit.nv", "42\n"),
         ("valid/records.nv", "42\n"),
         ("valid/enums-match.nv", "42\n"),
+        ("valid/int-boundaries.nv", "-9223372036854775808\n"),
     ] {
         let path = fixture(relative);
         let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
@@ -75,6 +77,7 @@ fn run_command_executes_checked_program() {
 fn run_command_reports_runtime_failures() {
     for (relative, code) in [
         ("runtime/overflow.nv", "N4002"),
+        ("runtime/min-negate-overflow.nv", "N4002"),
         ("runtime/divide-by-zero.nv", "N4003"),
         ("runtime/invalid-main.nv", "N4001"),
         ("runtime/unit-main.nv", "N4001"),
@@ -133,7 +136,8 @@ fn rejects_negative_fixtures_with_stable_codes() {
         ("invalid/missing-return-type.nv", "N2001"),
         ("invalid/malformed-expression.nv", "N2002"),
         ("invalid/unterminated-comment.nv", "N1003"),
-        ("invalid/integer-overflow.nv", "N1004"),
+        ("invalid/integer-overflow.nv", "N3030"),
+        ("invalid/integer-magnitude-overflow.nv", "N1004"),
         ("invalid/missing-else.nv", "N2006"),
         ("invalid/unknown-name.nv", "N3003"),
         ("invalid/type-mismatch.nv", "N3004"),
