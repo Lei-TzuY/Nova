@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: six vertical slices implemented; broader type-system work remains.**
+**Status: seven vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -132,11 +132,30 @@ Implemented in the sixth Phase 2 slice:
 - adversarial semantic tests cover transfers nested in conditions, dead
   assignments after transfers, and `continue` inside selected match paths.
 
+Implemented in the seventh Phase 2 slice:
+
+- direct literal `while true` recognized as a guaranteed-entry bootstrap loop
+  without introducing constant folding or a general termination analysis;
+- loop contexts carry reachable `break` exit states and keep nested-loop exits
+  attributed only to the nearest enclosing loop;
+- definite-initialization after a literal-true loop is the intersection of every
+  reachable break exit targeting that loop;
+- a literal-true loop with no reachable break is classified as non-continuing,
+  improving function-fallthrough reasoning without changing runtime semantics;
+- ordinary pre-test loops remain conservative because their zero-iteration exit
+  is still possible;
+- strict left-to-right expression suffixes after an earlier non-continuing
+  subexpression are lowered for diagnostics while their scope and loop-exit
+  mutations are discarded; and
+- semantic unit tests plus CLI check/run fixtures lock the positive and negative
+  guaranteed-loop behavior end to end.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
 - split and stabilize HIR/resolution/type-analysis/dataflow contracts as
-  implementation evidence accumulates;
+  implementation evidence accumulates, introducing an explicit CFG or flow-state
+  representation if ad-hoc structured snapshots stop scaling;
 - define language-level numeric types, defaulting, conversions, and overflow
   behavior beyond the provisional interpreter contract;
 - deepen the pattern model only with a specified usefulness and diagnostic

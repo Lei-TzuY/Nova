@@ -1,0 +1,8 @@
+fn main() -> Int {
+    var value: Int;
+    while true {
+        value = 42;
+        break;
+    }
+    value
+}
