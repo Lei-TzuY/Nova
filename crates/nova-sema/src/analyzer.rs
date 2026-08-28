@@ -757,11 +757,7 @@ impl Analyzer {
                     self.lower_expression(right, return_type)
                 };
 
-                if short_circuit_operator
-                    && !left.ty.is_never()
-                    && !skips_right
-                    && !forces_right
-                {
+                if short_circuit_operator && !left.ty.is_never() && !skips_right && !forces_right {
                     let right_scopes = self.scopes.clone();
                     self.merge_optional_execution_initialization(
                         &left_scopes,
@@ -2336,9 +2332,7 @@ mod tests {
         );
         assert_eq!(codes(&output), vec!["N3009"]);
 
-        let output = analyze_text(
-            "fn f(flag: Bool) -> Int { flag && { return 1; }; 2 }",
-        );
+        let output = analyze_text("fn f(flag: Bool) -> Int { flag && { return 1; }; 2 }");
         assert!(output.is_success(), "{:?}", output.diagnostics);
         assert_eq!(output.program.functions[0].body.ty, Type::Int);
     }
@@ -2349,9 +2343,8 @@ mod tests {
         assert!(skipped.is_success(), "{:?}", skipped.diagnostics);
         assert!(skipped.program.functions[0].body.ty.is_never());
 
-        let dynamic = analyze_text(
-            "fn f(flag: Bool) -> Int { while true { flag && { break; true }; } }",
-        );
+        let dynamic =
+            analyze_text("fn f(flag: Bool) -> Int { while true { flag && { break; true }; } }");
         assert_eq!(codes(&dynamic), vec!["N3007"]);
 
         let forced = analyze_text("fn f() -> Int { while true { true && { break; true }; } }");
