@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: sixteen vertical slices implemented; broader type-system work remains.**
+**Status: seventeen vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -287,6 +287,19 @@ Implemented in the sixteenth Phase 2 slice:
   instead of unconditionally collapsing the rejected expression to `Type::Error`; and
 - adversarial tests lock definite-initialization, conditional break-exit, HIR type,
   and non-continuation behavior for both unknown targets and enum-as-record misuse.
+
+Implemented in the seventeenth Phase 2 slice:
+
+- call lowering snapshots reachable state before evaluating the callee and arguments,
+  so a continuing rejected call cannot export assignments or loop-exit facts;
+- wrong arity, non-callable callees, argument type mismatches, and evaluated argument
+  errors now produce `Type::Error` HIR rather than retaining a normal return type;
+- callee and argument HIR remain intact and are still lowered left-to-right for
+  deterministic diagnostics and source-qualified recovery;
+- an actually evaluated non-continuing callee or argument keeps `!` precedence even
+  when the call is otherwise invalid, preserving reachable return/break/continue; and
+- red-to-green adversarial tests lock definite-initialization, conditional break,
+  recovery typing, child-error, and non-continuation behavior across invalid calls.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

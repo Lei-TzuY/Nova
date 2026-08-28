@@ -800,6 +800,7 @@ impl Analyzer {
                 )
             }
             ast::ExpressionKind::Call { callee, arguments } => {
+                let call_entry_state = self.capture_reachable_state();
                 let callee = self.lower_expression(callee, return_type);
                 let mut can_continue = !callee.ty.is_never();
                 let mut lowered_arguments = Vec::with_capacity(arguments.len());
@@ -815,6 +816,9 @@ impl Analyzer {
                     lowered_arguments.push(argument);
                 }
                 let ty = self.check_call(&callee, &lowered_arguments, expression.span);
+                if ty.is_error() {
+                    self.restore_reachable_state(call_entry_state);
+                }
                 (
                     ExpressionKind::Call {
                         callee: Box::new(callee),
@@ -1925,9 +1929,16 @@ impl Analyzer {
         if callee.ty.is_never() {
             return Type::Never;
         }
+
+        let arguments_never = arguments.iter().any(|argument| argument.ty.is_never());
+        let arguments_error = arguments.iter().any(|argument| argument.ty.is_error());
         let Type::Function(signature) = callee.ty.clone() else {
             if callee.ty.is_error() {
-                return Type::Error;
+                return if arguments_never {
+                    Type::Never
+                } else {
+                    Type::Error
+                };
             }
             self.diagnostics.push(
                 Diagnostic::error("N3005", "expression is not callable").with_primary(
@@ -1935,10 +1946,15 @@ impl Analyzer {
                     format!("found {} instead of a function", callee.ty),
                 ),
             );
-            return Type::Error;
+            return if arguments_never {
+                Type::Never
+            } else {
+                Type::Error
+            };
         };
 
-        if arguments.len() != signature.parameters.len() {
+        let arity_matches = arguments.len() == signature.parameters.len();
+        if !arity_matches {
             self.diagnostics.push(
                 Diagnostic::error("N3006", "wrong number of arguments").with_primary(
                     span,
@@ -1950,20 +1966,27 @@ impl Analyzer {
                 ),
             );
         }
+
+        let mut argument_types_match = true;
         for (index, (argument, expected)) in arguments
             .iter()
             .zip(signature.parameters.iter())
             .enumerate()
         {
+            let type_matches = expected_type_compatible(&argument.ty, expected);
             self.require_type(
                 &argument.ty,
                 expected,
                 argument.span,
                 &format!("argument {}", index + 1),
             );
+            argument_types_match &= type_matches;
         }
-        if arguments.iter().any(|argument| argument.ty.is_never()) {
+
+        if arguments_never {
             Type::Never
+        } else if arguments_error || !arity_matches || !argument_types_match {
+            Type::Error
         } else {
             *signature.return_type
         }

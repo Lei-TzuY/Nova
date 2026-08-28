@@ -164,6 +164,13 @@ initialization facts during diagnostic recovery. This is direct-constructor
 reachability, not propagation of enum values through locals, calls, or general
 constant evaluation.
 
+A continuing call rejected because its callee is not callable, its arity is wrong,
+an argument has the wrong type, or an evaluated argument is erroneous is fail-closed
+for flow recovery. Callee/argument diagnostics and HIR children are retained, but
+assignments and loop-exit facts produced only inside that rejected call do not become
+post-call facts. An actually evaluated non-continuing callee or argument keeps `!`
+precedence.
+
 Continuing record or enum construction that is itself rejected by type-head,
 structural, or payload/field type validation is fail-closed for flow recovery:
 assignments and

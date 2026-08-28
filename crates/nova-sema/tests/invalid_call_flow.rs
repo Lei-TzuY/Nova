@@ -78,9 +78,8 @@ fn argument_type_mismatch_does_not_initialize_outer_binding() {
 
 #[test]
 fn noncallable_callee_does_not_export_argument_initialization() {
-    let output = analyze_text(
-        "fn f() -> Int { var x: Int; let callee = 0; callee({ x = 1; 0 }); x }",
-    );
+    let output =
+        analyze_text("fn f() -> Int { var x: Int; let callee = 0; callee({ x = 1; 0 }); x }");
     assert_has_codes(&output, &["N3005", "N3009"]);
     assert_eq!(expression_statement_type(&output, "f", 2), &Type::Error);
 }
@@ -106,9 +105,8 @@ fn rejected_call_discards_conditional_break_exits() {
 
 #[test]
 fn noncontinuing_wrong_arity_argument_keeps_never_flow() {
-    let output = analyze_text(
-        "fn target() -> Int { 0 } fn f() -> Int { target({ return 1; 0 }); }",
-    );
+    let output =
+        analyze_text("fn target() -> Int { 0 } fn f() -> Int { target({ return 1; 0 }); }");
     let actual = codes(&output);
     assert!(actual.contains(&"N3006"), "{actual:?}");
     assert!(!actual.contains(&"N3007"), "{actual:?}");
@@ -118,9 +116,7 @@ fn noncontinuing_wrong_arity_argument_keeps_never_flow() {
 
 #[test]
 fn noncontinuing_argument_dominates_noncallable_callee_recovery() {
-    let output = analyze_text(
-        "fn f() -> Int { let callee = 0; callee({ return 1; 0 }); }",
-    );
+    let output = analyze_text("fn f() -> Int { let callee = 0; callee({ return 1; 0 }); }");
     let actual = codes(&output);
     assert!(actual.contains(&"N3005"), "{actual:?}");
     assert!(!actual.contains(&"N3007"), "{actual:?}");
@@ -141,9 +137,8 @@ fn noncontinuing_argument_dominates_error_callee_recovery() {
 
 #[test]
 fn call_hir_still_preserves_lowered_children_for_diagnostics() {
-    let output = analyze_text(
-        "fn target() -> Int { 0 } fn f() -> Int { target({ missing; 0 }); 1 }",
-    );
+    let output =
+        analyze_text("fn target() -> Int { 0 } fn f() -> Int { target({ missing; 0 }); 1 }");
     assert_has_codes(&output, &["N3003", "N3006"]);
     let StatementKind::Expression(expression) = &function(&output, "f").body.statements[0].kind
     else {
