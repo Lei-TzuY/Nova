@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: nine vertical slices implemented; broader type-system work remains.**
+**Status: ten vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -184,6 +184,22 @@ Implemented in the ninth Phase 2 slice:
   execution when classifying `!` expressions and guaranteed-loop exits; and
 - analyzer adversarial tests plus CLI check/run fixtures lock selected/dead
   initialization and loop-control behavior end to end.
+
+Implemented in the tenth Phase 2 slice:
+
+- a successfully typed direct enum-constructor scrutinee exposes its resolved
+  variant slot to semantic match reachability without adding constant folding;
+- only the selected constructor arm contributes reachable definite-initialization,
+  non-continuation, and loop-exit facts;
+- unselected arms remain fully checked for pattern/payload validity, duplicate
+  variants, exhaustiveness, names, and arm type compatibility while their flow
+  mutations are discarded;
+- matches over parameters, locals, calls, blocks, and other computed enum values
+  retain the existing conservative merge across continuing arms;
+- payload-carrying direct constructors preserve the selected arm's immutable
+  payload binding while still refining outer flow state; and
+- analyzer adversarial tests plus CLI check/run fixtures lock initialization,
+  payload, return, loop-exit, dead-arm diagnostic, and dynamic-match behavior.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

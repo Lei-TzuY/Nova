@@ -136,6 +136,15 @@ unselected branch is still lowered for deterministic static diagnostics and stil
 participates in branch type compatibility. Block-valued or computed Boolean
 conditions keep the ordinary conservative two-branch merge.
 
+A `match` whose lowered scrutinee is itself a successfully typed direct enum
+constructor, such as `Result::Value(40)`, receives the same narrow reachability
+refinement. Only the arm for that constructed variant may contribute reachable
+definite-initialization, non-continuation, or loop-exit facts. Every arm remains
+subject to pattern, payload, exhaustiveness, duplicate-variant, name, and type
+checking, and all arm result types must still be compatible. Matches over locals,
+parameters, calls, blocks, or other computed enum values retain the ordinary
+conservative all-arm flow merge.
+
 `while condition { body }` is a pre-test statement. The condition must be
 `Bool`. For an ordinary condition, the body may execute zero times, so
 definite-assignment facts established while evaluating the mandatory first

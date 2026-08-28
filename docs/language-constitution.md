@@ -201,6 +201,15 @@ its assignments, returns, and loop transfers cannot affect reachable continuatio
 state. Computed and block-valued Boolean conditions keep the ordinary two-branch
 merge; this rule is not general constant folding.
 
+A valid exhaustive `match` receives an equally narrow refinement only when its
+lowered scrutinee is a directly constructed, successfully typed enum variant.
+The arm for that variant is the sole source of reachable assignment,
+non-continuation, and loop-exit facts; every other arm is lowered for diagnostics
+without mutating reachable flow state. Pattern validity, payload bindings,
+duplicate detection, exhaustiveness, and arm type compatibility still consider
+the complete match. Any computed enum scrutinee keeps the conservative merge over
+all continuing arms; constructor recognition is not general value propagation.
+
 Chained assignment, arbitrary lvalues, field mutation, indexing, and general
 uninitialized storage remain unsupported.
 
