@@ -60,9 +60,8 @@ fn structurally_invalid_record_does_not_initialize_outer_binding() {
 
 #[test]
 fn unknown_record_type_does_not_initialize_outer_binding() {
-    let output = analyze_text(
-        "fn f() -> Int { var x: Int; new Missing { value: { x = 1; 0 } }; x }",
-    );
+    let output =
+        analyze_text("fn f() -> Int { var x: Int; new Missing { value: { x = 1; 0 } }; x }");
     assert_has_codes(&output, &["N3001", "N3009"]);
     let StatementKind::Expression(expression) =
         &output.program.functions[0].body.statements[1].kind

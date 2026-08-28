@@ -91,8 +91,9 @@ record identity and declaration-order field slot without reordering evaluation.
 field assignment, layout, and ABI guarantees are not implemented.
 
 Rejected aggregate construction is fail-closed for continuing flow recovery. A
-record with invalid field shape/type or an enum constructor with invalid payload
-shape/type may still emit deterministic child diagnostics, but assignments or loop
+record with an unresolved/non-record target or invalid field shape/type, or an enum
+constructor with invalid target/payload shape/type, may still emit deterministic
+child diagnostics, but assignments or loop
 exits created only inside that rejected continuing expression do not become
 post-expression facts. A child that is already non-continuing keeps its `!` flow.
 

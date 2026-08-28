@@ -965,6 +965,27 @@ impl Analyzer {
         lowered
     }
 
+    fn lower_rejected_record_fields(
+        &mut self,
+        fields: &[ast::RecordLiteralField],
+        return_type: &Type,
+    ) -> bool {
+        let mut can_continue = true;
+        let mut contains_never = false;
+        for field in fields {
+            let value = if can_continue {
+                self.lower_expression(&field.value, return_type)
+            } else {
+                self.lower_expression_for_diagnostics(&field.value, return_type)
+            };
+            contains_never |= value.ty.is_never();
+            if can_continue && value.ty.is_never() {
+                can_continue = false;
+            }
+        }
+        contains_never
+    }
+
     fn lower_record_literal(
         &mut self,
         name: &ast::Name,
@@ -972,36 +993,23 @@ impl Analyzer {
         return_type: &Type,
         _span: Span,
     ) -> (ExpressionKind, Type) {
+        let aggregate_entry_state = self.capture_reachable_state();
         let Some(symbol) = self.types.get(&name.text).copied() else {
-            let mut can_continue = true;
-            for field in fields {
-                let value = if can_continue {
-                    self.lower_expression(&field.value, return_type)
-                } else {
-                    self.lower_expression_for_diagnostics(&field.value, return_type)
-                };
-                if can_continue && value.ty.is_never() {
-                    can_continue = false;
-                }
-            }
+            let contains_never = self.lower_rejected_record_fields(fields, return_type);
             self.diagnostics.push(
                 Diagnostic::error("N3001", "unknown type")
                     .with_primary(name.span, format!("unknown record type `{}`", name.text)),
             );
-            return (ExpressionKind::Error, Type::Error);
+            let ty = if contains_never {
+                Type::Never
+            } else {
+                self.restore_reachable_state(aggregate_entry_state);
+                Type::Error
+            };
+            return (ExpressionKind::Error, ty);
         };
         let TypeDefinition::Record(record_id) = symbol.definition else {
-            let mut can_continue = true;
-            for field in fields {
-                let value = if can_continue {
-                    self.lower_expression(&field.value, return_type)
-                } else {
-                    self.lower_expression_for_diagnostics(&field.value, return_type)
-                };
-                if can_continue && value.ty.is_never() {
-                    can_continue = false;
-                }
-            }
+            let contains_never = self.lower_rejected_record_fields(fields, return_type);
             self.diagnostics.push(
                 Diagnostic::error("N3004", "type mismatch")
                     .with_primary(
@@ -1010,10 +1018,15 @@ impl Analyzer {
                     )
                     .with_secondary(symbol.span, "enum declared here"),
             );
-            return (ExpressionKind::Error, Type::Error);
+            let ty = if contains_never {
+                Type::Never
+            } else {
+                self.restore_reachable_state(aggregate_entry_state);
+                Type::Error
+            };
+            return (ExpressionKind::Error, ty);
         };
         let definition = self.record_definitions[record_id.index()].clone();
-        let aggregate_entry_state = self.capture_reachable_state();
         let mut seen = BTreeMap::<String, Span>::new();
         let mut resolved = Vec::with_capacity(fields.len());
         let mut structural_error = false;
