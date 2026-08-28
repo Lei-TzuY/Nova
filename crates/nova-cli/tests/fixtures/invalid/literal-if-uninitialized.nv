@@ -1,0 +1,5 @@
+fn choose() -> Int {
+    var value: Int;
+    if true { 0 } else { value = 1; 0 };
+    value
+}
