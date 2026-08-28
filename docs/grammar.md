@@ -19,7 +19,8 @@ integer         = digit , { [ "_" ] , digit } ;
 ```
 
 Keywords are `fn`, `record`, `new`, `let`, `var`, `if`, `else`, `while`,
-`return`, `true`, and `false`. A keyword cannot be used as an identifier.
+`break`, `continue`, `return`, `true`, and `false`. A keyword cannot be used as
+an identifier.
 
 Integer separators cannot lead, trail, or repeat. The frontend checks decimal
 conversion and rejects magnitudes above `9223372036854775807`; it never wraps or
@@ -50,6 +51,8 @@ statement           = binding_statement
                     | uninitialized_var_statement
                     | assignment_statement
                     | while_statement
+                    | break_statement
+                    | continue_statement
                     | return_statement
                     | expression_statement ;
 binding_statement   = ("let" | "var") , identifier ,
@@ -57,6 +60,8 @@ binding_statement   = ("let" | "var") , identifier ,
 uninitialized_var_statement = "var" , identifier , ":" , type_name , ";" ;
 assignment_statement = identifier , "=" , expression , ";" ;
 while_statement     = "while" , expression , block ;
+break_statement     = "break" , ";" ;
+continue_statement  = "continue" , ";" ;
 return_statement    = "return" , expression , ";" ;
 expression_statement = expression , ";" ;
 
@@ -88,9 +93,10 @@ if_expression       = "if" , expression , block , "else" ,
 ```
 
 A block may end in one expression without a semicolon; that expression is its
-tail value. Any earlier expression must end in `;`. Bindings, assignments, and
-returns always end in `;`. A `while` statement ends with its body block and does
-not take a trailing semicolon. Top-level statements are not accepted.
+tail value. Any earlier expression must end in `;`. Bindings, assignments,
+`break`, `continue`, and returns always end in `;`. A `while` statement ends with
+its body block and does not take a trailing semicolon. Top-level statements are
+not accepted.
 
 Records are nominal top-level types. Each field has an explicit type and field
 names must be unique within a record. `new Type { ... }` constructs a record by
@@ -122,15 +128,24 @@ to match that binding's type.
 A `while` condition must have type `Bool` and is evaluated before every
 iteration. Because the first condition test always occurs but the body may run
 zero times, definite-assignment facts created while evaluating the condition may
-flow after the loop, while facts established only inside the body do not.
-The body block's value, if any, is discarded. `break`, `continue`, and `for` are
-not implemented in this subset.
+flow after the loop, while facts established only inside the body do not. The
+body block's value, if any, is discarded.
+
+`break;` exits the nearest lexically enclosing `while` body. `continue;` starts
+the next iteration of that nearest loop, which means its condition is evaluated
+again before the body can run again. Both forms are statement-only and carry no
+value. Diagnostic `N3013` rejects either form when no enclosing `while` body is
+active. The loop's condition expression itself is deliberately outside this
+control-transfer scope in the bootstrap subset; `break` or `continue` nested in
+a condition block is therefore rejected. Unreachable source after a transfer is
+still analyzed for deterministic diagnostics, but it cannot contribute
+name/dataflow facts to reachable code.
 
 An `if` is an expression and therefore always has an `else` branch in this
 subset. `else if` is represented by the recursive `if_expression` production.
-Definite-assignment state is merged across both branches; a branch that cannot
-continue because it returns does not constrain initialization on the surviving
-path.
+Definite-assignment state is merged across both branches; any branch that cannot
+continue because it returns, breaks, or continues does not constrain
+initialization on the surviving path.
 
 ## Precedence and associativity
 
@@ -154,7 +169,7 @@ limit, not a promise that deeply nested source will remain portable unchanged.
 ## Deliberate limitations
 
 The implemented grammar has no strings, floating-point literals, arrays, enums,
-pattern matching, field assignment, `break`, `continue`, `for`, methods,
-modules, imports, generics, traits, effects, async syntax, ownership syntax,
-unsafe blocks, or attributes. Encountering such syntax is an error, not an
-approximation.
+pattern matching, field assignment, value-carrying `break`, labelled loop
+control, `for`, methods, modules, imports, generics, traits, effects, async
+syntax, ownership syntax, unsafe blocks, or attributes. Encountering such syntax
+is an error, not an approximation.
