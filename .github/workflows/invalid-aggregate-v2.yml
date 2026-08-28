@@ -1,0 +1,311 @@
+name: Replay invalid aggregate flow on latest main
+
+on:
+  push:
+    branches:
+      - fix/invalid-aggregate-flow-v2
+
+permissions:
+  contents: write
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/invalid-aggregate-flow-v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt,clippy
+      - name: Confirm regression is red before the fix
+        shell: bash
+        run: |
+          set +e
+          cargo test -p nova-sema --test invalid_aggregate_flow --locked
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "expected invalid aggregate flow regression to fail before the patch" >&2
+            exit 1
+          fi
+      - name: Apply aggregate flow rollback fix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def block(lines):
+              return "\n".join(lines) + "\n"
+
+          def patch(path, old, new, count=1):
+              file = Path(path)
+              text = file.read_text()
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f"{path}: expected {count} match(es), found {actual}: {old[:120]!r}")
+              file.write_text(text.replace(old, new, count))
+
+          analyzer = "crates/nova-sema/src/analyzer.rs"
+          patch(
+              analyzer,
+              block([
+                  "        let definition = self.record_definitions[record_id.index()].clone();",
+                  "        let mut seen = BTreeMap::<String, Span>::new();",
+                  "        let mut resolved = Vec::with_capacity(fields.len());",
+                  "        let mut structural_error = false;",
+                  "        let mut contains_error = false;",
+                  "        let mut contains_never = false;",
+                  "        let mut can_continue = true;",
+              ]),
+              block([
+                  "        let definition = self.record_definitions[record_id.index()].clone();",
+                  "        let aggregate_entry_state = self.capture_reachable_state();",
+                  "        let mut seen = BTreeMap::<String, Span>::new();",
+                  "        let mut resolved = Vec::with_capacity(fields.len());",
+                  "        let mut structural_error = false;",
+                  "        let mut contains_error = false;",
+                  "        let mut contains_never = false;",
+                  "        let mut type_error = false;",
+                  "        let mut can_continue = true;",
+              ]),
+          )
+          patch(
+              analyzer,
+              block([
+                  "            let expected = &definition.fields[field_index].ty;",
+                  "            self.require_type(&value.ty, expected, value.span, \"record field initializer\");",
+                  "            resolved.push(RecordFieldValue { field_index, value });",
+              ]),
+              block([
+                  "            let expected = &definition.fields[field_index].ty;",
+                  "            let type_matches = types_compatible(&value.ty, expected);",
+                  "            self.require_type(&value.ty, expected, value.span, \"record field initializer\");",
+                  "            type_error |= !type_matches;",
+                  "            resolved.push(RecordFieldValue { field_index, value });",
+              ]),
+          )
+          patch(
+              analyzer,
+              block([
+                  "        let ty = if contains_never {",
+                  "            Type::Never",
+                  "        } else if structural_error || contains_error {",
+                  "            Type::Error",
+                  "        } else {",
+                  "            Type::Record(definition.record_type())",
+                  "        };",
+                  "        if structural_error {",
+                  "            (ExpressionKind::Error, ty)",
+                  "        } else {",
+                  "            (",
+                  "                ExpressionKind::RecordLiteral {",
+                  "                    record: record_id,",
+                  "                    fields: resolved,",
+                  "                },",
+                  "                ty,",
+                  "            )",
+                  "        }",
+              ]),
+              block([
+                  "        let ty = if contains_never {",
+                  "            Type::Never",
+                  "        } else if structural_error || contains_error || type_error {",
+                  "            Type::Error",
+                  "        } else {",
+                  "            Type::Record(definition.record_type())",
+                  "        };",
+                  "        let should_restore = ty.is_error();",
+                  "        let result = if structural_error {",
+                  "            (ExpressionKind::Error, ty)",
+                  "        } else {",
+                  "            (",
+                  "                ExpressionKind::RecordLiteral {",
+                  "                    record: record_id,",
+                  "                    fields: resolved,",
+                  "                },",
+                  "                ty,",
+                  "            )",
+                  "        };",
+                  "        if should_restore {",
+                  "            self.restore_reachable_state(aggregate_entry_state);",
+                  "        }",
+                  "        result",
+              ]),
+          )
+          patch(
+              analyzer,
+              block([
+                  "    ) -> (ExpressionKind, Type) {",
+                  "        let payload =",
+                  "            payload.map(|expression| Box::new(self.lower_expression(expression, return_type)));",
+              ]),
+              block([
+                  "    ) -> (ExpressionKind, Type) {",
+                  "        let aggregate_entry_state = self.capture_reachable_state();",
+                  "        let payload =",
+                  "            payload.map(|expression| Box::new(self.lower_expression(expression, return_type)));",
+              ]),
+          )
+          old_return = block([
+              "            return (",
+              "                ExpressionKind::Error,",
+              "                if payload_never {",
+              "                    Type::Never",
+              "                } else {",
+              "                    Type::Error",
+              "                },",
+              "            );",
+          ])
+          new_return = block([
+              "            let ty = if payload_never {",
+              "                Type::Never",
+              "            } else {",
+              "                self.restore_reachable_state(aggregate_entry_state.clone());",
+              "                Type::Error",
+              "            };",
+              "            return (ExpressionKind::Error, ty);",
+          ])
+          patch(analyzer, old_return, new_return, count=3)
+          patch(
+              analyzer,
+              block([
+                  "        let declared = &definition.variants[variant_index];",
+                  "        let arity_matches = match (&declared.payload, payload.as_deref()) {",
+                  "            (Some(expected), Some(actual)) => {",
+                  "                self.require_type(&actual.ty, expected, actual.span, \"enum variant payload\");",
+                  "                true",
+                  "            }",
+              ]),
+              block([
+                  "        let declared = &definition.variants[variant_index];",
+                  "        let mut payload_type_error = false;",
+                  "        let arity_matches = match (&declared.payload, payload.as_deref()) {",
+                  "            (Some(expected), Some(actual)) => {",
+                  "                let type_matches = types_compatible(&actual.ty, expected);",
+                  "                self.require_type(&actual.ty, expected, actual.span, \"enum variant payload\");",
+                  "                payload_type_error = !type_matches;",
+                  "                true",
+                  "            }",
+              ]),
+          )
+          patch(
+              analyzer,
+              block([
+                  "        let ty = if payload_never {",
+                  "            Type::Never",
+                  "        } else if payload_error || !arity_matches {",
+                  "            Type::Error",
+                  "        } else {",
+                  "            Type::Enum(definition.enum_type())",
+                  "        };",
+                  "        if arity_matches {",
+                  "            (",
+                  "                ExpressionKind::EnumConstructor {",
+                  "                    enumeration: enum_id,",
+                  "                    variant_index,",
+                  "                    payload,",
+                  "                },",
+                  "                ty,",
+                  "            )",
+                  "        } else {",
+                  "            (ExpressionKind::Error, ty)",
+                  "        }",
+              ]),
+              block([
+                  "        let ty = if payload_never {",
+                  "            Type::Never",
+                  "        } else if payload_error || payload_type_error || !arity_matches {",
+                  "            Type::Error",
+                  "        } else {",
+                  "            Type::Enum(definition.enum_type())",
+                  "        };",
+                  "        let should_restore = ty.is_error();",
+                  "        let result = if arity_matches {",
+                  "            (",
+                  "                ExpressionKind::EnumConstructor {",
+                  "                    enumeration: enum_id,",
+                  "                    variant_index,",
+                  "                    payload,",
+                  "                },",
+                  "                ty,",
+                  "            )",
+                  "        } else {",
+                  "            (ExpressionKind::Error, ty)",
+                  "        };",
+                  "        if should_restore {",
+                  "            self.restore_reachable_state(aggregate_entry_state);",
+                  "        }",
+                  "        result",
+              ]),
+          )
+
+          readme_marker = "`value.field` is read-only field projection in this slice. Record equality,\nfield assignment, layout, and ABI guarantees are not implemented.\n\n"
+          readme_add = (
+              "Rejected aggregate construction is fail-closed for continuing flow recovery. A\n"
+              "record with invalid field shape/type or an enum constructor with invalid payload\n"
+              "shape/type may still emit deterministic child diagnostics, but assignments or loop\n"
+              "exits created only inside that rejected continuing expression do not become\n"
+              "post-expression facts. A child that is already non-continuing keeps its `!` flow.\n\n"
+          )
+          patch("README.md", readme_marker, readme_marker + readme_add)
+
+          constitution_marker = (
+              "reachability, not propagation of enum values through locals, calls, or general\n"
+              "constant evaluation.\n\n"
+          )
+          constitution_add = (
+              "Continuing record or enum construction that is itself rejected by structural or\n"
+              "payload/field type validation is fail-closed for flow recovery: assignments and\n"
+              "loop-exit facts produced only while lowering that invalid aggregate cannot establish\n"
+              "state after the rejected expression. If a child expression is already `!`, its\n"
+              "reachable non-continuation remains dominant; this rollback rule applies only when\n"
+              "the invalid aggregate would otherwise continue.\n\n"
+          )
+          patch(
+              "docs/language-constitution.md",
+              constitution_marker,
+              constitution_marker + constitution_add,
+          )
+
+          roadmap = "docs/roadmap.md"
+          patch(
+              roadmap,
+              "**Status: twelve vertical slices implemented; broader type-system work remains.**\n",
+              "**Status: thirteen vertical slices implemented; broader type-system work remains.**\n",
+          )
+          roadmap_marker = block([
+              "The next Phase 2 slices should address semantic depth rather than widen syntax",
+              "prematurely. In particular:",
+          ])
+          roadmap_add = block([
+              "Implemented in the thirteenth Phase 2 slice:",
+              "",
+              "- continuing record construction that fails structural, child-error, or field-type",
+              "  validation restores its pre-construction reachable state instead of exporting",
+              "  assignments or loop-exit facts from rejected source;",
+              "- enum constructors apply the same rollback to unknown/invalid constructors, payload",
+              "  arity errors, child errors, and payload type mismatches;",
+              "- aggregate field/payload type mismatches now produce `Type::Error` HIR rather than",
+              "  retaining a nominal aggregate type after diagnostic `N3004`;",
+              "- a child expression that is already non-continuing still yields `!`, preserving",
+              "  reachable return/break/continue precedence over continuing recovery rollback; and",
+              "- adversarial tests lock both definite-initialization rollback and non-continuing",
+              "  aggregate inputs across records and enums.",
+              "",
+          ])
+          patch(roadmap, roadmap_marker, roadmap_add + roadmap_marker)
+          PY
+          cargo fmt --all
+      - name: Validate fixed semantic slice
+        run: |
+          cargo test -p nova-sema --all-targets --locked
+          cargo clippy -p nova-sema --all-targets --all-features -- -D warnings
+      - name: Commit replay and remove temporary workflow
+        run: |
+          rm .github/workflows/invalid-aggregate-v2.yml
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: fail closed on invalid aggregate flow"
+          git push origin HEAD:fix/invalid-aggregate-flow-v2
