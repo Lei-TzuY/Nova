@@ -109,10 +109,15 @@ later assignment. The explicit type is required. Reading such a binding before
 it is definitely initialized is diagnostic `N3009`. For `if` expressions with a non-literal condition,
 analysis evaluates the branch states independently and keeps a binding
 initialized afterward only when every branch that can continue has initialized
-it. The same intersection rule applies across all arms of a valid exhaustive
-match. A branch or arm that returns, breaks, or continues does not constrain the
-surviving path. Unreachable code is still analyzed for deterministic diagnostics,
-but its assignments cannot manufacture reachable definite-initialization facts.
+it. For a valid exhaustive match with a dynamic scrutinee, the same intersection
+rule applies across every arm that can continue. When the scrutinee is a direct,
+successfully resolved enum constructor, its variant is already known: only the
+selected arm may contribute definite-initialization, non-continuation, or loop-exit
+facts. Non-selected arms are still fully checked for pattern validity, static
+diagnostics, exhaustiveness, and arm type compatibility. A branch or reachable arm
+that returns, breaks, or continues does not constrain a surviving continuation.
+Unreachable code is still analyzed for deterministic diagnostics, but its
+assignments cannot manufacture reachable definite-initialization facts.
 For strict left-to-right expression forms, once an earlier subexpression cannot
 continue, later operands, call arguments, or record initializers are likewise
 lowered only for diagnostics and cannot create reachable scope or loop-exit

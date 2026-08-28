@@ -75,10 +75,20 @@ and diagnostics.
 ## Definite assignment
 
 Each arm starts from the post-scrutinee initialization state. For a valid,
-exhaustive match, a pre-existing local is definitely initialized afterward only
-if every arm that can continue initializes it. Arms that cannot continue because
-of `return`, `break`, or `continue` are excluded from that intersection. If all
-arms cannot continue, the match itself has type `!`.
+exhaustive match whose scrutinee is dynamic, a pre-existing local is definitely
+initialized afterward only if every arm that can continue initializes it. Arms
+that cannot continue because of `return`, `break`, or `continue` are excluded from
+that intersection. If all reachable arms cannot continue, the match itself has type
+`!`.
+
+A direct, successfully resolved enum constructor is a narrower bootstrap
+reachability case. Because its variant is known after the constructor payload has
+been evaluated, only the corresponding arm contributes reachable initialization,
+non-continuation, and enclosing-loop transfer facts. Every non-selected arm is still
+resolved and type checked, still participates in exhaustiveness and result-type
+compatibility, and can still emit diagnostics; only its runtime flow facts are
+discarded. Values flowing through locals, parameters, calls, or other expressions
+do not receive this refinement.
 
 An invalid or non-exhaustive match never establishes an initialization fact.
 This fail-closed rule prevents a rejected control-flow shape from making a later
