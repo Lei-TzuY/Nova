@@ -1560,16 +1560,21 @@ impl Analyzer {
         field: &ast::Name,
         return_type: &Type,
     ) -> (ExpressionKind, Type) {
+        let access_entry_state = self.capture_reachable_state();
         let base = self.lower_expression(base, return_type);
+        if base.ty.is_never() {
+            return (ExpressionKind::Error, Type::Never);
+        }
+
         let Type::Record(record_type) = base.ty.clone() else {
-            if base.ty.is_error() {
-                return (ExpressionKind::Error, Type::Error);
+            if !base.ty.is_error() {
+                self.diagnostics
+                    .push(Diagnostic::error("N3004", "type mismatch").with_primary(
+                        field.span,
+                        format!("field access requires a record value, found {}", base.ty),
+                    ));
             }
-            self.diagnostics
-                .push(Diagnostic::error("N3004", "type mismatch").with_primary(
-                    field.span,
-                    format!("field access requires a record value, found {}", base.ty),
-                ));
+            self.restore_reachable_state(access_entry_state);
             return (ExpressionKind::Error, Type::Error);
         };
 
@@ -1590,6 +1595,7 @@ impl Analyzer {
                     )
                     .with_secondary(definition.span, "record declared here"),
             );
+            self.restore_reachable_state(access_entry_state);
             return (ExpressionKind::Error, Type::Error);
         };
         let ty = definition.fields[field_index].ty.clone();

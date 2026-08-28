@@ -171,6 +171,12 @@ assignments and loop-exit facts produced only inside that rejected call do not b
 post-call facts. An actually evaluated non-continuing callee or argument keeps `!`
 precedence.
 
+A continuing field access rejected because its base is not a record or the named field
+does not exist is likewise fail-closed for flow recovery. The base is still lowered
+for deterministic diagnostics, but its assignments and loop-exit facts do not become
+post-access facts. A base expression that is already `!` remains non-continuing and
+does not acquire a secondary record-type diagnostic.
+
 Continuing record or enum construction that is itself rejected by type-head,
 structural, or payload/field type validation is fail-closed for flow recovery:
 assignments and

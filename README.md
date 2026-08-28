@@ -86,6 +86,11 @@ callee, wrong arity, argument type mismatch, or erroneous argument yields Error 
 and cannot export assignments or loop-exit facts. An actually evaluated child that
 is already non-continuing keeps its `!` flow.
 
+Rejected field access follows the same recovery discipline. The base is evaluated
+first, but a continuing non-record base or unknown field yields Error HIR and cannot
+export flow facts produced only inside the rejected access. A base that is already
+non-continuing keeps `!` without a secondary field-type cascade.
+
 `record Name { field: Type, ... }` declares a nominal type: two separately
 declared records are distinct even if their fields have the same shape. Field
 names must be unique. `new Name { field: expression, ... }` must initialize every
