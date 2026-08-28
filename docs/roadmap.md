@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: seventeen vertical slices implemented; broader type-system work remains.**
+**Status: eighteen vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -300,6 +300,19 @@ Implemented in the seventeenth Phase 2 slice:
   when the call is otherwise invalid, preserving reachable return/break/continue; and
 - red-to-green adversarial tests lock definite-initialization, conditional break,
   recovery typing, child-error, and non-continuation behavior across invalid calls.
+
+Implemented in the eighteenth Phase 2 slice:
+
+- field-access lowering snapshots reachable state before evaluating its base, so a
+  continuing rejected projection cannot export assignments or loop-exit facts;
+- non-record bases and unknown record fields remain source-diagnosed and produce
+  `Type::Error` HIR, while valid record projection keeps its established slot/type;
+- a base expression that is already non-continuing yields `!` directly instead of
+  receiving a cascading N3004 record-type error and being flattened to recovery Error;
+- the fix is deliberately local to field access rather than declaring a global
+  transactional policy for every erroneous expression category; and
+- red-to-green adversarial tests lock definite-initialization, conditional break,
+  unknown-field, recovery typing, and non-continuation behavior.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
