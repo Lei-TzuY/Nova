@@ -152,12 +152,22 @@ that can continue; non-continuing arms are excluded. Invalid or non-exhaustive
 matches establish no arm-derived initialization facts during diagnostic
 recovery.
 
-The bootstrap `while` form is a pre-test statement. Its condition executes
-before the loop can exit, while its body may execute zero times. Therefore
-initialization facts established while evaluating the condition may flow after
-the loop, but facts established only in the body cannot by themselves prove a
-binding initialized after the loop. This conservative rule prevents a zero-run
-loop from manufacturing definite-assignment evidence.
+The bootstrap `while` form is a pre-test statement. For an ordinary condition,
+the body may execute zero times. Initialization facts established while
+evaluating the mandatory first condition test may therefore flow after the
+loop, while facts established only inside the body cannot by themselves prove a
+binding initialized afterward. This conservative rule preserves the
+zero-iteration exit.
+
+A direct Boolean literal `while true` is a provisional special case because it
+has no condition-false exit. The bootstrap analyzer records reachable `break`
+exit states that target that exact loop. If at least one such exit exists, a
+pre-existing binding is definitely initialized after the loop only when every
+reachable break exit initializes it. If no reachable break exists, the loop is
+non-continuing. A break consumed by a nested loop never becomes evidence for an
+outer loop exit. This recognition is deliberately syntactic: equivalent-looking
+computed or block-valued conditions do not trigger constant folding, fixed-point
+iteration, or a general termination proof.
 
 `break;` and `continue;` are provisional statement-only transfers with no value.
 They are legal only in the body of an enclosing `while`; the condition
@@ -166,16 +176,19 @@ such loop and exits it. `continue;` targets the nearest such loop and re-enters
 at its condition test. Both make the current path non-continuing for `if` and
 exhaustive-`match` dataflow joins. Source after a transfer remains subject to
 name/type diagnostics, but unreachable assignments must not alter the reachable
-definite-initialization state.
+definite-initialization state. The same rule applies within strict left-to-right
+expression evaluation: operands, call arguments, and record initializers after
+an earlier non-continuing subexpression are lowered for diagnostics only and
+cannot manufacture reachable scope or loop-exit facts.
 
 Chained assignment, arbitrary lvalues, field mutation, indexing, and general
 uninitialized storage remain unsupported.
 
 **Research.** Broader flow-sensitive facts, labelled loops, value-carrying
 breaks or loop expressions, nested and refutable binding forms, partial
-aggregate initialization, mutable aggregate views, ownership interactions, and
-diagnostics for more complex control-flow graphs require implementation
-evidence before their rules are frozen.
+aggregate initialization, mutable aggregate views, ownership interactions,
+loop fixed-point analysis, and diagnostics for more complex control-flow graphs
+require implementation evidence before their rules are frozen.
 
 ## 6. Names, modules, and packages
 
@@ -351,12 +364,14 @@ Every compiler and execution stage must uphold these constraints:
    negative tests.
 9. A local read cannot observe an uninitialized binding; delayed initialization
    must be proven on every reachable continuing path before the read.
-10. Pre-test loop analysis must not treat body-only effects as facts that hold
-    after a loop which may execute zero times.
+10. Pre-test loop analysis must not treat body-only effects as post-loop facts
+    when a loop may execute zero times. A direct literal `while true` may derive
+    post-loop facts only from reachable `break` exits targeting that exact loop.
 11. `break` and `continue` target only the nearest enclosing `while` body; a
     loop's condition is not inside that control-transfer scope.
-12. An unreachable statement may still produce diagnostics but must not change
-    definite-initialization facts observed by reachable continuation paths.
+12. Unreachable statements and strict-expression suffixes may still produce
+    diagnostics but must not change definite-initialization or loop-exit facts
+    observed by reachable continuation paths.
 13. Nominal type identity must not silently collapse to structural field shape.
 14. Resolved field slots must preserve source semantics and must not be mistaken
     for a stabilized memory-layout or ABI guarantee.
