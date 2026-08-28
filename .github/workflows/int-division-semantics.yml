@@ -1,0 +1,80 @@
+name: Validate Int division semantics
+
+on:
+  push:
+    branches:
+      - feat/int-division-semantics
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Confirm baseline runtime behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/signed-division.nv <<'EOF'
+          fn main() -> Int {
+              (-7 / 3) * 10 + (-7 % 3)
+          }
+          EOF
+          test "$(cargo run --quiet -p nova-cli -- run /tmp/signed-division.nv)" = "-21"
+
+          cat > /tmp/min-div.nv <<'EOF'
+          fn main() -> Int {
+              -9223372036854775808 / -1
+          }
+          EOF
+          if cargo run --quiet -p nova-cli -- run /tmp/min-div.nv >/tmp/min-div.out 2>/tmp/min-div.err; then
+            echo "MIN / -1 unexpectedly succeeded" >&2
+            exit 1
+          fi
+          grep -q N4002 /tmp/min-div.err
+
+          cat > /tmp/min-rem.nv <<'EOF'
+          fn main() -> Int {
+              -9223372036854775808 % -1
+          }
+          EOF
+          if cargo run --quiet -p nova-cli -- run /tmp/min-rem.nv >/tmp/min-rem.out 2>/tmp/min-rem.err; then
+            echo "MIN % -1 unexpectedly succeeded" >&2
+            exit 1
+          fi
+          grep -q N4002 /tmp/min-rem.err
+
+          cat > /tmp/rem-zero.nv <<'EOF'
+          fn main() -> Int {
+              10 % 0
+          }
+          EOF
+          if cargo run --quiet -p nova-cli -- run /tmp/rem-zero.nv >/tmp/rem-zero.out 2>/tmp/rem-zero.err; then
+            echo "remainder by zero unexpectedly succeeded" >&2
+            exit 1
+          fi
+          grep -q N4003 /tmp/rem-zero.err
+      - name: Apply explicit arithmetic contract
+        run: python scripts/apply_int_division_semantics.py
+      - name: Validate numeric slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Commit fix and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/int-division-semantics.yml scripts/apply_int_division_semantics.py
+          git add -A
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git commit -m "refactor: specify bootstrap Int arithmetic"
+          git push origin HEAD:feat/int-division-semantics
