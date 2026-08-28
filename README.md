@@ -118,6 +118,17 @@ continue, later operands, call arguments, or record initializers are likewise
 lowered only for diagnostics and cannot create reachable scope or loop-exit
 facts.
 
+`&&` and `||` preserve static checking of both operands while modeling their
+runtime reachability explicitly. A direct `false && rhs` or `true || rhs` lowers
+`rhs` only for diagnostics, so skipped assignments and loop transfers contribute
+no reachable flow facts. A direct `true && rhs` or `false || rhs` treats `rhs` as
+mandatory. With a dynamic Boolean left operand, `rhs` is optional: post-expression
+definite initialization is the intersection of the short-circuit continuation
+and every continuing RHS path. An RHS that returns, breaks, or continues therefore
+does not make the whole Boolean expression non-continuing when the left operand
+can bypass it, although a reachable RHS `break` still remains a possible exit
+from its enclosing loop.
+
 `while condition { body }` is a pre-test statement. The condition must be
 `Bool`. For an ordinary condition, the body may execute zero times, so
 definite-assignment facts established while evaluating the mandatory first
@@ -162,8 +173,9 @@ mutation, control-flow, aggregate, and shadowing policies are frozen.
 `Bool` return type. It evaluates expressions left to right. Record initializer
 expressions follow the same rule even when named fields are written out of
 declaration order. `&&` and `||` are short-circuiting, so a skipped right operand
-performs no mutation or call. A match evaluates its scrutinee exactly once and
-then only its selected arm.
+performs no mutation, call, return, or loop transfer. Semantic dataflow follows
+that same reachability while still type-checking the skipped source. A match
+evaluates its scrutinee exactly once and then only its selected arm.
 
 The interpreter propagates structured control flow through nested blocks,
 conditionals, aggregate initializers, call arguments, and selected match arms.
@@ -248,6 +260,8 @@ language semantics.
 - Runtime arithmetic is checked; host build mode never decides Nova results.
 - Observable evaluation order is explicit; named record fields do not reorder
   their initializer expressions, and a match evaluates only its selected arm.
+- Short-circuit reachability in semantic flow must agree with runtime `&&`/`||`
+  execution while skipped source remains statically checked.
 - Non-continuing control-flow paths cannot contribute definite-assignment or loop-
   exit facts to code they cannot reach.
 - Potentially nonterminating bootstrap execution is bounded and fails with a

@@ -1,0 +1,5 @@
+fn choose(flag: Bool) -> Int {
+    var value: Int;
+    flag && { value = 1; true };
+    value
+}

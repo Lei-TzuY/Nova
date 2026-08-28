@@ -26,6 +26,7 @@ fn accepts_positive_fixtures() {
         "valid/while-loop.nv",
         "valid/loop-control.nv",
         "valid/guaranteed-loop-break.nv",
+        "valid/short-circuit-flow.nv",
         "valid/records.nv",
         "valid/enums-match.nv",
     ] {
@@ -47,6 +48,7 @@ fn run_command_executes_checked_program() {
         ("valid/while-loop.nv", "5\n"),
         ("valid/loop-control.nv", "42\n"),
         ("valid/guaranteed-loop-break.nv", "42\n"),
+        ("valid/short-circuit-flow.nv", "42\n"),
         ("valid/records.nv", "42\n"),
         ("valid/enums-match.nv", "42\n"),
     ] {
@@ -133,6 +135,7 @@ fn rejects_negative_fixtures_with_stable_codes() {
         ("invalid/uninitialized-read.nv", "N3009"),
         ("invalid/loop-definite-assignment.nv", "N3009"),
         ("invalid/guaranteed-loop-break-uninitialized.nv", "N3009"),
+        ("invalid/short-circuit-uninitialized.nv", "N3009"),
         ("invalid/loop-control-outside-loop.nv", "N3013"),
         ("invalid/missing-record-field.nv", "N3012"),
         ("invalid/non-exhaustive-match.nv", "N3023"),
