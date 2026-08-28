@@ -301,6 +301,10 @@ impl<'source> Parser<'source> {
                 self.parse_binding_statement()
             } else if self.at(TokenKind::While) {
                 self.parse_while_statement()
+            } else if self.at(TokenKind::Break) {
+                self.parse_break_statement()
+            } else if self.at(TokenKind::Continue) {
+                self.parse_continue_statement()
             } else if self.at(TokenKind::Return) {
                 self.parse_return_statement()
             } else if self.at(TokenKind::Identifier) && self.at_offset(1, TokenKind::Equal) {
@@ -421,6 +425,24 @@ impl<'source> Parser<'source> {
         Some(Statement {
             span: self.cover(keyword.span, body.span),
             kind: StatementKind::While { condition, body },
+        })
+    }
+
+    fn parse_break_statement(&mut self) -> Option<Statement> {
+        let keyword = self.expect(TokenKind::Break, "to start a break statement")?;
+        let semicolon = self.expect(TokenKind::Semicolon, "after `break`")?;
+        Some(Statement {
+            span: self.cover(keyword.span, semicolon.span),
+            kind: StatementKind::Break,
+        })
+    }
+
+    fn parse_continue_statement(&mut self) -> Option<Statement> {
+        let keyword = self.expect(TokenKind::Continue, "to start a continue statement")?;
+        let semicolon = self.expect(TokenKind::Semicolon, "after `continue`")?;
+        Some(Statement {
+            span: self.cover(keyword.span, semicolon.span),
+            kind: StatementKind::Continue,
         })
     }
 
@@ -1152,6 +1174,18 @@ fn f() -> Int {
                 if matches!(condition.kind, ExpressionKind::Binary { operator: BinaryOperator::Less, .. })
                     && body.statements.len() == 1
         ));
+    }
+
+    #[test]
+    fn parses_break_and_continue_as_statement_only_loop_control() {
+        let (_, parsed) = parse_text("fn f() -> Int { while true { continue; break; } 0 }");
+        assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
+        let StatementKind::While { body, .. } = &parsed.program.functions[0].body.statements[0].kind
+        else {
+            panic!("expected while statement");
+        };
+        assert!(matches!(body.statements[0].kind, StatementKind::Continue));
+        assert!(matches!(body.statements[1].kind, StatementKind::Break));
     }
 
     #[test]
