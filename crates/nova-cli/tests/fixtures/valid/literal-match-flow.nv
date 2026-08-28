@@ -1,0 +1,17 @@
+enum Choice {
+    None,
+    Some(Int),
+}
+
+fn main() -> Int {
+    var value: Int;
+    match Choice::Some(40) {
+        Choice::None => 0,
+        Choice::Some(inner) => { value = inner; 0 },
+    };
+    match Choice::None {
+        Choice::None => { value = value + 2; 0 },
+        Choice::Some(inner) => { value = inner; 0 },
+    };
+    value
+}
