@@ -1,0 +1,300 @@
+name: Sync surface Unit contracts
+
+on:
+  push:
+    branches:
+      - feat/surface-unit
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/surface-unit
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Update CLI coverage and language documentation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def block(lines):
+              return "\n".join(lines) + "\n"
+
+          def patch(path, old, new):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:100]!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          # CLI end-to-end coverage.
+          patch(
+              "crates/nova-cli/tests/cli.rs",
+              '        "valid/literal-match-flow.nv",\n        "valid/records.nv",\n',
+              '        "valid/literal-match-flow.nv",\n        "valid/unit.nv",\n        "valid/records.nv",\n',
+          )
+          patch(
+              "crates/nova-cli/tests/cli.rs",
+              '        ("valid/literal-match-flow.nv", "42\\n"),\n        ("valid/records.nv", "42\\n"),\n',
+              '        ("valid/literal-match-flow.nv", "42\\n"),\n        ("valid/unit.nv", "42\\n"),\n        ("valid/records.nv", "42\\n"),\n',
+          )
+          patch(
+              "crates/nova-cli/tests/cli.rs",
+              '        ("runtime/invalid-main.nv", "N4001"),\n        ("runtime/nonterminating-loop.nv", "N4006"),\n',
+              '        ("runtime/invalid-main.nv", "N4001"),\n        ("runtime/unit-main.nv", "N4001"),\n        ("runtime/nonterminating-loop.nv", "N4006"),\n',
+          )
+          patch(
+              "crates/nova-cli/tests/cli.rs",
+              '        ("invalid/type-mismatch.nv", "N3004"),\n        ("invalid/assignment-type-mismatch.nv", "N3004"),\n',
+              '        ("invalid/type-mismatch.nv", "N3004"),\n        ("invalid/unit-type-mismatch.nv", "N3004"),\n        ("invalid/assignment-type-mismatch.nv", "N3004"),\n',
+          )
+
+          # Normative grammar.
+          patch(
+              "docs/grammar.md",
+              block([
+                  '                    | enum_constructor',
+                  '                    | "(" , expression , ")"',
+                  '                    | block',
+              ]),
+              block([
+                  '                    | enum_constructor',
+                  '                    | unit_literal',
+                  '                    | "(" , expression , ")"',
+                  '                    | block',
+              ]),
+          )
+          patch(
+              "docs/grammar.md",
+              'enum_constructor    = identifier , "::" , identifier ,\n                      [ "(" , expression , [ "," ] , ")" ] ;\n',
+              'unit_literal        = "(" , ")" ;\nenum_constructor    = identifier , "::" , identifier ,\n                      [ "(" , expression , [ "," ] , ")" ] ;\n',
+          )
+          patch(
+              "docs/grammar.md",
+              block([
+                  'A block may end in one expression without a semicolon; that expression is its',
+                  'tail value. Any earlier expression must end in `;`. Bindings, assignments,',
+                  '`break`, `continue`, and returns always end in `;`. A `while` statement ends',
+                  'with its body block and does not take a trailing semicolon. Top-level statements',
+                  'are not accepted.',
+              ]),
+              block([
+                  'A block may end in one expression without a semicolon; that expression is its',
+                  'tail value. Any earlier expression must end in `;`. Bindings, assignments,',
+                  '`break`, `continue`, and returns always end in `;`. A `while` statement ends',
+                  'with its body block and does not take a trailing semicolon. Top-level statements',
+                  'are not accepted.',
+                  '',
+                  '`Unit` is a built-in surface type and `()` is its sole literal. A block with no',
+                  'tail expression also has type `Unit`. A function declared `-> Unit` may therefore',
+                  'fall through a value-less body; `return ();` is the explicit equivalent. Other',
+                  'return types still require a compatible tail or an explicit return on every',
+                  'continuing path. Parenthesized non-empty expressions retain ordinary grouping, so',
+                  '`(value)` is not a Unit literal.',
+              ]),
+          )
+          patch(
+              "docs/grammar.md",
+              block([
+                  'constructs a payload variant. Empty `()` is not an alternate spelling for a',
+                  'payload-free constructor. Declared enum names and record names share one type',
+              ]),
+              block([
+                  'constructs a payload variant. `()` is the Unit literal, so `Enum::Variant(())`',
+                  'supplies one Unit payload and is valid only for a variant declared with payload',
+                  'type `Unit`; it is not an alternate spelling for a payload-free constructor.',
+                  'Declared enum names and record names share one type',
+              ]),
+          )
+
+          # README product contract.
+          patch(
+              "README.md",
+              block([
+                  '- check bootstrap `Int`, `Bool`, and nominal aggregate types, function signatures,',
+                  '  local inference and annotations, calls, operators, block tails, branches,',
+              ]),
+              block([
+                  '- check bootstrap `Int`, `Bool`, `Unit`, and nominal aggregate types, function',
+                  '  signatures, local inference and annotations, calls, operators, block tails, branches,',
+              ]),
+          )
+          patch(
+              "README.md",
+              block([
+                  '- execute semantically accepted programs through a deterministic bootstrap',
+                  '  interpreter with function calls, recursion, records, enums, pattern matching,',
+                  '  mutation, blocks, conditionals, bounded loops, and structured `break`/`continue`;',
+              ]),
+              block([
+                  '- execute semantically accepted programs through a deterministic bootstrap',
+                  '  interpreter with function calls, recursion, Unit-valued procedures, records, enums,',
+                  '  pattern matching, mutation, blocks, conditionals, bounded loops, and structured',
+                  '  `break`/`continue`;',
+              ]),
+          )
+          patch(
+              "README.md",
+              block([
+                  '`Int`, `Bool`, and declared nominal records and enums are recognized surface',
+                  'types today. Arithmetic and ordered comparisons require `Int`; boolean',
+                  'operators require `Bool`; equality currently accepts only matching `Int` or',
+                  'matching `Bool`; calls require a function value with matching arity and argument',
+                  'types. `if` conditions require `Bool`, its two continuing branches must have',
+                  'compatible nominal or primitive value types, and all continuing match arms must',
+                  'likewise agree on one type. Explicit `return` expressions are checked against',
+                  'the function signature, and a function cannot fall through without a value.',
+                  'Internal HIR uses `()` and `!` only to model value-less and non-continuing',
+                  'control flow; neither is a surface type in the current grammar.',
+              ]),
+              block([
+                  '`Int`, `Bool`, `Unit`, and declared nominal records and enums are recognized',
+                  'surface types today. `()` is the sole Unit literal, and a block with no tail also',
+                  'produces Unit. A function declared `-> Unit` may fall through such a body or use',
+                  'the explicit `return ();` form; non-Unit functions still need a compatible tail or',
+                  'an explicit return on every continuing path. Arithmetic and ordered comparisons',
+                  'require `Int`; boolean operators require `Bool`; equality currently accepts only',
+                  'matching `Int` or matching `Bool`; calls require matching arity and argument types.',
+                  '`if` conditions require `Bool`, and continuing branches or match arms must remain',
+                  'type-compatible. The internal `!` bottom type still has no surface spelling.',
+              ]),
+          )
+          patch(
+              "README.md",
+              block([
+                  '`nova run` requires one top-level `main` with no parameters and an `Int` or',
+                  '`Bool` return type. It evaluates expressions left to right. Record initializer',
+              ]),
+              block([
+                  '`nova run` requires one top-level `main` with no parameters and an `Int` or',
+                  '`Bool` return type; surface `Unit` is available to helper functions but does not',
+                  'widen the bootstrap entry-point contract. Execution evaluates expressions left to',
+                  'right. Record initializer',
+              ]),
+          )
+
+          # Constitution.
+          patch(
+              "docs/language-constitution.md",
+              block([
+                  '**Provisional bootstrap decisions.** The current semantic core recognizes the',
+                  'surface types `Int`, `Bool`, and declared nominal record and enum types. Aggregate',
+              ]),
+              block([
+                  '**Provisional bootstrap decisions.** The current semantic core recognizes the',
+                  'surface types `Int`, `Bool`, `Unit`, and declared nominal record and enum types.',
+                  'The sole Unit literal is `()`, and a value-less block also produces Unit. Aggregate',
+              ]),
+          )
+          patch(
+              "docs/language-constitution.md",
+              block([
+                  'initialization.',
+                  '',
+                  'A bootstrap record declares explicitly typed, uniquely named fields.',
+              ]),
+              block([
+                  'initialization. A function declared to return `Unit` may complete through a body',
+                  'with no tail expression; `return ();` is the explicit Unit return. Functions with',
+                  'other return types still require a compatible value on every continuing path.',
+                  '`Unit` is reserved alongside `Int` and `Bool` and cannot be redefined as a nominal',
+                  'record or enum. Unit equality is not part of this bootstrap operator subset.',
+                  '',
+                  'A bootstrap record declares explicitly typed, uniquely named fields.',
+              ]),
+          )
+          patch(
+              "docs/language-constitution.md",
+              block([
+                  'function, call, record construction/projection, enum construction/matching,',
+                  'block, `if`, `while`, `break`, `continue`, return, binding, assignment, Boolean,',
+                  'and integer subset. Evaluation order is left-to-right; named record initializers',
+              ]),
+              block([
+                  'function, call, record construction/projection, enum construction/matching,',
+                  'block, `if`, `while`, `break`, `continue`, return, binding, assignment, Unit,',
+                  'Boolean, and integer subset. Unit helpers may return explicit `()` or fall through',
+                  'a value-less body. Evaluation order is left-to-right; named record initializers',
+              ]),
+          )
+
+          # Roadmap Phase 2 + Phase 3 evidence.
+          roadmap = Path("docs/roadmap.md")
+          text = roadmap.read_text()
+          old = "**Status: ten vertical slices implemented; broader type-system work remains.**"
+          new = "**Status: eleven vertical slices implemented; broader type-system work remains.**"
+          if text.count(old) != 1:
+              raise SystemExit("Phase 2 status marker mismatch")
+          text = text.replace(old, new, 1)
+          marker = block([
+              'The next Phase 2 slices should address semantic depth rather than widen syntax',
+              'prematurely. In particular:',
+          ])
+          slice11 = block([
+              'Implemented in the eleventh Phase 2 slice:',
+              '',
+              '- `Unit` promoted from an internal HIR-only concept to a reserved surface built-in',
+              '  type, with `()` as its sole literal;',
+              '- AST and typed HIR represent explicit Unit literals directly while value-less blocks',
+              '  continue to produce the same semantic `Unit` type;',
+              '- functions declared `-> Unit` may fall through a body with no tail expression, while',
+              '  explicit `return ();` remains type checked through the ordinary return path;',
+              '- non-Unit functions retain the existing all-continuing-path value requirement, and',
+              '  non-Unit values returned from Unit functions are rejected with `N3004`;',
+              '- `Unit` cannot be redefined as a record or enum, and Unit equality remains outside',
+              '  the bootstrap operator contract; and',
+              '- parser, semantic, CLI, grammar, constitution, README, and runtime-entry-point tests',
+              '  distinguish surface Unit support from the still-Int/Bool-only `main` contract.',
+              '',
+          ])
+          if text.count(marker) != 1:
+              raise SystemExit("Phase 2 insertion marker mismatch")
+          text = text.replace(marker, slice11 + marker, 1)
+
+          old = "**Status: five vertical slices implemented; execution surface remains small.**"
+          new = "**Status: six vertical slices implemented; execution surface remains small.**"
+          if text.count(old) != 1:
+              raise SystemExit("Phase 3 status marker mismatch")
+          text = text.replace(old, new, 1)
+          marker = block([
+              'Next Phase 3 slices should deepen executable semantics without bypassing Phase 2',
+              'contracts:',
+          ])
+          slice6 = block([
+              'Implemented in the sixth Phase 3 slice:',
+              '',
+              '- the interpreter executes the explicit HIR Unit literal as the existing `Value::Unit`',
+              '  representation rather than introducing a second runtime sentinel;',
+              '- value-less Unit-returning functions complete normally with Unit, and explicit',
+              '  `return ();` propagates through the same structured return machinery as other values;',
+              '- Unit values may flow through ordinary local bindings, parameters, calls, returns,',
+              '  record fields, and enum payloads under the existing static type checks;',
+              '- CLI execution fixtures confirm Unit-valued helper procedures compose with an Int',
+              '  `main`, while `main() -> Unit` remains rejected at runtime with `N4001`; and',
+              '- no Unit equality, special calling convention, layout promise, or widened entry-point',
+              '  ABI is inferred from this bootstrap execution support.',
+              '',
+          ])
+          if text.count(marker) != 1:
+              raise SystemExit("Phase 3 insertion marker mismatch")
+          roadmap.write_text(text.replace(marker, slice6 + marker, 1))
+          PY
+          cargo fmt --all
+          cargo test -p nova-cli --test cli --locked
+      - name: Commit synchronized surface and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/surface-unit-docs.yml
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git add -A
+          git commit -m "docs: synchronize surface Unit contracts"
+          git push origin HEAD:feat/surface-unit
