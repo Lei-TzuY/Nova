@@ -28,14 +28,15 @@ interpreter slices. The toolchain is written in Rust and can:
   binding, record, and enum identities;
 - resolve top-level functions and nominal types, parameters, lexical local
   bindings, record field slots, enum variant slots, and match payload bindings;
-- check bootstrap `Int`, `Bool`, and nominal aggregate types, function signatures,
-  local inference and annotations, calls, operators, block tails, branches,
+- check bootstrap `Int`, `Bool`, `Unit`, and nominal aggregate types, function
+  signatures, local inference and annotations, calls, operators, block tails, branches,
   returns, loop conditions, loop-control legality, record construction/projection,
   enum construction, match exhaustiveness and arm types, assignment
   mutability/type constraints, and definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
-  interpreter with function calls, recursion, records, enums, pattern matching,
-  mutation, blocks, conditionals, bounded loops, and structured `break`/`continue`;
+  interpreter with function calls, recursion, Unit-valued procedures, records, enums,
+  pattern matching, mutation, blocks, conditionals, bounded loops, and structured
+  `break`/`continue`;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
   text or JSON Lines; and
 - print a deterministic debug representation of the parsed AST.
@@ -165,16 +166,15 @@ iteration and re-evaluates that same loop's condition. Neither carries a value
 or acts as an expression. Labelled loops and value-carrying breaks are not part
 of the bootstrap subset.
 
-`Int`, `Bool`, and declared nominal records and enums are recognized surface
-types today. Arithmetic and ordered comparisons require `Int`; boolean
-operators require `Bool`; equality currently accepts only matching `Int` or
-matching `Bool`; calls require a function value with matching arity and argument
-types. `if` conditions require `Bool`, its two continuing branches must have
-compatible nominal or primitive value types, and all continuing match arms must
-likewise agree on one type. Explicit `return` expressions are checked against
-the function signature, and a function cannot fall through without a value.
-Internal HIR uses `()` and `!` only to model value-less and non-continuing
-control flow; neither is a surface type in the current grammar.
+`Int`, `Bool`, `Unit`, and declared nominal records and enums are recognized
+surface types today. `()` is the sole Unit literal, and a block with no tail also
+produces Unit. A function declared `-> Unit` may fall through such a body or use
+the explicit `return ();` form; non-Unit functions still need a compatible tail or
+an explicit return on every continuing path. Arithmetic and ordered comparisons
+require `Int`; boolean operators require `Bool`; equality currently accepts only
+matching `Int` or matching `Bool`; calls require matching arity and argument types.
+`if` conditions require `Bool`, and continuing branches or match arms must remain
+type-compatible. The internal `!` bottom type still has no surface spelling.
 
 These rules are bootstrap semantics, not a promise that Nova's broader type,
 mutation, control-flow, aggregate, and shadowing policies are frozen.
@@ -182,7 +182,9 @@ mutation, control-flow, aggregate, and shadowing policies are frozen.
 ## Bootstrap execution rules
 
 `nova run` requires one top-level `main` with no parameters and an `Int` or
-`Bool` return type. It evaluates expressions left to right. Record initializer
+`Bool` return type; surface `Unit` is available to helper functions but does not
+widen the bootstrap entry-point contract. Execution evaluates expressions left to
+right. Record initializer
 expressions follow the same rule even when named fields are written out of
 declaration order. `&&` and `||` are short-circuiting, so a skipped right operand
 performs no mutation, call, return, or loop transfer. Semantic dataflow follows

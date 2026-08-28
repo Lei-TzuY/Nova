@@ -29,6 +29,7 @@ fn accepts_positive_fixtures() {
         "valid/short-circuit-flow.nv",
         "valid/literal-if-flow.nv",
         "valid/literal-match-flow.nv",
+        "valid/unit.nv",
         "valid/records.nv",
         "valid/enums-match.nv",
     ] {
@@ -53,6 +54,7 @@ fn run_command_executes_checked_program() {
         ("valid/short-circuit-flow.nv", "42\n"),
         ("valid/literal-if-flow.nv", "42\n"),
         ("valid/literal-match-flow.nv", "42\n"),
+        ("valid/unit.nv", "42\n"),
         ("valid/records.nv", "42\n"),
         ("valid/enums-match.nv", "42\n"),
     ] {
@@ -75,6 +77,7 @@ fn run_command_reports_runtime_failures() {
         ("runtime/overflow.nv", "N4002"),
         ("runtime/divide-by-zero.nv", "N4003"),
         ("runtime/invalid-main.nv", "N4001"),
+        ("runtime/unit-main.nv", "N4001"),
         ("runtime/nonterminating-loop.nv", "N4006"),
     ] {
         let path = fixture(relative);
@@ -134,6 +137,7 @@ fn rejects_negative_fixtures_with_stable_codes() {
         ("invalid/missing-else.nv", "N2006"),
         ("invalid/unknown-name.nv", "N3003"),
         ("invalid/type-mismatch.nv", "N3004"),
+        ("invalid/unit-type-mismatch.nv", "N3004"),
         ("invalid/assignment-type-mismatch.nv", "N3004"),
         ("invalid/immutable-assignment.nv", "N3008"),
         ("invalid/uninitialized-read.nv", "N3009"),

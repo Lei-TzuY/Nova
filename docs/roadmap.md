@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: eleven vertical slices implemented; broader type-system work remains.**
+**Status: twelve vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -216,6 +216,21 @@ Implemented in the eleventh Phase 2 slice:
 - dedicated regression tests plus the existing adversarial semantic suite lock the
   refactor to behavior-preserving state restoration.
 
+Implemented in the twelfth Phase 2 slice:
+
+- `Unit` is promoted from an internal value-less HIR marker to a reserved surface
+  type available in signatures, annotations, record fields, and enum payloads;
+- `()` is the sole surface Unit literal and lowers to explicit typed HIR rather than
+  being confused with grouping or an empty argument list;
+- Unit-returning functions may complete through an empty body, while explicit tails
+  and `return` expressions remain type checked against `Unit`;
+- non-Unit fallthrough rules remain unchanged, and `Unit` is still excluded from the
+  bootstrap equality operators;
+- reserved-type diagnostics prevent user-defined `Unit` declarations from shadowing
+  the built-in type; and
+- parser, semantic, interpreter, CLI, aggregate, call, match, negative-type, and
+  invalid-entry-point coverage lock the surface contract end to end.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
@@ -238,7 +253,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: five vertical slices implemented; execution surface remains small.**
+**Status: six vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -314,6 +329,17 @@ Implemented in the fifth Phase 3 slice:
 - interpreter and CLI end-to-end tests covering `break`, `continue`, nested
   loops, selected match-arm propagation, invalid placement, and deterministic
   results.
+
+Implemented in the sixth Phase 3 slice:
+
+- the interpreter executes explicit Unit literals as the existing `Value::Unit`
+  runtime value and empty Unit-returning bodies produce the same value;
+- Unit values pass through ordinary function parameters and returns, record slots,
+  enum payloads, and match payload bindings without a special runtime channel;
+- `nova run` keeps its zero-argument `main -> Int | Bool` entry-point contract, so a
+  semantically valid `main() -> Unit` still fails deterministically with `N4001`; and
+- CLI end-to-end fixtures prove Unit execution while retaining the existing runtime
+  entry-point boundary.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
