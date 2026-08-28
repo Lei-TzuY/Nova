@@ -615,7 +615,7 @@ impl Analyzer {
                 );
 
                 let post_condition_scopes = self.scopes.clone();
-                let guaranteed_entry = matches!(condition.kind, ExpressionKind::Boolean(true));
+                let guaranteed_entry = matches!(&condition.kind, ExpressionKind::Boolean(true));
                 self.loop_stack.push(LoopContext {
                     visible_scope_count: self.scopes.len(),
                     break_states: Vec::new(),
@@ -735,7 +735,11 @@ impl Analyzer {
                 right,
             } => {
                 let left = self.lower_expression(left, return_type);
-                let right = self.lower_expression(right, return_type);
+                let right = if left.ty.is_never() {
+                    self.lower_expression_for_diagnostics(right, return_type)
+                } else {
+                    self.lower_expression(right, return_type)
+                };
                 let ty = self.check_binary(*operator, &left, &right, expression.span);
                 (
                     ExpressionKind::Binary {
@@ -748,15 +752,24 @@ impl Analyzer {
             }
             ast::ExpressionKind::Call { callee, arguments } => {
                 let callee = self.lower_expression(callee, return_type);
-                let arguments = arguments
-                    .iter()
-                    .map(|argument| self.lower_expression(argument, return_type))
-                    .collect::<Vec<_>>();
-                let ty = self.check_call(&callee, &arguments, expression.span);
+                let mut can_continue = !callee.ty.is_never();
+                let mut lowered_arguments = Vec::with_capacity(arguments.len());
+                for argument in arguments {
+                    let argument = if can_continue {
+                        self.lower_expression(argument, return_type)
+                    } else {
+                        self.lower_expression_for_diagnostics(argument, return_type)
+                    };
+                    if can_continue && argument.ty.is_never() {
+                        can_continue = false;
+                    }
+                    lowered_arguments.push(argument);
+                }
+                let ty = self.check_call(&callee, &lowered_arguments, expression.span);
                 (
                     ExpressionKind::Call {
                         callee: Box::new(callee),
-                        arguments,
+                        arguments: lowered_arguments,
                     },
                     ty,
                 )
@@ -823,6 +836,19 @@ impl Analyzer {
         }
     }
 
+    fn lower_expression_for_diagnostics(
+        &mut self,
+        expression: &ast::Expression,
+        return_type: &Type,
+    ) -> hir::Expression {
+        let reachable_scopes = self.scopes.clone();
+        let reachable_loop_stack = self.loop_stack.clone();
+        let lowered = self.lower_expression(expression, return_type);
+        self.scopes = reachable_scopes;
+        self.loop_stack = reachable_loop_stack;
+        lowered
+    }
+
     fn lower_record_literal(
         &mut self,
         name: &ast::Name,
@@ -831,8 +857,16 @@ impl Analyzer {
         _span: Span,
     ) -> (ExpressionKind, Type) {
         let Some(symbol) = self.types.get(&name.text).copied() else {
+            let mut can_continue = true;
             for field in fields {
-                self.lower_expression(&field.value, return_type);
+                let value = if can_continue {
+                    self.lower_expression(&field.value, return_type)
+                } else {
+                    self.lower_expression_for_diagnostics(&field.value, return_type)
+                };
+                if can_continue && value.ty.is_never() {
+                    can_continue = false;
+                }
             }
             self.diagnostics.push(
                 Diagnostic::error("N3001", "unknown type")
@@ -841,8 +875,16 @@ impl Analyzer {
             return (ExpressionKind::Error, Type::Error);
         };
         let TypeDefinition::Record(record_id) = symbol.definition else {
+            let mut can_continue = true;
             for field in fields {
-                self.lower_expression(&field.value, return_type);
+                let value = if can_continue {
+                    self.lower_expression(&field.value, return_type)
+                } else {
+                    self.lower_expression_for_diagnostics(&field.value, return_type)
+                };
+                if can_continue && value.ty.is_never() {
+                    can_continue = false;
+                }
             }
             self.diagnostics.push(
                 Diagnostic::error("N3004", "type mismatch")
@@ -860,11 +902,19 @@ impl Analyzer {
         let mut structural_error = false;
         let mut contains_error = false;
         let mut contains_never = false;
+        let mut can_continue = true;
 
         for field in fields {
-            let value = self.lower_expression(&field.value, return_type);
+            let value = if can_continue {
+                self.lower_expression(&field.value, return_type)
+            } else {
+                self.lower_expression_for_diagnostics(&field.value, return_type)
+            };
             contains_error |= value.ty.is_error();
             contains_never |= value.ty.is_never();
+            if can_continue && value.ty.is_never() {
+                can_continue = false;
+            }
 
             let Some(field_index) = definition
                 .fields
@@ -2141,6 +2191,26 @@ mod tests {
             let output = analyze_text(text);
             assert!(output.is_success(), "{text}: {:?}", output.diagnostics);
             assert!(output.program.functions[0].body.ty.is_never(), "{text}");
+        }
+    }
+
+    #[test]
+    fn unreachable_expression_suffixes_cannot_create_loop_exits() {
+        for text in [
+            "fn f() -> Int { while true { { return 1; } + { break; 2 }; } }",
+            "fn sink(a: Int, b: Int) -> Int { 0 } fn f() -> Int { while true { sink({ return 1; }, { break; 2 }); } }",
+            "fn f() -> Int { while true { { return 1; }({ break; 2 }); } }",
+            "record Pair { left: Int, right: Int } fn f() -> Int { while true { new Pair { left: { return 1; }, right: { break; 2 } }; } }",
+        ] {
+            let output = analyze_text(text);
+            assert!(output.is_success(), "{text}: {:?}", output.diagnostics);
+            let function = output
+                .program
+                .functions
+                .iter()
+                .find(|function| function.name == "f")
+                .expect("test function");
+            assert!(function.body.ty.is_never(), "{text}");
         }
     }
 
