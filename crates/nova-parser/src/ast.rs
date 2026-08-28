@@ -158,6 +158,10 @@ pub enum StatementKind {
         /// Loop body.
         body: Block,
     },
+    /// Exit the nearest lexically enclosing loop.
+    Break,
+    /// Start the next iteration of the nearest lexically enclosing loop.
+    Continue,
     /// Explicit function return.
     Return(Expression),
     /// Expression whose value is discarded by a semicolon.

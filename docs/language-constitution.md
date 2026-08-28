@@ -78,8 +78,9 @@ identity comes from the declaration rather than shape: separately declared
 types remain different even when their fields or variants have identical names
 and types. The checker resolves explicitly typed function signatures, infers
 initialized local binding types, and checks the implemented operators, calls,
-branches, loops, returns, assignments, aggregate construction, field projection,
-exhaustive enum matching, and definite initialization.
+branches, loops, loop-control legality, returns, assignments, aggregate
+construction, field projection, exhaustive enum matching, and definite
+initialization.
 
 A bootstrap record declares explicitly typed, uniquely named fields.
 `new Record { field: expression, ... }` must initialize every declared field
@@ -142,8 +143,8 @@ is read-only in the bootstrap subset; `record.field = value` is not an accepted
 assignment form. Definite-initialization state is propagated through lexical
 blocks and merged across `if` branches. If both branches can continue, a
 binding is definitely initialized afterward only when both continuing paths
-initialize it; a branch that cannot continue because it returns does not
-constrain the surviving path.
+initialize it; a branch that cannot continue because it returns, breaks, or
+continues does not constrain the surviving path.
 
 Each match payload binding is immutable and scoped to one arm. A valid
 exhaustive match merges definite-initialization state by intersecting every arm
@@ -158,14 +159,23 @@ the loop, but facts established only in the body cannot by themselves prove a
 binding initialized after the loop. This conservative rule prevents a zero-run
 loop from manufacturing definite-assignment evidence.
 
+`break;` and `continue;` are provisional statement-only transfers with no value.
+They are legal only in the body of an enclosing `while`; the condition
+expression is outside that loop-control scope. `break;` targets the nearest
+such loop and exits it. `continue;` targets the nearest such loop and re-enters
+at its condition test. Both make the current path non-continuing for `if` and
+exhaustive-`match` dataflow joins. Source after a transfer remains subject to
+name/type diagnostics, but unreachable assignments must not alter the reachable
+definite-initialization state.
+
 Chained assignment, arbitrary lvalues, field mutation, indexing, and general
 uninitialized storage remain unsupported.
 
-**Research.** Broader flow-sensitive facts, `break`, `continue`, labelled loops,
-nested and refutable binding forms, partial aggregate initialization, mutable
-aggregate views, ownership interactions, and diagnostics for more complex
-control-flow graphs require implementation evidence before their rules are
-frozen.
+**Research.** Broader flow-sensitive facts, labelled loops, value-carrying
+breaks or loop expressions, nested and refutable binding forms, partial
+aggregate initialization, mutable aggregate views, ownership interactions, and
+diagnostics for more complex control-flow graphs require implementation
+evidence before their rules are frozen.
 
 ## 6. Names, modules, and packages
 
@@ -260,11 +270,19 @@ semantics.
 syntactic, name-resolution, type, and definite-assignment validation succeeds.
 The interpreter consumes typed HIR directly and supports the implemented
 function, call, record construction/projection, enum construction/matching,
-block, `if`, `while`, return, binding, assignment, Boolean, and integer subset.
-Evaluation order is left-to-right; named record initializers do not reorder their
-expressions when resolved to declaration slots. A match evaluates its scrutinee
-once and only its selected arm. `&&` and `||` short-circuit. The entry point is a
-zero-argument top-level `main` returning `Int` or `Bool`.
+block, `if`, `while`, `break`, `continue`, return, binding, assignment, Boolean,
+and integer subset. Evaluation order is left-to-right; named record initializers
+do not reorder their expressions when resolved to declaration slots. A match
+evaluates its scrutinee once and only its selected arm. `&&` and `||`
+short-circuit. The entry point is a zero-argument top-level `main` returning
+`Int` or `Bool`.
+
+The interpreter propagates `return`, `break`, and `continue` as structured
+control flow through nested expressions and selected match arms. A `while`
+consumes only the `break` or `continue` targeted lexically at its body; function
+calls consume returns but may not become an implicit target for loop control.
+Malformed HIR that lets loop control escape its lexical loop or function fails
+closed with runtime invariant diagnostic `N4005`.
 
 Runtime record values carry nominal identity and declaration-order field slots;
 runtime enum values carry nominal identity, a declaration-order variant slot,
@@ -272,15 +290,15 @@ and an optional boxed payload. Those representations are executable semantic
 oracles, not stable layouts, allocation promises, serialization formats, or
 backend ABIs. Runtime failures use structured diagnostics. Recursive execution
 is guarded by a finite call-depth limit, and all statement/expression evaluation
-shares a finite step budget so
-nonterminating loops fail closed rather than intentionally hanging the host.
-These choices provide an executable oracle for the current subset; HIR
-interpretation is not the intended final backend ABI.
+shares a finite step budget so nonterminating loops fail closed rather than
+intentionally hanging the host. These choices provide an executable oracle for
+the current subset; HIR interpretation is not the intended final backend ABI.
 
 **Research.** HIR and MIR forms, verification rules, optimization contracts,
 debug information, incremental compilation, monomorphization, backend
-selection, stable entry-point conventions, richer loop-control semantics,
-aggregate lowering/layout, and cross-backend execution conformance remain open.
+selection, stable entry-point conventions, labelled/value-producing loop-control
+semantics, aggregate lowering/layout, and cross-backend execution conformance
+remain open.
 
 ## 12. Diagnostics and tooling contracts
 
@@ -293,9 +311,10 @@ diagnostics must be deterministic for identical input and compiler version.
 byte spans and exposes human and JSON Lines rendering across lexical, syntactic,
 semantic, and runtime diagnostics. Aggregate diagnostics distinguish duplicate,
 unknown, missing, mistyped, payload-arity, nominal-mismatch, and non-exhaustive
-cases while preserving source-qualified labels.
-Diagnostic code meaning is documented by tests but codes are not yet covered by
-the language compatibility promise.
+cases while preserving source-qualified labels. `N3013` identifies a bootstrap
+`break` or `continue` with no enclosing `while` body. Diagnostic code meaning is
+documented by tests but codes are not yet covered by the language compatibility
+promise.
 
 Semantic introspection for editors and AI systems must ultimately expose
 resolved symbols, types, effects, ownership facts, nominal type identities, and
@@ -334,16 +353,20 @@ Every compiler and execution stage must uphold these constraints:
    must be proven on every reachable continuing path before the read.
 10. Pre-test loop analysis must not treat body-only effects as facts that hold
     after a loop which may execute zero times.
-11. Nominal type identity must not silently collapse to structural field shape.
-12. Resolved field slots must preserve source semantics and must not be mistaken
+11. `break` and `continue` target only the nearest enclosing `while` body; a
+    loop's condition is not inside that control-transfer scope.
+12. An unreachable statement may still produce diagnostics but must not change
+    definite-initialization facts observed by reachable continuation paths.
+13. Nominal type identity must not silently collapse to structural field shape.
+14. Resolved field slots must preserve source semantics and must not be mistaken
     for a stabilized memory-layout or ABI guarantee.
-13. An accepted enum match names every variant of exactly one nominal enum once;
+15. An accepted enum match names every variant of exactly one nominal enum once;
     its scrutinee runs once and unselected arms do not run.
-14. Resolved enum variant slots and boxed interpreter payloads are not stabilized
+16. Resolved enum variant slots and boxed interpreter payloads are not stabilized
     layout, allocation, ownership, serialization, or ABI guarantees.
-15. Optimization must preserve specified behavior and later operate on verified
+17. Optimization must preserve specified behavior and later operate on verified
     IR rather than repair invalid earlier output.
-16. Roadmap documents distinguish implemented, provisional, and researched
+18. Roadmap documents distinguish implemented, provisional, and researched
     properties; benchmarks and safety claims require reproducible evidence.
 
 ## 15. Current unresolved research register

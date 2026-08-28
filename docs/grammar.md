@@ -19,8 +19,8 @@ integer         = digit , { [ "_" ] , digit } ;
 ```
 
 Keywords are `fn`, `record`, `enum`, `new`, `let`, `var`, `if`, `else`,
-`match`, `while`, `return`, `true`, and `false`. A keyword cannot be used as an
-identifier.
+`match`, `while`, `break`, `continue`, `return`, `true`, and `false`. A keyword
+cannot be used as an identifier.
 
 Integer separators cannot lead, trail, or repeat. The frontend checks decimal
 conversion and rejects magnitudes above `9223372036854775807`; it never wraps or
@@ -55,6 +55,8 @@ statement           = binding_statement
                     | uninitialized_var_statement
                     | assignment_statement
                     | while_statement
+                    | break_statement
+                    | continue_statement
                     | return_statement
                     | expression_statement ;
 binding_statement   = ("let" | "var") , identifier ,
@@ -62,6 +64,8 @@ binding_statement   = ("let" | "var") , identifier ,
 uninitialized_var_statement = "var" , identifier , ":" , type_name , ";" ;
 assignment_statement = identifier , "=" , expression , ";" ;
 while_statement     = "while" , expression , block ;
+break_statement     = "break" , ";" ;
+continue_statement  = "continue" , ";" ;
 return_statement    = "return" , expression , ";" ;
 expression_statement = expression , ";" ;
 
@@ -102,9 +106,10 @@ enum_pattern        = identifier , "::" , identifier ,
 ```
 
 A block may end in one expression without a semicolon; that expression is its
-tail value. Any earlier expression must end in `;`. Bindings, assignments, and
-returns always end in `;`. A `while` statement ends with its body block and does
-not take a trailing semicolon. Top-level statements are not accepted.
+tail value. Any earlier expression must end in `;`. Bindings, assignments,
+`break`, `continue`, and returns always end in `;`. A `while` statement ends
+with its body block and does not take a trailing semicolon. Top-level statements
+are not accepted.
 
 Records are nominal top-level types. Each field has an explicit type and field
 names must be unique within a record. `new Type { ... }` constructs a record by
@@ -136,7 +141,8 @@ All variants of the scrutinee's nominal enum must appear exactly once; missing,
 duplicate, unknown, or differently qualified variants are errors. Wildcards,
 guards, nested patterns, alternatives, literals, and record destructuring are
 not accepted. Continuing arm values must have one compatible type; arms that
-cannot continue because they return do not constrain that result type.
+cannot continue because they return, break, or continue do not constrain that
+result type.
 
 The scrutinee is evaluated once before arm selection, and only the selected arm
 is evaluated. Definite-assignment state after a valid exhaustive match is the
@@ -160,14 +166,23 @@ A `while` condition must have type `Bool` and is evaluated before every
 iteration. Because the first condition test always occurs but the body may run
 zero times, definite-assignment facts created while evaluating the condition may
 flow after the loop, while facts established only inside the body do not.
-The body block's value, if any, is discarded. `break`, `continue`, and `for` are
-not implemented in this subset.
+The body block's value, if any, is discarded.
+
+`break;` and `continue;` are legal only inside the body of an enclosing `while`.
+The loop condition itself is deliberately outside that control-transfer scope.
+`break;` exits the nearest enclosing `while`; `continue;` abandons the remainder
+of the current iteration and re-evaluates that same loop's condition. Both are
+statement-only, carry no value, and make their current control-flow path
+non-continuing for branch and match definite-assignment merging. Unreachable
+source after either statement is still analyzed for deterministic diagnostics,
+but it cannot manufacture initialization facts on the reachable path. Labelled
+loops, value-carrying breaks, and `for` are not implemented.
 
 An `if` is an expression and therefore always has an `else` branch in this
 subset. `else if` is represented by the recursive `if_expression` production.
 Definite-assignment state is merged across both branches; a branch that cannot
-continue because it returns does not constrain initialization on the surviving
-path.
+continue because it returns, breaks, or continues does not constrain
+initialization on the surviving path.
 
 ## Precedence and associativity
 
@@ -192,6 +207,7 @@ limit, not a promise that deeply nested source will remain portable unchanged.
 
 The implemented grammar has no strings, floating-point literals, arrays,
 wildcard or guarded patterns, multi-payload variants, record destructuring,
-field assignment, `break`, `continue`, `for`, methods, modules, imports,
-generics, traits, effects, async syntax, ownership syntax, unsafe blocks, or
-attributes. Encountering such syntax is an error, not an approximation.
+field assignment, `for`, labelled loops, value-carrying loop control, methods,
+modules, imports, generics, traits, effects, async syntax, ownership syntax,
+unsafe blocks, or attributes. Encountering such syntax is an error, not an
+approximation.
