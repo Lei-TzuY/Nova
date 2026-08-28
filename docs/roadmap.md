@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: fifteen vertical slices implemented; broader type-system work remains.**
+**Status: sixteen vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -273,6 +273,20 @@ Implemented in the fifteenth Phase 2 slice:
   reusable flow rule independent of lexical representation; and
 - truth-table tests plus the existing loop, short-circuit, branch, match, and invalid-
   aggregate adversarial suites lock the refactor to behavior-preserving dataflow.
+
+Implemented in the sixteenth Phase 2 slice:
+
+- record construction now captures reachable state before resolving its nominal
+  target, matching the fail-closed policy already applied to enum constructors;
+- unresolved record names and enum-as-record category errors still lower field
+  expressions in written order for deterministic diagnostics, but continuing
+  assignments and loop-exit facts from the rejected construction are rolled back;
+- a field expression that is already non-continuing keeps `!` precedence, so a
+  reachable `return`, `break`, or `continue` is not hidden by the invalid record head;
+- record-head recovery now returns `Type::Never` for an actually non-continuing child
+  instead of unconditionally collapsing the rejected expression to `Type::Error`; and
+- adversarial tests lock definite-initialization, conditional break-exit, HIR type,
+  and non-continuation behavior for both unknown targets and enum-as-record misuse.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

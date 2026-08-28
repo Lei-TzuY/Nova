@@ -59,6 +59,33 @@ fn structurally_invalid_record_does_not_initialize_outer_binding() {
 }
 
 #[test]
+fn unknown_record_type_does_not_initialize_outer_binding() {
+    let output =
+        analyze_text("fn f() -> Int { var x: Int; new Missing { value: { x = 1; 0 } }; x }");
+    assert_has_codes(&output, &["N3001", "N3009"]);
+    let StatementKind::Expression(expression) =
+        &output.program.functions[0].body.statements[1].kind
+    else {
+        panic!("expected record expression statement");
+    };
+    assert_eq!(expression.ty, Type::Error);
+}
+
+#[test]
+fn enum_used_as_record_does_not_initialize_outer_binding() {
+    let output = analyze_text(
+        "enum Choice { Empty } fn f() -> Int { var x: Int; new Choice { value: { x = 1; 0 } }; x }",
+    );
+    assert_has_codes(&output, &["N3004", "N3009"]);
+    let StatementKind::Expression(expression) =
+        &output.program.functions[0].body.statements[1].kind
+    else {
+        panic!("expected record expression statement");
+    };
+    assert_eq!(expression.ty, Type::Error);
+}
+
+#[test]
 fn invalid_enum_payload_type_does_not_initialize_outer_binding() {
     let output = analyze_text(
         "enum Choice { Value(Bool) } fn f() -> Int { var x: Int; Choice::Value({ x = 1; 0 }); x }",
@@ -94,6 +121,25 @@ fn invalid_aggregate_rollback_discards_conditional_break_exits() {
 }
 
 #[test]
+fn invalid_record_heads_discard_conditional_break_exits() {
+    for (text, expected_code) in [
+        (
+            "fn f(flag: Bool) -> Int { while true { new Missing { value: if flag { break; } else { 0 } }; } }",
+            "N3001",
+        ),
+        (
+            "enum Choice { Empty } fn f(flag: Bool) -> Int { while true { new Choice { value: if flag { break; } else { 0 } }; } }",
+            "N3004",
+        ),
+    ] {
+        let output = analyze_text(text);
+        let actual = codes(&output);
+        assert!(actual.contains(&expected_code), "{text}: {actual:?}");
+        assert!(!actual.contains(&"N3007"), "{text}: {actual:?}");
+    }
+}
+
+#[test]
 fn noncontinuing_valid_aggregate_inputs_keep_their_never_flow() {
     for text in [
         "record Box { value: Bool } fn f() -> Int { new Box { value: { return 1; false } }; }",
@@ -101,6 +147,26 @@ fn noncontinuing_valid_aggregate_inputs_keep_their_never_flow() {
     ] {
         let output = analyze_text(text);
         assert!(output.is_success(), "{text}: {:?}", output.diagnostics);
+        assert!(output.program.functions[0].body.ty.is_never(), "{text}");
+    }
+}
+
+#[test]
+fn noncontinuing_invalid_record_heads_keep_their_never_flow() {
+    for (text, expected_code) in [
+        (
+            "fn f() -> Int { new Missing { value: { return 1; 0 } }; }",
+            "N3001",
+        ),
+        (
+            "enum Choice { Empty } fn f() -> Int { new Choice { value: { return 1; 0 } }; }",
+            "N3004",
+        ),
+    ] {
+        let output = analyze_text(text);
+        let actual = codes(&output);
+        assert!(actual.contains(&expected_code), "{text}: {actual:?}");
+        assert!(!actual.contains(&"N3007"), "{text}: {actual:?}");
         assert!(output.program.functions[0].body.ty.is_never(), "{text}");
     }
 }

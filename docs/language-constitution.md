@@ -164,8 +164,9 @@ initialization facts during diagnostic recovery. This is direct-constructor
 reachability, not propagation of enum values through locals, calls, or general
 constant evaluation.
 
-Continuing record or enum construction that is itself rejected by structural or
-payload/field type validation is fail-closed for flow recovery: assignments and
+Continuing record or enum construction that is itself rejected by type-head,
+structural, or payload/field type validation is fail-closed for flow recovery:
+assignments and
 loop-exit facts produced only while lowering that invalid aggregate cannot establish
 state after the rejected expression. If a child expression is already `!`, its
 reachable non-continuation remains dominant; this rollback rule applies only when
