@@ -168,6 +168,15 @@ struct LocalSymbol {
     span: Span,
 }
 
+type Scope = BTreeMap<String, LocalSymbol>;
+type ScopeState = Vec<Scope>;
+
+#[derive(Clone, Debug)]
+struct LoopContext {
+    visible_scope_count: usize,
+    break_states: Vec<ScopeState>,
+}
+
 struct Analyzer {
     diagnostics: Vec<Diagnostic>,
     record_definitions: Vec<RecordDefinition>,
@@ -175,9 +184,9 @@ struct Analyzer {
     types: BTreeMap<String, TypeSymbol>,
     signatures: Vec<SignatureRecord>,
     functions: BTreeMap<String, FunctionSymbol>,
-    scopes: Vec<BTreeMap<String, LocalSymbol>>,
+    scopes: ScopeState,
     next_binding: usize,
-    loop_depth: usize,
+    loop_stack: Vec<LoopContext>,
 }
 
 impl Analyzer {
@@ -191,7 +200,7 @@ impl Analyzer {
             functions: BTreeMap::new(),
             scopes: Vec::new(),
             next_binding: 0,
-            loop_depth: 0,
+            loop_stack: Vec::new(),
         }
     }
 
@@ -406,7 +415,7 @@ impl Analyzer {
         let signature = self.signatures[id.index()].clone();
         self.scopes.clear();
         self.scopes.push(BTreeMap::new());
-        self.loop_depth = 0;
+        self.loop_stack.clear();
 
         let mut parameters = Vec::with_capacity(function.parameters.len());
         for (parameter, ty) in function.parameters.iter().zip(&signature.parameters) {
@@ -416,7 +425,7 @@ impl Analyzer {
         }
 
         let body = self.lower_block(&function.body, &signature.return_type, false);
-        debug_assert_eq!(self.loop_depth, 0);
+        debug_assert!(self.loop_stack.is_empty());
         if !body.ty.is_never() && function.body.tail.is_none() {
             self.diagnostics.push(
                 Diagnostic::error("N3007", "function can complete without returning a value")
@@ -466,10 +475,12 @@ impl Analyzer {
         let mut statements = Vec::with_capacity(block.statements.len());
         for statement in &block.statements {
             let reachable_scopes = self.scopes.clone();
+            let reachable_loop_stack = self.loop_stack.clone();
             let (statement, diverges) = self.lower_statement(statement, return_type);
             statements.push(statement);
             if terminated {
                 self.scopes = reachable_scopes;
+                self.loop_stack = reachable_loop_stack;
             } else if diverges {
                 terminated = true;
             }
@@ -477,9 +488,11 @@ impl Analyzer {
 
         let tail = block.tail.as_deref().map(|expression| {
             let reachable_scopes = self.scopes.clone();
+            let reachable_loop_stack = self.loop_stack.clone();
             let expression = Box::new(self.lower_expression(expression, return_type));
             if terminated {
                 self.scopes = reachable_scopes;
+                self.loop_stack = reachable_loop_stack;
             }
             expression
         });
@@ -602,15 +615,42 @@ impl Analyzer {
                 );
 
                 let post_condition_scopes = self.scopes.clone();
-                self.loop_depth += 1;
+                let guaranteed_entry = matches!(condition.kind, ExpressionKind::Boolean(true));
+                self.loop_stack.push(LoopContext {
+                    visible_scope_count: self.scopes.len(),
+                    break_states: Vec::new(),
+                });
                 let body = self.lower_block(body, return_type, true);
-                self.loop_depth -= 1;
-                self.scopes = post_condition_scopes;
-                let diverges = condition.ty.is_never();
+                let loop_context = self
+                    .loop_stack
+                    .pop()
+                    .expect("while lowering must own one loop context");
+
+                let diverges = if condition.ty.is_never() {
+                    self.scopes = post_condition_scopes;
+                    true
+                } else if guaranteed_entry {
+                    if loop_context.break_states.is_empty() {
+                        self.scopes = post_condition_scopes;
+                        true
+                    } else {
+                        self.merge_loop_break_initialization(
+                            &post_condition_scopes,
+                            &loop_context.break_states,
+                        );
+                        false
+                    }
+                } else {
+                    self.scopes = post_condition_scopes;
+                    false
+                };
                 (StatementKind::While { condition, body }, diverges)
             }
             ast::StatementKind::Break => {
-                if self.loop_depth == 0 {
+                let legal = !self.loop_stack.is_empty();
+                if legal {
+                    self.record_loop_break_exit();
+                } else {
                     self.diagnostics.push(
                         Diagnostic::error("N3013", "loop control outside loop").with_primary(
                             statement.span,
@@ -618,10 +658,11 @@ impl Analyzer {
                         ),
                     );
                 }
-                (StatementKind::Break, true)
+                (StatementKind::Break, legal)
             }
             ast::StatementKind::Continue => {
-                if self.loop_depth == 0 {
+                let legal = !self.loop_stack.is_empty();
+                if !legal {
                     self.diagnostics.push(
                         Diagnostic::error("N3013", "loop control outside loop").with_primary(
                             statement.span,
@@ -629,7 +670,7 @@ impl Analyzer {
                         ),
                     );
                 }
-                (StatementKind::Continue, true)
+                (StatementKind::Continue, legal)
             }
             ast::StatementKind::Return(expression) => {
                 let expression = self.lower_expression(expression, return_type);
@@ -734,6 +775,7 @@ impl Analyzer {
                 self.require_type(&condition.ty, &Type::Bool, condition.span, "if condition");
 
                 let entry_scopes = self.scopes.clone();
+                let post_condition_loop_stack = self.loop_stack.clone();
                 let then_branch = self.lower_block(then_branch, return_type, true);
                 let then_scopes = self.scopes.clone();
 
@@ -743,6 +785,7 @@ impl Analyzer {
 
                 let ty = if condition.ty.is_never() {
                     self.scopes = entry_scopes;
+                    self.loop_stack = post_condition_loop_stack;
                     Type::Never
                 } else {
                     self.merge_branch_initialization(
@@ -1038,6 +1081,7 @@ impl Analyzer {
         span: Span,
     ) -> (ExpressionKind, Type) {
         let scrutinee = self.lower_expression(scrutinee, return_type);
+        let post_scrutinee_loop_stack = self.loop_stack.clone();
         let mut scrutinee_enum = match &scrutinee.ty {
             Type::Enum(enumeration) => Some(enumeration.clone()),
             Type::Error | Type::Never => None,
@@ -1259,9 +1303,11 @@ impl Analyzer {
         let joined_type = self.join_match_arm_types(&branch_types);
         let ty = if scrutinee.ty.is_never() {
             self.scopes = entry_scopes;
+            self.loop_stack = post_scrutinee_loop_stack;
             Type::Never
         } else if structural_error {
             self.scopes = entry_scopes;
+            self.loop_stack = post_scrutinee_loop_stack;
             Type::Error
         } else {
             self.merge_match_initialization(&entry_scopes, &branch_states);
@@ -1375,12 +1421,53 @@ impl Analyzer {
         }
     }
 
+    fn record_loop_break_exit(&mut self) {
+        let visible_scope_count = self
+            .loop_stack
+            .last()
+            .expect("a legal break must have an active loop context")
+            .visible_scope_count;
+        let state = self
+            .scopes
+            .iter()
+            .take(visible_scope_count)
+            .cloned()
+            .collect();
+        self.loop_stack
+            .last_mut()
+            .expect("a legal break must have an active loop context")
+            .break_states
+            .push(state);
+    }
+
+    fn merge_loop_break_initialization(
+        &mut self,
+        entry_scopes: &[Scope],
+        break_states: &[ScopeState],
+    ) {
+        debug_assert!(!break_states.is_empty());
+        self.scopes = entry_scopes.to_vec();
+        for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
+            for name in entry_scope.keys() {
+                let initialized = break_states.iter().all(|break_scopes| {
+                    break_scopes
+                        .get(scope_index)
+                        .and_then(|scope| scope.get(name))
+                        .is_some_and(|symbol| symbol.initialized)
+                });
+                if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
+                    symbol.initialized = initialized;
+                }
+            }
+        }
+    }
+
     fn merge_branch_initialization(
         &mut self,
-        entry_scopes: &[BTreeMap<String, LocalSymbol>],
-        then_scopes: &[BTreeMap<String, LocalSymbol>],
+        entry_scopes: &[Scope],
+        then_scopes: &[Scope],
         then_never: bool,
-        else_scopes: &[BTreeMap<String, LocalSymbol>],
+        else_scopes: &[Scope],
         else_never: bool,
     ) {
         self.scopes = entry_scopes.to_vec();
@@ -1409,8 +1496,8 @@ impl Analyzer {
 
     fn merge_match_initialization(
         &mut self,
-        entry_scopes: &[BTreeMap<String, LocalSymbol>],
-        branches: &[(Vec<BTreeMap<String, LocalSymbol>>, bool)],
+        entry_scopes: &[Scope],
+        branches: &[(ScopeState, bool)],
     ) {
         self.scopes = entry_scopes.to_vec();
         let continuing = branches
@@ -2020,6 +2107,41 @@ mod tests {
         let output =
             analyze_text("fn f() -> Int { var value: Int; while { value = 1; false } {} value }");
         assert!(output.is_success(), "{:?}", output.diagnostics);
+    }
+
+    #[test]
+    fn guaranteed_true_loop_merges_reachable_break_exit_states() {
+        let output = analyze_text(
+            "fn f() -> Int { var value: Int; while true { value = 42; break; } value }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+    }
+
+    #[test]
+    fn guaranteed_true_loop_requires_initialization_on_every_break_exit() {
+        let output = analyze_text(
+            "fn f(flag: Bool) -> Int {\n\
+                 var value: Int;\n\
+                 while true {\n\
+                     if flag { value = 1; break; } else { break; }\n\
+                 }\n\
+                 value\n\
+             }",
+        );
+        assert_eq!(codes(&output), vec!["N3009"]);
+    }
+
+    #[test]
+    fn guaranteed_true_loop_without_reachable_break_is_noncontinuing() {
+        for text in [
+            "fn f() -> Int { while true {} }",
+            "fn f() -> Int { while true { continue; break; } }",
+            "fn f() -> Int { while true { while true { break; } } }",
+        ] {
+            let output = analyze_text(text);
+            assert!(output.is_success(), "{text}: {:?}", output.diagnostics);
+            assert!(output.program.functions[0].body.ty.is_never(), "{text}");
+        }
     }
 
     #[test]
