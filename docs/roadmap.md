@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirteen vertical slices implemented; broader type-system work remains.**
+**Status: fourteen vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -244,6 +244,21 @@ Implemented in the thirteenth Phase 2 slice:
   reachable return/break/continue precedence over continuing recovery rollback; and
 - adversarial tests lock both definite-initialization rollback and non-continuing
   aggregate inputs across records and enums.
+
+Implemented in the fourteenth Phase 2 slice:
+
+- recovery-aware expected-type compatibility is centralized in an internal pure
+  `type_rules` contract instead of being duplicated inside analyzer helpers;
+- strict binary result typing explicitly records that reachable non-continuation
+  (`!`) dominates recovery errors while ordinary successful operands produce the
+  operator's declared result type;
+- `if` and exhaustive `match` now share one `TypeJoin` state machine in which `!` is
+  bottom, `<error>` is recovery-neutral when a concrete alternative exists, and the
+  first concrete continuing type remains the diagnostic anchor;
+- analyzer-owned source spans and N3004 wording remain unchanged while pure type
+  decisions are separated from diagnostic rendering; and
+- truth-table tests lock primitive, `Unit`, nominal, `!`, `<error>`, compatible, and
+  mismatched joins so later type-system work has an executable semantic contract.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
