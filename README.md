@@ -106,7 +106,7 @@ cannot be chained or embedded in another expression.
 
 A mutable local may also be declared as `var name: Type;` and initialized by a
 later assignment. The explicit type is required. Reading such a binding before
-it is definitely initialized is diagnostic `N3009`. For `if` expressions,
+it is definitely initialized is diagnostic `N3009`. For `if` expressions with a non-literal condition,
 analysis evaluates the branch states independently and keeps a binding
 initialized afterward only when every branch that can continue has initialized
 it. The same intersection rule applies across all arms of a valid exhaustive
@@ -128,6 +128,13 @@ and every continuing RHS path. An RHS that returns, breaks, or continues therefo
 does not make the whole Boolean expression non-continuing when the left operand
 can bypass it, although a reachable RHS `break` still remains a possible exit
 from its enclosing loop.
+
+A direct `if true` or `if false` refines control-flow reachability without
+turning the checker into a general constant folder. Only the selected branch may
+contribute definite-initialization, non-continuation, or loop-exit facts; the
+unselected branch is still lowered for deterministic static diagnostics and still
+participates in branch type compatibility. Block-valued or computed Boolean
+conditions keep the ordinary conservative two-branch merge.
 
 `while condition { body }` is a pre-test statement. The condition must be
 `Bool`. For an ordinary condition, the body may execute zero times, so

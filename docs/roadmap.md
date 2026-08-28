@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: eight vertical slices implemented; broader type-system work remains.**
+**Status: nine vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -168,6 +168,22 @@ Implemented in the eighth Phase 2 slice:
   exits from the enclosing loop; and
 - analyzer adversarial tests plus CLI check/run fixtures lock literal, dynamic,
   initialization, return, and loop-exit behavior against runtime semantics.
+
+Implemented in the ninth Phase 2 slice:
+
+- direct Boolean-literal `if` conditions refine branch reachability without
+  introducing general constant folding;
+- only the selected literal branch contributes definite-initialization,
+  non-continuation, and loop-exit facts to reachable continuation state;
+- the unselected branch remains fully lowered for deterministic name/type
+  diagnostics and branch type compatibility while its flow mutations are
+  discarded;
+- non-literal conditions preserve the existing conservative merge across every
+  continuing branch;
+- literal-selected `return`, `break`, and `continue` now agree with interpreter
+  execution when classifying `!` expressions and guaranteed-loop exits; and
+- analyzer adversarial tests plus CLI check/run fixtures lock selected/dead
+  initialization and loop-control behavior end to end.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
