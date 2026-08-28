@@ -1,0 +1,13 @@
+enum Result {
+    Empty,
+    Value(Int),
+}
+
+fn main() -> Int {
+    var value: Int;
+    match Result::Value(40) {
+        Result::Empty => { value = 1; 0 },
+        Result::Value(payload) => { value = payload + 2; 0 },
+    };
+    value
+}
