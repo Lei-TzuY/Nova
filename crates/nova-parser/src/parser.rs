@@ -573,6 +573,12 @@ impl<'source> Parser<'source> {
             }
             TokenKind::LeftParen => {
                 let opening = self.bump();
+                if let Some(closing) = self.consume(TokenKind::RightParen) {
+                    return Some(Expression {
+                        kind: ExpressionKind::Unit,
+                        span: self.cover(opening.span, closing.span),
+                    });
+                }
                 let mut expression = self.parse_expression_with_binding_power(0)?;
                 let closing = self.expect(TokenKind::RightParen, "to close the expression")?;
                 expression.span = self.cover(opening.span, closing.span);
@@ -1148,6 +1154,22 @@ fn f() -> Int {
             "later declaration was lost: {:?}",
             parsed.program
         );
+    }
+
+    #[test]
+    fn parses_surface_unit_type_and_literal() {
+        let (_, parsed) = parse_text("fn noop() -> Unit { () } fn empty() -> Unit {}");
+        assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
+        assert_eq!(parsed.program.functions[0].return_type.name.text, "Unit");
+        assert!(matches!(
+            parsed.program.functions[0]
+                .body
+                .tail
+                .as_deref()
+                .map(|expression| &expression.kind),
+            Some(ExpressionKind::Unit)
+        ));
+        assert!(parsed.program.functions[1].body.tail.is_none());
     }
 
     #[test]

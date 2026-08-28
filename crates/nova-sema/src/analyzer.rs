@@ -257,7 +257,7 @@ impl Analyzer {
         declarations.sort_by_key(|(start, _, _)| *start);
 
         for (_, name, definition) in declarations {
-            if matches!(name.text.as_str(), "Int" | "Bool") {
+            if matches!(name.text.as_str(), "Int" | "Bool" | "Unit") {
                 self.diagnostics.push(
                     Diagnostic::error("N3002", "duplicate type definition").with_primary(
                         name.span,
@@ -386,6 +386,7 @@ impl Analyzer {
         match reference.name.text.as_str() {
             "Int" => Type::Int,
             "Bool" => Type::Bool,
+            "Unit" => Type::Unit,
             unknown => {
                 if let Some(symbol) = self.types.get(unknown).copied() {
                     return match symbol.definition {
@@ -403,7 +404,7 @@ impl Analyzer {
                     Diagnostic::error("N3001", "unknown type")
                         .with_primary(reference.span, format!("unknown type `{unknown}`"))
                         .with_note(
-                            "the bootstrap semantic core recognizes Int, Bool, and declared record or enum names",
+                            "the bootstrap semantic core recognizes Int, Bool, Unit, and declared record or enum names",
                         ),
                 );
                 Type::Error
@@ -426,7 +427,10 @@ impl Analyzer {
 
         let body = self.lower_block(&function.body, &signature.return_type, false);
         debug_assert!(self.loop_stack.is_empty());
-        if !body.ty.is_never() && function.body.tail.is_none() {
+        if !body.ty.is_never()
+            && function.body.tail.is_none()
+            && signature.return_type != Type::Unit
+        {
             self.diagnostics.push(
                 Diagnostic::error("N3007", "function can complete without returning a value")
                     .with_primary(
@@ -706,6 +710,7 @@ impl Analyzer {
         let (kind, ty) = match &expression.kind {
             ast::ExpressionKind::Integer(value) => (ExpressionKind::Integer(*value), Type::Int),
             ast::ExpressionKind::Boolean(value) => (ExpressionKind::Boolean(*value), Type::Bool),
+            ast::ExpressionKind::Unit => (ExpressionKind::Unit, Type::Unit),
             ast::ExpressionKind::Name(name) => self.lower_name(name),
             ast::ExpressionKind::RecordLiteral { name, fields } => {
                 self.lower_record_literal(name, fields, return_type, expression.span)
@@ -2101,6 +2106,31 @@ mod tests {
             .iter()
             .map(|diagnostic| diagnostic.code.as_str())
             .collect()
+    }
+
+    #[test]
+    fn supports_surface_unit_literals_types_and_fallthrough() {
+        let output = analyze_text(
+            "fn empty() -> Unit {} fn explicit() -> Unit { () } fn returned() -> Unit { return (); }",
+        );
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        assert_eq!(output.program.functions[0].return_type, Type::Unit);
+        assert_eq!(output.program.functions[0].body.ty, Type::Unit);
+        let tail = output.program.functions[1]
+            .body
+            .tail
+            .as_deref()
+            .expect("unit tail");
+        assert!(matches!(tail.kind, ExpressionKind::Unit));
+        assert_eq!(tail.ty, Type::Unit);
+    }
+
+    #[test]
+    fn rejects_non_unit_values_and_reserved_unit_redefinition() {
+        let output = analyze_text(
+            "record Unit { value: Int } fn bad_tail() -> Unit { 1 } fn bad_return() -> Unit { return 1; }",
+        );
+        assert_eq!(codes(&output), vec!["N3002", "N3004", "N3004"]);
     }
 
     #[test]

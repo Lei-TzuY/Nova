@@ -219,6 +219,8 @@ pub enum ExpressionKind {
     Integer(i64),
     /// Boolean value.
     Boolean(bool),
+    /// Unit value written as `()`.
+    Unit,
     /// Unresolved name reference.
     Name(Name),
     /// Nominal record construction with named fields.
