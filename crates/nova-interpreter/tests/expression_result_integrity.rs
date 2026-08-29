@@ -42,7 +42,7 @@ fn rejects_discarded_primitive_value_with_drifted_hir_type() {
     let StatementKind::Expression(expression) = &mut main.body.statements[0].kind else {
         panic!("expected expression statement");
     };
-    assert!(matches!(expression.kind, ExpressionKind::Integer(42)));
+    assert!(matches!(&expression.kind, ExpressionKind::Integer(42)));
     expression.ty = Type::Bool;
 
     let error = execute(&analyzed.program).expect_err("discarded expression drift must fail");
@@ -64,7 +64,7 @@ fn rejects_composed_field_result_with_drifted_hir_type() {
         panic!("expected field expression statement");
     };
     assert!(matches!(
-        expression.kind,
+        &expression.kind,
         ExpressionKind::FieldAccess { .. }
     ));
     expression.ty = Type::Bool;
