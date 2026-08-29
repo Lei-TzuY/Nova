@@ -4,6 +4,8 @@ mod analyzer;
 mod constant_condition;
 mod constant_int;
 pub mod control_flow;
+#[cfg(test)]
+mod control_flow_backedge_tests;
 mod type_rules;
 
 pub mod hir;
