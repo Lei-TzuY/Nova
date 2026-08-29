@@ -3,6 +3,7 @@ use crate::control_flow::{
     ControlFlowProgram, FlowEdgeKind, FlowNodeId, FlowNodeKind, FlowTransfer, FunctionControlFlow,
     FunctionFlowBuilder, definite_initialization_diagnostics, unreachable_code_diagnostics,
 };
+use crate::equality_rules::is_equality_comparable as type_is_equality_comparable;
 use crate::hir::{
     self, BindingId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType, MatchArm,
     RecordFieldValue, RecordId, RecordType, StatementKind, Type,
@@ -2302,20 +2303,17 @@ impl Analyzer {
     }
 
     fn is_equality_comparable(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Int | Type::Bool | Type::Unit | Type::Function(_) => true,
-            Type::Enum(enumeration) => self
-                .enum_definitions
-                .get(enumeration.id.index())
+        type_is_equality_comparable(ty, |enum_id| {
+            self.enum_definitions
+                .get(enum_id.index())
                 .is_some_and(|definition| {
-                    definition.id == enumeration.id
+                    definition.id == enum_id
                         && definition
                             .variants
                             .iter()
                             .all(|variant| variant.payload.is_none())
-                }),
-            _ => false,
-        }
+                })
+        })
     }
 
     fn check_call(

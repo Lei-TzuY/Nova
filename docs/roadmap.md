@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty vertical slices implemented; broader type-system work remains.**
+**Status: forty-one vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -681,6 +681,21 @@ Implemented in the fortieth Phase 2 slice:
 - semantic regressions lock same-signature acceptance, cross-signature rejection,
   direct-reference flow refinement, and alias conservatism.
 
+Implemented in the forty-first Phase 2 slice:
+
+- bootstrap equality type admissibility is factored into a small public semantic rule
+  over resolved HIR types instead of leaving primitive/function/enum classification
+  embedded only in analyzer implementation code;
+- the shared rule keeps exact-type matching explicit and delegates payload-free enum
+  eligibility to declaration context, so consumers cannot infer comparability from one
+  runtime variant shape alone;
+- semantic analysis continues to own source diagnostics and enum declaration lookup,
+  preserving accepted/rejected source behavior while making the equality contract
+  reusable at later trusted boundaries; and
+- focused truth-table tests lock primitive, Unit, function, record, Never/Error, nominal
+  enum, and cross-signature behavior without changing syntax, HIR, CFG, or inspection
+  schema shape.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -699,7 +714,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: fifteen vertical slices implemented; execution surface remains small.**
+**Status: sixteen vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -918,6 +933,21 @@ Implemented in the fifteenth Phase 3 slice:
   introduced; and
 - interpreter malformed-HIR tests plus a CLI check/run fixture lock dynamic alias
   equality, inequality, and signature-drift rejection end to end.
+
+Implemented in the sixteenth Phase 3 slice:
+
+- equality execution now validates the resolved HIR operand types against the shared
+  semantic equality-admissibility rule before evaluating either operand;
+- enum equality rechecks declaration-wide payload freedom from the runtime program table,
+  closing a malformed-HIR gap where a currently payload-free variant of a payload-bearing
+  enum could previously reach the variant-slot comparison path;
+- ordinary expression result conformance still validates each produced value, while the
+  new operator precondition protects a distinct invariant: whether those types are legal
+  operands for equality at all;
+- function equality retains its independent declaration/signature validation as
+  defense-in-depth after the shared type gate; and
+- malformed payload-bearing-enum regression coverage plus a valid payload-free enum
+  control prove the boundary fails closed with `N4005` without changing valid execution.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
