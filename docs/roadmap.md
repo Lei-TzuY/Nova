@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty-two vertical slices implemented; broader type-system work remains.**
+**Status: thirty-three vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -562,6 +562,20 @@ Implemented in the thirty-second Phase 2 slice:
   post-exit diagnostic successors; and
 - existing function completion, divergent-function, CFG isolation, and full workspace
   tests remain green without changing syntax, HIR, runtime semantics, or inspection v1.
+
+Implemented in the thirty-third Phase 2 slice:
+
+- verified CFG binding metadata now has a canonical identity-order invariant rather than
+  relying only on the builder's current `BTreeMap` implementation;
+- binding identities must be strictly increasing, simultaneously rejecting duplicate and
+  out-of-order metadata without assuming function-local identities are contiguous;
+- this closes a corruption path where `definite_initialization_diagnostics` could collect
+  duplicate identities into a `BTreeMap` and silently select the wrong declaration name or
+  span for N3009;
+- direct verifier corruption regressions prove both duplicate and out-of-order tables were
+  previously accepted and are now rejected; and
+- the change affects no syntax, HIR, runtime behavior, dataflow transfer function, or
+  semantic-inspection schema.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

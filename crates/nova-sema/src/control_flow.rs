@@ -504,6 +504,14 @@ fn verify(graph: &FunctionControlFlow, fallback_span: Span) -> Result<(), FlowEr
         }
     }
 
+    for bindings in graph.bindings.windows(2) {
+        if bindings[0].id >= bindings[1].id {
+            return Err(FlowError::invalid(
+                bindings[1].span,
+                "flow binding metadata is not in strict semantic identity order",
+            ));
+        }
+    }
     let known_bindings = graph
         .bindings
         .iter()
@@ -780,6 +788,29 @@ mod tests {
         let error = super::verify(&graph, span(0, 20))
             .expect_err("a function Exit must be terminal even for diagnostic source");
         assert!(error.message().contains("successor"));
+    }
+
+    #[test]
+    fn verifier_rejects_duplicate_and_out_of_order_binding_metadata() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        let first = binding(0, "first", 1);
+        let second = binding(1, "second", 7);
+        builder.register_binding(&first);
+        builder.register_binding(&second);
+        let exit = builder.cursor();
+        let graph = builder.finish(Some(exit)).expect("valid seed graph");
+
+        let mut duplicate = graph.clone();
+        duplicate.bindings.push(duplicate.bindings[1].clone());
+        let error = super::verify(&duplicate, span(0, 20))
+            .expect_err("duplicate binding identities must be rejected");
+        assert!(error.message().contains("binding metadata"));
+
+        let mut out_of_order = graph;
+        out_of_order.bindings.swap(0, 1);
+        let error = super::verify(&out_of_order, span(0, 20))
+            .expect_err("binding metadata must remain in semantic identity order");
+        assert!(error.message().contains("binding metadata"));
     }
 
     #[test]
