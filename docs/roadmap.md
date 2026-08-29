@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty-six vertical slices implemented; broader type-system work remains.**
+**Status: thirty-seven vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -620,6 +620,22 @@ Implemented in the thirty-sixth Phase 2 slice:
 - the change affects no syntax, HIR shape, analyzer reachability policy, runtime
   behavior, dataflow transfer function, or semantic-inspection schema.
 
+Implemented in the thirty-seventh Phase 2 slice:
+
+- nominal enums whose every declared variant is payload-free join `Int`, `Bool`, and
+  `Unit` as equality-comparable bootstrap value types;
+- `==` and `!=` require the exact same enum identity on both operands and compare the
+  resolved variant slot rather than variant spelling or declaration shape;
+- if any variant carries a payload, the entire enum remains non-comparable in this
+  slice, deliberately avoiding recursive payload/aggregate equality semantics;
+- closed-condition reasoning may prove equality and inequality for direct payload-free
+  enum constructors, extending flow precision without propagating locals or executing
+  enum-returning calls;
+- differently declared enums, records, functions, and all payload-bearing enums remain
+  rejected with the existing type-mismatch diagnostic; and
+- semantic and CLI regressions lock nominal identity, payload boundaries, direct-
+  constructor reachability, dynamic-call conservatism, and retained HIR shape.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -638,7 +654,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: eight vertical slices implemented; execution surface remains small.**
+**Status: nine vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -754,6 +770,22 @@ Implemented in the eighth Phase 3 slice:
   acquiring structural or identity equality accidentally; and
 - a CLI check/run fixture locks Unit equality end to end while preserving the existing
   `main -> Int | Bool` entry-point contract.
+
+Implemented in the ninth Phase 3 slice:
+
+- the interpreter executes equality and inequality for semantically accepted
+  payload-free enum values after ordinary left-to-right operand evaluation;
+- runtime comparison requires the same nominal `EnumId` and compares declaration-order
+  variant slots, so same-spelled variants from distinct enum declarations cannot acquire
+  accidental structural equality;
+- payload-bearing enum values remain outside the semantic operator contract rather than
+  triggering recursive runtime comparison;
+- direct enum-constructor equality used by semantic reachability and runtime execution
+  agrees on variant identity, while enum-returning calls remain dynamically evaluated;
+- CLI check/run coverage locks parameter, direct-constructor, equality, and inequality
+  behavior end to end; and
+- the interpreter's boxed payload representation, enum layout, ownership, and ABI remain
+  explicitly provisional and unaffected by this equality slice.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

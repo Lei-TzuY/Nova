@@ -72,6 +72,21 @@ is evaluated. Written arm order does not change selection because duplicate
 variants are rejected, but HIR preserves source order for deterministic tooling
 and diagnostics.
 
+## Equality
+
+A nominal enum is equality-comparable in the bootstrap subset only when every
+declared variant is payload-free. For such an enum, `==` and `!=` require both
+operands to have that exact nominal enum type and compare the resolved variant
+slot after ordinary left-to-right operand evaluation. Same-spelled variants from
+different enum declarations are never comparable.
+
+If any variant carries a payload, the entire enum type remains non-comparable in
+this slice; Nova does not recursively derive payload or aggregate equality yet.
+Direct payload-free constructors may participate in the existing closed-condition
+proof (`Color::Red == Color::Red`, for example), but locals, parameters, calls,
+and blocks remain dynamic values even when their runtime result is predictable to
+a human.
+
 ## Definite assignment
 
 Each arm starts from the post-scrutinee initialization state. For a valid,
@@ -137,6 +152,7 @@ compatibility promise.
 
 This slice has no wildcard, default arm, guard, literal pattern, nested pattern,
 alternative pattern, multi-payload variant, named variant fields, record
-destructuring, exhaustiveness usefulness warning, or stable enum layout. It also
-does not add enum equality. Those features require separate semantic and
-diagnostic designs rather than syntactic shortcuts.
+destructuring, exhaustiveness usefulness warning, or stable enum layout. Enums
+with payload variants and records do not yet receive recursively derived value
+equality. Those features require separate semantic and diagnostic designs rather
+than syntactic shortcuts.

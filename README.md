@@ -106,9 +106,12 @@ conditional right-hand evaluation rules.
 
 Matching `Int`, `Bool`, and `Unit` values support `==` and `!=`. `Unit` has a
 single runtime value, so Unit equality is always true and Unit inequality is always false
-once both operands have evaluated normally. Record, enum, and function values remain
-non-comparable. Closed-condition analysis recognizes only literal `()` equality; Unit
-locals and calls remain dynamic and are still evaluated at runtime.
+once both operands have evaluated normally. A nominal enum also supports equality when
+every declared variant is payload-free; operands must have the same enum identity and
+comparison uses the resolved variant slot. Enums with any payload variant, records, and
+functions remain non-comparable. Closed-condition analysis can prove literal Unit and
+direct payload-free enum-constructor comparisons, while locals and calls remain dynamic
+and are still evaluated at runtime.
 
 Invalid continuing control conditions are fail-closed too. A non-Bool or erroneous
 `if` condition makes the expression Error-typed and discards condition/branch flow
@@ -138,8 +141,8 @@ carry zero or one payload in this slice. Construction is explicitly qualified as
 `Name::Empty` or `Name::Value(expression)`. A `match` scrutinee must have an enum
 type, every pattern must name a variant of that same nominal enum, and every
 variant must occur exactly once. Payload bindings are immutable and scoped to
-one arm. Wildcards, guards, nested patterns, multi-payload variants, enum
-equality, layout, and ABI guarantees are not implemented.
+one arm. Wildcards, guards, nested patterns, multi-payload variants, equality for
+payload-bearing enums, layout, and ABI guarantees are not implemented.
 
 `let` bindings and function parameters are immutable. `var` bindings may be
 assigned with the narrow statement form `name = expression;`. The target must
@@ -214,8 +217,9 @@ surface types today. `()` is the sole Unit literal, and a block with no tail als
 produces Unit. A function declared `-> Unit` may fall through such a body or use
 the explicit `return ();` form; non-Unit functions still need a compatible tail or
 an explicit return on every continuing path. Arithmetic and ordered comparisons
-require `Int`; boolean operators require `Bool`; equality currently accepts only
-matching `Int` or matching `Bool`; calls require matching arity and argument types.
+require `Int`; boolean operators require `Bool`; equality accepts matching `Int`, `Bool`,
+`Unit`, or the same nominal payload-free enum type; calls require matching arity and
+argument types.
 `if` conditions require `Bool`, and continuing branches or match arms must remain
 type-compatible. The internal `!` bottom type still has no surface spelling.
 
