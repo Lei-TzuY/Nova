@@ -771,6 +771,8 @@ impl<'program> Interpreter<'program> {
         frame: &mut Frame,
     ) -> Result<Flow, Diagnostic> {
         if matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
+            && !left.ty.is_never()
+            && !right.ty.is_never()
             && !self.equality_types_match(&left.ty, &right.ty)
         {
             return Err(self.invariant(

@@ -82,6 +82,7 @@ fn noncontinuing_equality_operand_still_propagates_structured_return() {
              (if true { return true; } else { false }) == false\n\
          }",
     );
-    let value = execute(&analyzed.program).expect("return inside equality operand should propagate");
+    let value =
+        execute(&analyzed.program).expect("return inside equality operand should propagate");
     assert_eq!(value, Value::Bool(true));
 }

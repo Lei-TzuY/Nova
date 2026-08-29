@@ -283,12 +283,13 @@ interpreter postcondition: the value must recursively conform to that expression
 typed-HIR result type. This closes gaps for local or discarded literals, projections,
 operators, blocks, conditionals, matches, and other values that may never cross a
 function, aggregate, or frame-storage boundary. Equality adds an operator-level
-precondition as well: the two resolved operand types must satisfy the same shared
-semantic comparability rule, including the declaration-wide payload-free requirement
-for enums. Malformed HIR therefore cannot compare a payload-free variant of an enum
-whose other variants carry payloads. Structured `return`, `break`, and `continue`
-propagation is not a runtime value and therefore remains outside the value postcondition.
-Any such interpreter/HIR contract drift fails closed with `N4005`.
+precondition on ordinary value-producing paths as well: when both operands can complete
+normally, their resolved types must satisfy the same shared semantic comparability rule,
+including the declaration-wide payload-free requirement for enums. Malformed HIR therefore
+cannot compare a payload-free variant of an enum whose other variants carry payloads.
+A `Never` operand still evaluates normally for structured `return`, `break`, or `continue`
+propagation and never reaches the comparison itself. Any interpreter/HIR contract drift
+on a value-producing equality path fails closed with `N4005`.
 
 For deterministic execution while the numeric design remains provisional, the
 bootstrap frontend now covers the complete signed 64-bit literal endpoints: positive

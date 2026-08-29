@@ -936,14 +936,15 @@ Implemented in the fifteenth Phase 3 slice:
 
 Implemented in the sixteenth Phase 3 slice:
 
-- equality execution now validates the resolved HIR operand types against the shared
-  semantic equality-admissibility rule before evaluating either operand;
+- equality execution validates resolved HIR operand types against the shared semantic
+  equality-admissibility rule whenever both operands can complete with ordinary values;
 - enum equality rechecks declaration-wide payload freedom from the runtime program table,
   closing a malformed-HIR gap where a currently payload-free variant of a payload-bearing
   enum could previously reach the variant-slot comparison path;
 - ordinary expression result conformance still validates each produced value, while the
   new operator precondition protects a distinct invariant: whether those types are legal
-  operands for equality at all;
+  operands for equality at all; `Never` operands deliberately bypass that value-only gate
+  so structured return/break/continue propagation remains unchanged;
 - function equality retains its independent declaration/signature validation as
   defense-in-depth after the shared type gate; and
 - malformed payload-bearing-enum regression coverage plus a valid payload-free enum
