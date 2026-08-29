@@ -2,8 +2,7 @@ name: Validate invalid while continue flow
 
 on:
   push:
-    branches:
-      - fix/invalid-while-continue-backedge
+    branches: [fix/invalid-while-continue-backedge]
 
 permissions:
   contents: write
@@ -16,63 +15,43 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+
       - name: Compile regression target
-        run: cargo test -p nova-sema --test invalid_while_continue_flow --no-run --locked
+        run: cargo test -p nova-sema --test invalid_while_continue_flow --locked --no-run
+
       - name: Confirm recovery backedge regression is red
         shell: bash
         run: |
-          set +e
-          cargo test -p nova-sema --test invalid_while_continue_flow --locked > /tmp/red.log 2>&1
-          status=$?
-          set -e
-          cat /tmp/red.log
-          if [ "$status" -eq 0 ]; then
-            echo "expected invalid-while continue regression to fail before the fix"
+          set -euo pipefail
+          if cargo test -p nova-sema --test invalid_while_continue_flow --locked; then
+            echo "expected invalid-while continue regression to fail before the fix" >&2
             exit 1
           fi
-      - name: Apply narrow recovery-backedge fix
+
+      - name: Apply recovery-backedge fix
+        run: python scripts/apply-invalid-while-continue-flow.py
+
+      - name: Validate behavior
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/nova-sema/src/analyzer.rs")
-          text = path.read_text()
-          old = '''                for continue_cursor in &loop_context.continue_cursors {
-                    self.flow
-                        .as_mut()
-                        .expect("semantic lowering must own a function flow graph")
-                        .add_backedge(*continue_cursor, loop_context.header);
-                }
-'''
-          new = '''                if condition.ty == Type::Bool && !guaranteed_skip {
-                    for continue_cursor in &loop_context.continue_cursors {
-                        self.flow
-                            .as_mut()
-                            .expect("semantic lowering must own a function flow graph")
-                            .add_backedge(*continue_cursor, loop_context.header);
-                    }
-                }
-'''
-          if text.count(old) != 1:
-              raise SystemExit("expected exactly one continue-backedge loop")
-          path.write_text(text.replace(old, new))
-          PY
-      - name: Format
-        run: cargo fmt --all
-      - name: Validate behavior
-        run: |
+          set -euo pipefail
+          cargo fmt --all
           cargo test -p nova-sema --test invalid_while_continue_flow --locked
           cargo test --workspace --all-targets --locked
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           cargo build --workspace --all-targets --locked
-          RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
-      - name: Commit implementation and remove helper
+          RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
+
+      - name: Commit implementation and remove helpers
         shell: bash
         run: |
+          set -euo pipefail
           rm .github/workflows/invalid-while-continue-flow.yml
-          git config user.name "LeiZ"
-          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
-          git add crates/nova-sema/src/analyzer.rs .github/workflows/invalid-while-continue-flow.yml
-          git commit -m "fix: isolate invalid while continue recovery flow"
-          git push
+          rm scripts/apply-invalid-while-continue-flow.py
+          git config user.name 'LeiZ'
+          git config user.email '52287354+Lei-TzuY@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: isolate invalid while continue recovery flow'
+          git push origin HEAD:fix/invalid-while-continue-backedge
