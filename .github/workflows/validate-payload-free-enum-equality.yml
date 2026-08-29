@@ -1,0 +1,37 @@
+name: Validate payload-free enum equality
+
+on:
+  push:
+    branches: [feat/payload-free-enum-equality]
+
+jobs:
+  red-green:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Compile semantic regressions
+        run: cargo test -p nova-sema --test payload_free_enum_equality --locked --no-run
+      - name: Confirm enum equality regressions are red
+        shell: bash
+        run: |
+          set -euo pipefail
+          if cargo test -p nova-sema --test payload_free_enum_equality --locked; then
+            echo "expected payload-free enum equality regressions to fail before the feature" >&2
+            exit 1
+          fi
+      - name: Apply feature in validation workspace
+        run: python scripts/apply-payload-free-enum-equality.py
+      - name: Validate semantics and runtime crates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo test -p nova-sema --test payload_free_enum_equality --locked
+          cargo test -p nova-interpreter --all-targets --locked
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo build --workspace --all-targets --locked
+          RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
