@@ -451,6 +451,14 @@ cases while preserving source-qualified labels. `N3013` identifies a bootstrap
 documented by tests but codes are not yet covered by the language compatibility
 promise.
 
+Errors reject the requested operation; warnings describe accepted programs.
+`N3033` is the first non-fatal warning and is derived after CFG verification from
+diagnostic-only source immediately following an executable `return`, `break`, or
+`continue`. Warnings are emitted on standard error while `check`, `run`, and
+`inspect` retain status `0` and their ordinary successful outputs. Existing
+errors suppress this warning pass. Warning controls, lint groups, and
+warnings-as-errors policy remain unresolved rather than being approximated.
+
 The bootstrap exposes semantic-inspection schema v1 for successfully checked
 single-file programs. It projects resolved declarations, bindings, types,
 nominal identities, typed blocks/statements/expressions, spans, and exhaustive

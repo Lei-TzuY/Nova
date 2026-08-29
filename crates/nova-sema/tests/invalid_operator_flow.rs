@@ -138,6 +138,7 @@ fn forced_short_circuit_rhs_noncontinuation_keeps_never() {
 #[test]
 fn optional_short_circuit_rhs_noncontinuation_does_not_force_divergence() {
     let output = analyze_text("fn f(flag: Bool) -> Bool { flag && { return true; false } }");
-    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(output.is_success(), "{:?}", output.diagnostics);
+    assert_eq!(codes(&output), vec!["N3033"]);
     assert_eq!(function(&output, "f").body.ty, Type::Bool);
 }

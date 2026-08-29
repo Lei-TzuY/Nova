@@ -1,0 +1,5 @@
+fn main() -> Int {
+    return 42;
+    0;
+    1
+}

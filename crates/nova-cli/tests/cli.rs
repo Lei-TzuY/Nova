@@ -43,6 +43,7 @@ fn accepts_positive_fixtures() {
         "valid/unit-equality.nv",
         "valid/unit-main.nv",
         "valid/inspection-v2.nv",
+        "valid/unreachable-warning.nv",
         "valid/payload-free-enum-equality.nv",
         "valid/records.nv",
         "valid/enums-match.nv",
@@ -62,24 +63,28 @@ fn accepts_positive_fixtures() {
 
 #[test]
 fn run_command_executes_checked_program() {
-    for (relative, expected) in [
-        ("valid/basic.nv", "42\n"),
-        ("valid/while-loop.nv", "5\n"),
-        ("valid/loop-control.nv", "42\n"),
-        ("valid/guaranteed-loop-break.nv", "42\n"),
-        ("valid/short-circuit-flow.nv", "42\n"),
-        ("valid/literal-if-flow.nv", "42\n"),
-        ("valid/constant-condition-flow.nv", "42\n"),
-        ("valid/noncontinuing-successors.nv", "42\n"),
-        ("valid/literal-match-flow.nv", "42\n"),
-        ("valid/unit.nv", "42\n"),
-        ("valid/unit-equality.nv", "true\n"),
-        ("valid/unit-main.nv", "()\n"),
-        ("valid/payload-free-enum-equality.nv", "true\n"),
-        ("valid/records.nv", "42\n"),
-        ("valid/enums-match.nv", "42\n"),
-        ("valid/int-boundaries.nv", "-9223372036854775808\n"),
-        ("valid/int-division.nv", "-21\n"),
+    for (relative, expected, warning) in [
+        ("valid/basic.nv", "42\n", None),
+        ("valid/while-loop.nv", "5\n", None),
+        ("valid/loop-control.nv", "42\n", None),
+        ("valid/guaranteed-loop-break.nv", "42\n", None),
+        ("valid/short-circuit-flow.nv", "42\n", None),
+        ("valid/literal-if-flow.nv", "42\n", None),
+        ("valid/constant-condition-flow.nv", "42\n", None),
+        (
+            "valid/noncontinuing-successors.nv",
+            "42\n",
+            Some("warning[N3033]"),
+        ),
+        ("valid/literal-match-flow.nv", "42\n", None),
+        ("valid/unit.nv", "42\n", None),
+        ("valid/unit-equality.nv", "true\n", None),
+        ("valid/unit-main.nv", "()\n", None),
+        ("valid/payload-free-enum-equality.nv", "true\n", None),
+        ("valid/records.nv", "42\n", None),
+        ("valid/enums-match.nv", "42\n", None),
+        ("valid/int-boundaries.nv", "-9223372036854775808\n", None),
+        ("valid/int-division.nv", "-21\n", None),
     ] {
         let path = fixture(relative);
         let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
@@ -90,7 +95,10 @@ fn run_command_executes_checked_program() {
             String::from_utf8_lossy(&output.stderr)
         );
         assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
-        assert!(output.stderr.is_empty());
+        match warning {
+            Some(warning) => assert!(String::from_utf8_lossy(&output.stderr).contains(warning)),
+            None => assert!(output.stderr.is_empty(), "fixture {relative}"),
+        }
     }
 }
 
@@ -224,6 +232,45 @@ fn emits_semantic_diagnostics_as_json() {
     assert_eq!(stderr.lines().count(), 1);
     assert!(stderr.contains("\"code\":\"N3003\""));
     assert!(stderr.contains("\"message\":\"unknown name\""));
+}
+
+#[test]
+fn warnings_are_nonfatal_for_check_run_and_inspect() {
+    let path = fixture("valid/unreachable-warning.nv");
+    let path = path.to_str().expect("fixture path is UTF-8");
+
+    let checked = nova(&["check", path]);
+    assert!(checked.status.success());
+    assert!(checked.stdout.is_empty());
+    let check_stderr = String::from_utf8(checked.stderr).expect("warning is UTF-8");
+    assert!(check_stderr.contains("warning[N3033]: unreachable code"));
+    assert!(check_stderr.contains("this return leaves the function"));
+    assert_eq!(check_stderr.matches("warning[N3033]").count(), 1);
+
+    let run = nova(&["run", path, "--message-format=json"]);
+    assert!(run.status.success());
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
+    let run_stderr = String::from_utf8(run.stderr).expect("warning JSON is UTF-8");
+    assert_eq!(run_stderr.lines().count(), 1);
+    assert!(run_stderr.contains("\"severity\":\"warning\""));
+    assert!(run_stderr.contains("\"code\":\"N3033\""));
+
+    for version in ["1", "2"] {
+        let inspected = nova(&[
+            "inspect",
+            path,
+            "--format=json",
+            "--schema-version",
+            version,
+        ]);
+        assert!(inspected.status.success());
+        let document = String::from_utf8(inspected.stdout).expect("inspection remains UTF-8 JSON");
+        assert!(document.contains(&format!("\"schema_version\": {version}")));
+        assert_eq!(document.contains("\"control_flow\":"), version == "2");
+        let stderr = String::from_utf8_lossy(&inspected.stderr);
+        assert!(stderr.contains("warning[N3033]"));
+        assert_eq!(stderr.matches("warning[N3033]").count(), 1);
+    }
 }
 
 #[test]

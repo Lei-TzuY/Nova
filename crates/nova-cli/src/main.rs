@@ -149,13 +149,16 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
     }
 
     let analyzed = analyze(&parsed.program);
-    if !analyzed.is_success() {
+    let accepted = analyzed.is_success();
+    if !analyzed.diagnostics.is_empty() {
         emit_diagnostics(
             &analyzed.diagnostics,
             &source,
             options.message_format,
             stderr,
         )?;
+    }
+    if !accepted {
         return Ok(1);
     }
 

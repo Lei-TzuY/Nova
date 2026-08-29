@@ -30,6 +30,10 @@ ordinary structured diagnostics to standard error and writes no partial
 document. `--message-format` controls those diagnostics; it does not change the
 successful inspection document.
 
+A successful analysis may carry non-fatal warnings. They are written to standard
+error and do not prevent the v1 document from being emitted; warning severity and
+code are not copied into this semantic-fact schema.
+
 Before serialization, `nova-inspect` independently checks the HIR invariants
 needed by the public document: source ranges, declaration and binding identity
 order, binding ownership, lexical visibility and assignment mutability, nominal

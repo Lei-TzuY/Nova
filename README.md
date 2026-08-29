@@ -38,7 +38,7 @@ interpreter slices. The toolchain is written in Rust and can:
   pattern matching, mutation, blocks, conditionals, bounded loops, and structured
   `break`/`continue`;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
-  text or JSON Lines;
+  text or JSON Lines, including non-fatal unreachable-code warnings;
 - print a deterministic debug representation of the parsed AST; and
 - emit fail-closed semantic-inspection v1 documents with resolved declarations,
   bindings, types, spans, expression relationships, and exhaustive match facts,
@@ -50,6 +50,12 @@ definite-assignment validation. `nova run` performs those same checks and then
 executes zero-argument `main`. The interpreter is evidence for the executable
 subset, not a claim that Nova's final runtime representation, numeric model,
 aggregate layout, ABI, or backend is stable.
+
+Semantic warnings do not reject an otherwise valid program. The bootstrap
+currently reports `N3033` when the verified CFG proves that source follows an
+executable `return`, `break`, or `continue`; the warning is written to standard
+error while `check`, `run`, or `inspect` continues normally. Existing errors
+suppress this warning pass to avoid recovery cascades.
 
 The implemented syntax is intentionally small:
 
@@ -71,6 +77,8 @@ fn main() -> Int {
 See [the implemented grammar](docs/grammar.md) for the normative frontend
 subset, [the enum and pattern semantics](docs/enums-and-patterns.md) for that
 aggregate slice's semantic contract,
+[the diagnostics contract](docs/diagnostics.md) for error/warning and exit-status
+behavior,
 [the semantic-introspection v1 contract](docs/semantic-introspection.md) and
 [v2 CFG extension](docs/semantic-introspection-v2.md) for the machine-readable
 tooling boundary,
@@ -351,7 +359,9 @@ intentionally stops after parsing, so it can inspect a syntactically valid AST
 even when `nova check` or `nova run` would reject that program later.
 `nova inspect` instead requires the complete semantic pipeline to succeed and
 writes no partial document when source diagnostics or an inspection invariant
-failure occurs. Schema v1 remains the default; v2 must be requested explicitly.
+failure occurs. Non-fatal warnings are written to standard error without changing
+status `0`, runtime output, or a successful inspection document. Schema v1 remains
+the default; v2 must be requested explicitly.
 
 ## Bootstrap architecture
 
@@ -389,6 +399,8 @@ language semantics.
   execution while skipped source remains statically checked.
 - Non-continuing control-flow paths cannot contribute definite-assignment or loop-
   exit facts to code they cannot reach.
+- Non-fatal unreachable warnings are derived from verified CFG edges, not from a
+  parallel lexical reachability flag, and never turn accepted HIR into a rejection.
 - Function CFGs are verified before publication; `N3009` is produced by their
   fixed-point must analysis rather than ad-hoc diagnostic emission during name lookup.
 - Definite initialization has no parallel lexical Boolean: binding HIR preserves the
