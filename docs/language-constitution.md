@@ -157,9 +157,12 @@ overflow policy for future backends.
 **Decided.** `let` introduces an immutable binding and `var` introduces a
 mutable binding. Mutability belongs to a binding or explicitly mutable view; it
 must not spread invisibly through an object graph. Reads must not observe an
-uninitialized local value; accepted programs require compile-time evidence that
-a delayed mutable binding has been initialized on every control-flow path that
-can reach the read.
+uninitialized local value; accepted programs require compile-time evidence from the
+verified function CFG that a delayed mutable binding has been initialized on every
+control-flow path that can reach the read. Binding HIR keeps its declared type
+independently of that proof, so a maybe-uninitialized read can still participate in
+ordinary type checking and can receive both an independent type diagnostic and
+`N3009` when both rules are violated.
 
 **Provisional bootstrap decisions.** `let` always requires an initializer.
 `var` may either be initialized immediately, with an optional type annotation,

@@ -3,7 +3,6 @@ use crate::control_flow::{
     ControlFlowProgram, FlowEdgeKind, FlowNodeId, FlowNodeKind, FlowTransfer, FunctionControlFlow,
     FunctionFlowBuilder, definite_initialization_diagnostics,
 };
-use crate::flow_rules::InitializationJoin;
 use crate::hir::{
     self, BindingId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType, MatchArm,
     RecordFieldValue, RecordId, RecordType, StatementKind, Type,
@@ -176,7 +175,6 @@ struct LocalSymbol {
     id: BindingId,
     ty: Type,
     mutable: bool,
-    initialized: bool,
     span: Span,
 }
 
@@ -191,7 +189,6 @@ struct ScopeFlowState {
 
 #[derive(Clone, Debug)]
 struct LoopContext {
-    visible_scope_count: usize,
     header: FlowNodeId,
     break_states: Vec<ScopeFlowState>,
     continue_cursors: Vec<FlowNodeId>,
@@ -543,7 +540,8 @@ impl Analyzer {
         let mut parameters = Vec::with_capacity(function.parameters.len());
         for (parameter, ty) in function.parameters.iter().zip(&signature.parameters) {
             let binding = self.new_binding(&parameter.name, ty.clone(), false);
-            self.insert_local(&binding, true);
+            self.insert_local(&binding);
+            self.record_initialization(binding.id, binding.span);
             parameters.push(binding);
         }
 
@@ -688,7 +686,10 @@ impl Analyzer {
                 }
                 let binding_type = annotation_type.unwrap_or_else(|| initializer.ty.clone());
                 let binding = self.new_binding(name, binding_type, *mutable);
-                self.insert_local(&binding, true);
+                self.insert_local(&binding);
+                if !initializer.ty.is_never() {
+                    self.record_initialization(binding.id, binding.span);
+                }
                 let diverges = initializer.ty.is_never();
                 (
                     StatementKind::Binding {
@@ -701,7 +702,7 @@ impl Analyzer {
             ast::StatementKind::UninitializedBinding { name, annotation } => {
                 let ty = self.resolve_type_ref(annotation);
                 let binding = self.new_binding(name, ty, true);
-                self.insert_local(&binding, false);
+                self.insert_local(&binding);
                 (StatementKind::UninitializedBinding(binding), false)
             }
             ast::StatementKind::Assignment { target, value } => {
@@ -725,7 +726,7 @@ impl Analyzer {
                         && !value.ty.is_never()
                         && expected_type_compatible(&value.ty, &symbol.ty)
                     {
-                        self.mark_initialized(&target.text, target.span);
+                        self.record_initialization(symbol.id, target.span);
                     }
                     Some(symbol.id)
                 } else if let Some(span) = function_span {
@@ -779,7 +780,6 @@ impl Analyzer {
                     },
                 );
                 self.loop_stack.push(LoopContext {
-                    visible_scope_count: self.scopes.len(),
                     header,
                     break_states: Vec::new(),
                     continue_cursors: Vec::new(),
@@ -819,7 +819,7 @@ impl Analyzer {
                         self.restore_scope_flow_state(&post_condition_state);
                         true
                     } else {
-                        self.merge_loop_break_initialization(
+                        self.merge_loop_break_flow(
                             &post_condition_state,
                             &loop_context.break_states,
                         );
@@ -991,7 +991,7 @@ impl Analyzer {
 
                 if short_circuit_operator && !left.ty.is_never() && !skips_right && !forces_right {
                     let right_state = self.capture_scope_flow_state();
-                    self.merge_optional_execution_initialization(
+                    self.merge_optional_execution_flow(
                         &left_state,
                         &right_state,
                         right.ty.is_never(),
@@ -1186,7 +1186,7 @@ impl Analyzer {
                             }
                         }
                         None => {
-                            self.merge_branch_initialization(
+                            self.merge_branch_flow(
                                 &entry_state,
                                 &then_state,
                                 then_branch.ty.is_never(),
@@ -1710,7 +1710,8 @@ impl Analyzer {
                         (Some(payload_type), Some(binding_name)) => {
                             let binding =
                                 self.new_binding(binding_name, payload_type.clone(), false);
-                            self.insert_local(&binding, true);
+                            self.insert_local(&binding);
+                            self.record_initialization(binding.id, binding.span);
                             payload_binding = Some(binding);
                         }
                         (None, None) => {}
@@ -1765,7 +1766,8 @@ impl Analyzer {
             if payload_binding.is_none() {
                 if let Some(binding_name) = &arm.pattern.binding {
                     let binding = self.new_binding(binding_name, Type::Error, false);
-                    self.insert_local(&binding, true);
+                    self.insert_local(&binding);
+                    self.record_initialization(binding.id, binding.span);
                     payload_binding = Some(binding);
                 }
             }
@@ -1865,7 +1867,7 @@ impl Analyzer {
                 selected_type
             }
         } else {
-            self.merge_match_initialization(&entry_state, &branch_states);
+            self.merge_match_flow(&entry_state, &branch_states);
             joined_type
         };
 
@@ -1940,9 +1942,6 @@ impl Analyzer {
     fn lower_name(&mut self, name: &ast::Name) -> (ExpressionKind, Type) {
         if let Some(symbol) = self.find_local(&name.text) {
             self.flow_advance(FlowNodeKind::Read(symbol.id), Some(name.span));
-            if !symbol.initialized {
-                return (ExpressionKind::Binding(symbol.id), Type::Error);
-            }
             return (ExpressionKind::Binding(symbol.id), symbol.ty);
         }
         if let Some(symbol) = self.functions.get(&name.text) {
@@ -1966,36 +1965,12 @@ impl Analyzer {
             .find_map(|scope| scope.get(name).cloned())
     }
 
-    fn mark_initialized(&mut self, name: &str, assignment_span: Span) {
-        let mut initialized = None;
-        for scope in self.scopes.iter_mut().rev() {
-            if let Some(symbol) = scope.get_mut(name) {
-                symbol.initialized = true;
-                initialized = Some(symbol.id);
-                break;
-            }
-        }
-        if let Some(binding) = initialized {
-            self.flow_advance(FlowNodeKind::Initialize(binding), Some(assignment_span));
-        }
+    fn record_initialization(&mut self, binding: BindingId, span: Span) {
+        self.flow_advance(FlowNodeKind::Initialize(binding), Some(span));
     }
 
     fn record_loop_break_exit(&mut self) {
-        let visible_scope_count = self
-            .loop_stack
-            .last()
-            .expect("a legal break must have an active loop context")
-            .visible_scope_count;
-        let scopes = self
-            .scopes
-            .iter()
-            .take(visible_scope_count)
-            .cloned()
-            .collect();
-        let state = ScopeFlowState {
-            scopes,
-            flow_cursor: self.flow_cursor(),
-        };
+        let state = self.capture_scope_flow_state();
         self.loop_stack
             .last_mut()
             .expect("a legal break must have an active loop context")
@@ -2012,54 +1987,19 @@ impl Analyzer {
             .push(cursor);
     }
 
-    fn merge_loop_break_initialization(
-        &mut self,
-        entry: &ScopeFlowState,
-        break_states: &[ScopeFlowState],
-    ) {
+    fn merge_loop_break_flow(&mut self, entry: &ScopeFlowState, break_states: &[ScopeFlowState]) {
         debug_assert!(!break_states.is_empty());
         self.scopes = entry.scopes.clone();
-        for (scope_index, entry_scope) in entry.scopes.iter().enumerate() {
-            for (name, entry_symbol) in entry_scope {
-                let mut join = InitializationJoin::default();
-                for break_state in break_states {
-                    let initialized = break_state
-                        .scopes
-                        .get(scope_index)
-                        .and_then(|scope| scope.get(name))
-                        .is_some_and(|symbol| symbol.initialized);
-                    join.observe(initialized, true);
-                }
-                if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
-                    symbol.initialized = join.finish(entry_symbol.initialized);
-                }
-            }
-        }
         self.flow_join(break_states.iter().map(|state| state.flow_cursor), None);
     }
 
-    fn merge_optional_execution_initialization(
+    fn merge_optional_execution_flow(
         &mut self,
         entry: &ScopeFlowState,
         executed: &ScopeFlowState,
         executed_never: bool,
     ) {
         self.scopes = entry.scopes.clone();
-        for (scope_index, entry_scope) in entry.scopes.iter().enumerate() {
-            for (name, entry_symbol) in entry_scope {
-                let executed_initialized = executed
-                    .scopes
-                    .get(scope_index)
-                    .and_then(|scope| scope.get(name))
-                    .is_some_and(|symbol| symbol.initialized);
-                let mut join = InitializationJoin::default();
-                join.observe(entry_symbol.initialized, true);
-                join.observe(executed_initialized, !executed_never);
-                if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
-                    symbol.initialized = join.finish(entry_symbol.initialized);
-                }
-            }
-        }
         let mut predecessors = vec![entry.flow_cursor];
         if !executed_never {
             predecessors.push(executed.flow_cursor);
@@ -2067,7 +2007,7 @@ impl Analyzer {
         self.flow_join(predecessors, None);
     }
 
-    fn merge_branch_initialization(
+    fn merge_branch_flow(
         &mut self,
         entry: &ScopeFlowState,
         then_state: &ScopeFlowState,
@@ -2076,26 +2016,6 @@ impl Analyzer {
         else_never: bool,
     ) {
         self.scopes = entry.scopes.clone();
-        for (scope_index, entry_scope) in entry.scopes.iter().enumerate() {
-            for (name, entry_symbol) in entry_scope {
-                let then_initialized = then_state
-                    .scopes
-                    .get(scope_index)
-                    .and_then(|scope| scope.get(name))
-                    .is_some_and(|symbol| symbol.initialized);
-                let else_initialized = else_state
-                    .scopes
-                    .get(scope_index)
-                    .and_then(|scope| scope.get(name))
-                    .is_some_and(|symbol| symbol.initialized);
-                let mut join = InitializationJoin::default();
-                join.observe(then_initialized, !then_never);
-                join.observe(else_initialized, !else_never);
-                if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
-                    symbol.initialized = join.finish(entry_symbol.initialized);
-                }
-            }
-        }
         let mut predecessors = Vec::with_capacity(2);
         if !then_never {
             predecessors.push(then_state.flow_cursor);
@@ -2110,28 +2030,8 @@ impl Analyzer {
         }
     }
 
-    fn merge_match_initialization(
-        &mut self,
-        entry: &ScopeFlowState,
-        branches: &[(ScopeFlowState, bool)],
-    ) {
+    fn merge_match_flow(&mut self, entry: &ScopeFlowState, branches: &[(ScopeFlowState, bool)]) {
         self.scopes = entry.scopes.clone();
-        for (scope_index, entry_scope) in entry.scopes.iter().enumerate() {
-            for (name, entry_symbol) in entry_scope {
-                let mut join = InitializationJoin::default();
-                for (branch_state, never) in branches {
-                    let initialized = branch_state
-                        .scopes
-                        .get(scope_index)
-                        .and_then(|scope| scope.get(name))
-                        .is_some_and(|symbol| symbol.initialized);
-                    join.observe(initialized, !never);
-                }
-                if let Some(symbol) = self.scopes[scope_index].get_mut(name) {
-                    symbol.initialized = join.finish(entry_symbol.initialized);
-                }
-            }
-        }
         let predecessors = branches
             .iter()
             .filter(|(_, never)| !never)
@@ -2502,7 +2402,7 @@ impl Analyzer {
         binding
     }
 
-    fn insert_local(&mut self, binding: &hir::Binding, initialized: bool) {
+    fn insert_local(&mut self, binding: &hir::Binding) {
         let scope = self
             .scopes
             .last_mut()
@@ -2524,13 +2424,9 @@ impl Analyzer {
                 id: binding.id,
                 ty: binding.ty.clone(),
                 mutable: binding.mutable,
-                initialized,
                 span: binding.span,
             },
         );
-        if initialized {
-            self.flow_advance(FlowNodeKind::Initialize(binding.id), Some(binding.span));
-        }
     }
 }
 

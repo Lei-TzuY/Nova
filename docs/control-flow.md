@@ -13,12 +13,12 @@ and statically skipped source may lose executable HIR structure, but Nova must
 still retain those paths for deterministic diagnostics without exporting their
 facts into reachable continuation.
 
-The graph currently owns diagnostic `N3009` (a local may be uninitialized).
-The structured lowerer temporarily retains a parallel Boolean initialization
-fact only to choose recovery HIR types after an erroneous read. That recovery
-fact does not emit `N3009` and is not the accepted-program proof. Removing this
-transitional duplication requires a later separation of HIR construction from
-all flow-dependent recovery typing.
+The graph exclusively owns definite-initialization state and diagnostic `N3009`.
+A resolved binding read keeps the binding's declared HIR type even when CFG analysis
+later rejects that read as maybe uninitialized. Type checking and flow checking are
+therefore orthogonal: an independently ill-typed use may report its ordinary type
+diagnostic alongside `N3009`, rather than relying on a hidden inline initialization
+bit to turn the read into recovery `<error>`.
 
 CFG data is exposed as a read-only Rust model on `AnalysisOutput`. It is not part
 of semantic-inspection schema v1; changing that tooling schema requires an
@@ -97,6 +97,6 @@ backend blocks. Loop reasoning remains the documented bootstrap rule: ordinary
 pre-test loops preserve the zero-iteration path, while a side-effect-free closed
 condition proven true may continue only through reachable `break` exits.
 
-The next architectural step should separate recovery HIR typing from the legacy
-inline initialization flag, then migrate additional flow-sensitive checks only
-when each has a specified lattice, verifier invariants, and adversarial tests.
+Additional flow-sensitive checks should migrate onto explicit analyses only when
+each has a specified lattice, verifier invariants, and adversarial tests; lexical
+resolution and HIR typing must not grow parallel hidden flow facts again.
