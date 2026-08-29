@@ -49,6 +49,11 @@ fn evaluate_binary(
                     unit_value(right)?;
                     true
                 }
+                (Type::Enum(left_enum), Type::Enum(right_enum))
+                    if left_enum.id == right_enum.id =>
+                {
+                    enum_tag(left)? == enum_tag(right)?
+                }
                 _ => return None,
             };
             Some(if operator == BinaryOperator::Equal {
@@ -82,6 +87,17 @@ fn unit_value(expression: &Expression) -> Option<()> {
                 None => Some(()),
             }
         }
+        _ => None,
+    }
+}
+
+fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
+    match &expression.kind {
+        ExpressionKind::EnumConstructor {
+            enumeration,
+            variant_index,
+            payload,
+        } if payload.is_none() => Some((*enumeration, *variant_index)),
         _ => None,
     }
 }
