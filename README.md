@@ -247,8 +247,12 @@ execution, semantic analysis also preflights reachable closed arithmetic trees m
 entirely from `Int` literals and arithmetic operators: statically certain overflow is
 `N3031` and a statically certain zero divisor is `N3032`. Source lowered only for
 diagnostics because control flow proves it unreachable does not manufacture these
-execution-failure diagnostics. Successful constant arithmetic is not folded, and any
-expression with a dynamic operand remains runtime checked. Such
+execution-failure diagnostics. The same side-effect-free literal Bool/Int evaluator
+may determine `if`, `while`, and short-circuit reachability from closed comparisons
+and Boolean operations; this changes flow analysis only and never folds the retained
+HIR. Names, calls, blocks, aggregates, and other dynamic operands stop the proof.
+Successful constant arithmetic is not folded, and any expression with a dynamic
+operand remains runtime checked. Such
 dynamic overflow produces `N4002`; dynamic division or remainder by zero produces
 `N4003`. The arithmetic truth table itself lives once in the dependency-free
 `nova-int-semantics` leaf crate; semantic preflight supplies only closed-HIR traversal

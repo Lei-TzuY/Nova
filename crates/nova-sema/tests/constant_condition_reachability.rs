@@ -6,17 +6,23 @@ use nova_source::{SourceFile, SourceId};
 fn analyze_text(text: &str) -> AnalysisOutput {
     let source = SourceFile::new(SourceId::new(0), "constant-condition.nv", text);
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
-    assert!(parsed.is_success(), "parse diagnostics: {:?}", parsed.diagnostics);
+    assert!(
+        parsed.is_success(),
+        "parse diagnostics: {:?}",
+        parsed.diagnostics
+    );
     analyze(&parsed.program)
 }
 
 #[test]
 fn literal_false_while_body_is_diagnostic_only_for_execution_failures() {
-    let output = analyze_text(
-        "fn main() -> Int { while false { 1 / 0; } 0 }",
-    );
+    let output = analyze_text("fn main() -> Int { while false { 1 / 0; } 0 }");
     assert!(output.is_success(), "{:?}", output.diagnostics);
 }
 
@@ -56,9 +62,8 @@ fn known_true_comparison_makes_loop_noncontinuing() {
 
 #[test]
 fn derived_short_circuit_truth_controls_flow_and_dead_rhs_diagnostics() {
-    let forced = analyze_text(
-        "fn main() -> Int { var value: Int; (1 > 2) || { value = 42; true }; value }",
-    );
+    let forced =
+        analyze_text("fn main() -> Int { var value: Int; (1 > 2) || { value = 42; true }; value }");
     assert!(forced.is_success(), "{:?}", forced.diagnostics);
 
     let skipped = analyze_text("fn main() -> Bool { (1 < 2) || (1 / 0 == 0) }");
@@ -73,7 +78,10 @@ fn names_calls_and_blocks_do_not_become_compile_time_conditions() {
     ] {
         let output = analyze_text(text);
         assert!(
-            output.diagnostics.iter().any(|diagnostic| diagnostic.code == "N3009"),
+            output
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "N3009"),
             "source: {text}; diagnostics: {:?}",
             output.diagnostics
         );

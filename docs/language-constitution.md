@@ -121,9 +121,15 @@ operation succeeds. `Int::MIN / -1` and `Int::MIN % -1` are both overflow.
 Semantic analysis preflights only reachable closed arithmetic trees composed entirely
 of `Int` literals and arithmetic operators: a provable overflow is `N3031`, while a
 provable zero divisor is `N3032`. Source lowered only for diagnostics on a statically
-unreachable path is excluded from these execution-failure diagnostics. Successful
-trees are deliberately not folded, and names, calls, blocks, or other dynamic
-operands stop this preflight rather than triggering general constant propagation.
+unreachable path is excluded from these execution-failure diagnostics. Semantic
+reachability may also evaluate closed, side-effect-free Bool/Int literal expressions
+for `if`, `while`, and `&&`/`||`, including checked arithmetic feeding comparisons.
+This evaluator never propagates names, executes calls or blocks, inspects aggregates,
+or folds the retained HIR. A `while` condition proven false therefore lowers its body
+only for static diagnostics, while a proven true condition participates in the same
+guaranteed-loop reasoning previously reserved for literal `true`. Successful arithmetic
+trees are deliberately not folded, and dynamic operands stop these proofs rather than
+triggering general constant propagation.
 Dynamic arithmetic remains checked by the
 interpreter: overflow is `N4002`, and division or remainder by zero is `N4003`.
 Both layers consume the same dependency-free `nova-int-semantics` arithmetic
