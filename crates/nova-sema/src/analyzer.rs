@@ -3024,13 +3024,13 @@ mod tests {
     }
 
     #[test]
-    fn equality_accepts_only_matching_primitive_types() {
+    fn equality_accepts_matching_primitives_and_function_signatures() {
         let output = analyze_text(
             "fn f() -> Bool { 1 == 1 }\n\
              fn g() -> Bool { true != false }\n\
              fn h() -> Bool { f == g }",
         );
-        assert_eq!(codes(&output), vec!["N3004"]);
+        assert!(output.is_success(), "{:?}", output.diagnostics);
     }
 
     #[test]
