@@ -1,9 +1,10 @@
 use crate::constant_int;
-use crate::hir::{Expression, ExpressionKind, Type};
+use crate::hir::{Expression, ExpressionKind, FunctionId, Type};
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
-/// already determined by literal Bool/Int operations. The HIR is never folded.
+/// already determined by supported literal, identity, comparison, and Boolean proofs.
+/// The HIR is never folded.
 pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
     if expression.ty != Type::Bool {
         return None;
@@ -51,6 +52,11 @@ fn evaluate_binary(
                     unit_value(left)?;
                     unit_value(right)?;
                     true
+                }
+                (Type::Function(left_function), Type::Function(right_function))
+                    if left_function == right_function =>
+                {
+                    function_id(left)? == function_id(right)?
                 }
                 (Type::Enum(left_enum), Type::Enum(right_enum))
                     if left_enum.id == right_enum.id =>
@@ -103,6 +109,16 @@ fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
         } if payload.is_none() => Some((*enumeration, *variant_index)),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             enum_tag(block.tail.as_deref()?)
+        }
+        _ => None,
+    }
+}
+
+fn function_id(expression: &Expression) -> Option<FunctionId> {
+    match &expression.kind {
+        ExpressionKind::Function(function) => Some(*function),
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            function_id(block.tail.as_deref()?)
         }
         _ => None,
     }

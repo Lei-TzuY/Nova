@@ -421,9 +421,12 @@ closed with runtime invariant diagnostic `N4005`.
 
 Runtime record values carry nominal identity and declaration-order field slots;
 runtime enum values carry nominal identity, a declaration-order variant slot,
-and an optional boxed payload. Those representations are executable semantic
-oracles, not stable layouts, allocation promises, serialization formats, or
-backend ABIs. Runtime failures use structured diagnostics. Recursive execution
+and an optional boxed payload. Top-level function values carry declaration identity.
+Equality is defined only between matching function signatures and compares that
+declaration identity; it does not expose code addresses, pointer equality, layout, or
+ABI identity. Those representations are executable semantic oracles, not stable
+layouts, allocation promises, serialization formats, or backend ABIs. Runtime failures
+use structured diagnostics. Recursive execution
 is guarded by a finite call-depth limit, and all statement/expression evaluation
 shares a finite step budget so nonterminating loops fail closed rather than
 intentionally hanging the host. These choices provide an executable oracle for

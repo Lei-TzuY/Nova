@@ -2278,7 +2278,7 @@ impl Analyzer {
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires Int, Bool, Unit, or payload-free enum operands, found {} and {}",
+                        "equality requires matching comparable operands (Int, Bool, Unit, function, or payload-free enum), found {} and {}",
                         left.ty, right.ty
                     ),
                 ));
@@ -2293,7 +2293,7 @@ impl Analyzer {
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires matching Int, Bool, Unit, or payload-free enum operands, found {} and {}",
+                        "equality requires matching comparable operands (Int, Bool, Unit, function, or payload-free enum), found {} and {}",
                         left.ty, right.ty
                     ),
                 ));
@@ -2303,7 +2303,7 @@ impl Analyzer {
 
     fn is_equality_comparable(&self, ty: &Type) -> bool {
         match ty {
-            Type::Int | Type::Bool | Type::Unit => true,
+            Type::Int | Type::Bool | Type::Unit | Type::Function(_) => true,
             Type::Enum(enumeration) => self
                 .enum_definitions
                 .get(enumeration.id.index())
@@ -3024,13 +3024,13 @@ mod tests {
     }
 
     #[test]
-    fn equality_accepts_only_matching_primitive_types() {
+    fn equality_accepts_matching_primitives_and_function_signatures() {
         let output = analyze_text(
             "fn f() -> Bool { 1 == 1 }\n\
              fn g() -> Bool { true != false }\n\
              fn h() -> Bool { f == g }",
         );
-        assert_eq!(codes(&output), vec!["N3004"]);
+        assert!(output.is_success(), "{:?}", output.diagnostics);
     }
 
     #[test]

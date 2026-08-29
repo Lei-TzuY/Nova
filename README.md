@@ -205,15 +205,14 @@ condition test may survive the loop while facts established only inside the body
 do not. This preserves the zero-iteration exit rather than manufacturing
 initialization evidence.
 
-A direct literal `while true { body }` is the one bootstrap exception because it
-has no condition-false exit. The checker treats it as guaranteed-entry and
-records only reachable `break` transfers that target that exact loop. If there
-are such exits, a pre-existing binding is definitely initialized afterward only
-when it is initialized at every reachable break exit. If there is no reachable
-break, the loop is non-continuing. A `break` consumed by a nested loop does not
-count as an exit from an outer loop. This is deliberately not constant folding:
-`while { true }`, computed booleans, and other equivalent-looking conditions keep
-the ordinary conservative rule.
+When the closed-condition evaluator proves a `while` condition true (for example
+`true` or the statement-free wrapper `{ true }`), the loop has no condition-false
+exit. The checker treats it as guaranteed-entry and records only reachable `break`
+transfers that target that exact loop. If there are such exits, a pre-existing
+binding is definitely initialized afterward only when it is initialized at every
+reachable break exit. If there is no reachable break, the loop is non-continuing.
+A `break` consumed by a nested loop does not count as an exit from an outer loop.
+This proof changes flow analysis only; the retained HIR is never constant-folded.
 
 `break;` and `continue;` are legal only inside an enclosing `while` body. The
 condition expression is intentionally outside that loop-control scope. `break;`
@@ -227,8 +226,9 @@ surface types today. `()` is the sole Unit literal, and a block with no tail als
 produces Unit. A function declared `-> Unit` may fall through such a body or use
 the explicit `return ();` form; non-Unit functions still need a compatible tail or
 an explicit return on every continuing path. Arithmetic and ordered comparisons
-require `Int`; boolean operators require `Bool`; equality accepts matching `Int`, `Bool`,
-`Unit`, or the same nominal payload-free enum type; calls require matching arity and
+require `Int`; boolean operators require `Bool`; equality accepts matching `Int`, `Bool`, `Unit`, the same function signature, or
+the same nominal payload-free enum type; function equality compares declaration
+identity rather than addresses or code layout, and calls require matching arity and
 argument types.
 `if` conditions require `Bool`, and continuing branches or match arms must remain
 type-compatible. The internal `!` bottom type still has no surface spelling.
@@ -298,10 +298,12 @@ execution, semantic analysis also preflights reachable closed arithmetic trees m
 entirely from `Int` literals and arithmetic operators: statically certain overflow is
 `N3031` and a statically certain zero divisor is `N3032`. Source lowered only for
 diagnostics because control flow proves it unreachable does not manufacture these
-execution-failure diagnostics. The same side-effect-free literal Bool/Int evaluator
-may determine `if`, `while`, and short-circuit reachability from closed comparisons
-and Boolean operations; this changes flow analysis only and never folds the retained
-HIR. Names, calls, blocks, aggregates, and other dynamic operands stop the proof.
+execution-failure diagnostics. The same side-effect-free closed evaluator may
+determine `if`, `while`, and short-circuit reachability from Bool/Int/Unit values,
+direct payload-free enum constructors, direct top-level function references,
+statement-free block wrappers, comparisons, and Boolean operations; this changes
+flow analysis only and never folds the retained HIR. Local bindings, calls,
+statement-bearing blocks, other aggregates, and other dynamic operands stop the proof.
 More generally, when an `if`/`while` condition or `match` scrutinee is already
 non-continuing (`!`), its successor branches/body/arms are lowered only for static
 diagnostics: execution-only constant failures and flow mutations cannot come from a

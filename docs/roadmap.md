@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty-nine vertical slices implemented; broader type-system work remains.**
+**Status: forty vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -668,6 +668,19 @@ Implemented in the thirty-ninth Phase 2 slice:
 - semantic, CFG, renderer, and CLI regressions lock severity, spans, deduplication,
   suppression, execution, inspection, and exit-status behavior.
 
+
+Implemented in the fortieth Phase 2 slice:
+
+- equality and inequality accept function values only when both operands have the same
+  fully resolved `FunctionType`; different parameter or return types remain `N3004`;
+- equality denotes top-level declaration identity rather than code-address, layout, ABI,
+  or structural body equality, keeping the contract independent from future backends;
+- the closed-condition evaluator can prove equality/inequality of direct function
+  references, including statement-free block wrappers, while local aliases and call
+  results remain dynamic and cannot manufacture definite-assignment reachability; and
+- semantic regressions lock same-signature acceptance, cross-signature rejection,
+  direct-reference flow refinement, and alias conservatism.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -686,7 +699,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: fourteen vertical slices implemented; execution surface remains small.**
+**Status: fifteen vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -890,6 +903,21 @@ Implemented in the fourteenth Phase 3 slice:
   and
 - malformed-HIR regressions cover discarded primitive and composed projection result-type
   drift, while return and loop-transfer controls prove non-value flow remains executable.
+
+
+Implemented in the fifteenth Phase 3 slice:
+
+- the interpreter executes equality and inequality for first-class top-level function
+  values by resolved `FunctionId` declaration identity after ordinary left-to-right
+  operand evaluation;
+- runtime comparison independently verifies that both referenced declarations exist and
+  have identical parameter and return types before comparing identity, so malformed HIR
+  with cross-signature function operands fails closed as `N4005`;
+- inferred local function aliases use the same runtime identity semantics as direct
+  references, while no code address, layout, closure environment, or ABI contract is
+  introduced; and
+- interpreter malformed-HIR tests plus a CLI check/run fixture lock dynamic alias
+  equality, inequality, and signature-drift rejection end to end.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

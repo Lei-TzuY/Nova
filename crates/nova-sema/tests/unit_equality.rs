@@ -40,7 +40,7 @@ fn literal_unit_equality_drives_closed_condition_reachability() {
 }
 
 #[test]
-fn aggregate_and_function_equality_remain_rejected() {
+fn aggregate_equality_remains_rejected() {
     let output = analyze_text(
         "record Pair { value: Int }\n\
          fn id(value: Int) -> Int { value }\n\
@@ -52,7 +52,7 @@ fn aggregate_and_function_equality_remain_rejected() {
         .iter()
         .map(|diagnostic| diagnostic.code.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(codes, vec!["N3004", "N3004"]);
+    assert_eq!(codes, vec!["N3004"]);
 }
 
 #[test]
