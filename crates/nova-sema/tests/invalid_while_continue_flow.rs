@@ -23,6 +23,14 @@ fn analyze_text(text: &str) -> AnalysisOutput {
     analyze(&parsed.program)
 }
 
+fn has_any_backedge(output: &AnalysisOutput) -> bool {
+    output.control_flow.functions()[0]
+        .nodes()
+        .iter()
+        .flat_map(|node| node.predecessors.iter())
+        .any(|edge| edge.kind == FlowEdgeKind::Backedge)
+}
+
 fn has_backedge_from_continue(output: &AnalysisOutput) -> bool {
     let graph = &output.control_flow.functions()[0];
     let continue_node = graph
@@ -57,8 +65,26 @@ fn invalid_while_condition_keeps_continue_on_discarded_recovery_path() {
 }
 
 #[test]
+fn invalid_while_fallthrough_does_not_form_a_recovery_backedge() {
+    let output = analyze_text("fn f() -> Int { while 0 { 1; } 1 }");
+    let codes = output
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.code.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(codes.contains(&"N3004"), "{codes:?}");
+    assert!(!codes.contains(&"N3999"), "{codes:?}");
+    assert!(
+        !has_any_backedge(&output),
+        "fallthrough from an invalid while body must stay on the discarded recovery path"
+    );
+}
+
+#[test]
 fn valid_dynamic_while_continue_still_has_a_backedge() {
     let output = analyze_text("fn f(flag: Bool) -> Int { while flag { continue; } 1 }");
     assert!(output.is_success(), "{:?}", output.diagnostics);
     assert!(has_backedge_from_continue(&output));
+    assert!(has_any_backedge(&output));
 }
