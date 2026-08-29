@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty-seven vertical slices implemented; broader type-system work remains.**
+**Status: thirty-eight vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -635,6 +635,23 @@ Implemented in the thirty-seventh Phase 2 slice:
   rejected with the existing type-mismatch diagnostic; and
 - semantic and CLI regressions lock nominal identity, payload boundaries, direct-
   constructor reachability, dynamic-call conservatism, and retained HIR shape.
+
+Implemented in the thirty-eighth Phase 2 slice:
+
+- semantic-inspection schema v2 preserves the complete strict v1 program fact table
+  and adds an explicitly selected, tooling-owned projection of verified function CFGs;
+- graph/function, binding metadata/ownership, graph-local node, predecessor, normal-
+  exit, and UTF-8 source-span references are independently checked at the inspection
+  boundary, with mismatches failing closed as `N5001` and no partial document;
+- stable v2 node categories cover entry, branch, join, initialize, read, structured
+  return/break/continue transfers, and normal exit, while edges distinguish execution,
+  diagnostic-only, and loop-backedge flow;
+- document-local CFG identities and canonical array ordering are specified without
+  stabilizing `nova-sema`'s Rust graph representation, a MIR, or backend blocks;
+- v1 remains the CLI default and explicit schema version 1 is byte-for-byte identical,
+  while `--schema-version 2` is required to select the new contract; and
+- separate JSON Schema, golden CLI output, cross-model corruption tests, all node/edge
+  category coverage, and documentation lock compatibility and fail-closed behavior.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

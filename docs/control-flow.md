@@ -20,9 +20,10 @@ therefore orthogonal: an independently ill-typed use may report its ordinary typ
 diagnostic alongside `N3009`, rather than relying on a hidden inline initialization
 bit to turn the read into recovery `<error>`.
 
-CFG data is exposed as a read-only Rust model on `AnalysisOutput`. It is not part
-of semantic-inspection schema v1; changing that tooling schema requires an
-independent versioned proposal.
+CFG data is exposed as a read-only Rust model on `AnalysisOutput`. It remains
+absent from semantic-inspection schema v1; explicitly selected schema v2 projects
+the verified graph through a separate tooling-owned model without declaring the
+Rust representation or a backend IR stable.
 
 ## Graph shape
 

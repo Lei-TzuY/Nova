@@ -4,11 +4,16 @@
 //! JSON representation is therefore not a serialization of compiler internals.
 
 pub mod v1;
+pub mod v2;
 
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
+use nova_sema::AnalysisOutput;
+use nova_sema::control_flow::{
+    ControlFlowProgram, FlowEdgeKind, FlowNodeKind, FlowTransfer, FunctionControlFlow,
+};
 use nova_sema::hir::{self, Type};
 use nova_source::{SourceFile, Span};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 
@@ -59,6 +64,44 @@ pub fn render_json(program: &hir::Program, source: &SourceFile) -> Result<String
     let document = build_document(program, source)?;
     serde_json::to_string_pretty(&document)
         .map_err(|error| InspectionError::invalid(format!("could not encode schema v1: {error}")))
+}
+
+/// Builds a schema-v2 document from one successful semantic analysis.
+///
+/// Version 2 preserves the complete schema-v1 HIR projection and independently
+/// validates the verified CFG's function, binding, node, edge, and span
+/// references before adding them to the document. Rejected analysis output and
+/// mismatched HIR/CFG pairs fail closed.
+pub fn build_document_v2(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<v2::Document, InspectionError> {
+    if !analysis.is_success() {
+        return Err(InspectionError::invalid(
+            "schema v2 requires a successful semantic analysis",
+        ));
+    }
+
+    let v1_document = build_document(&analysis.program, source)?;
+    let control_flow = project_control_flow(&analysis.control_flow, &v1_document.program, source)?;
+    Ok(v2::Document {
+        schema: v2::SCHEMA_NAME.to_owned(),
+        schema_version: v2::SCHEMA_VERSION,
+        producer: v1_document.producer,
+        source: v1_document.source,
+        program: v1_document.program,
+        control_flow,
+    })
+}
+
+/// Renders one successful analysis as deterministic, pretty-printed schema-v2 JSON.
+pub fn render_json_v2(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<String, InspectionError> {
+    let document = build_document_v2(analysis, source)?;
+    serde_json::to_string_pretty(&document)
+        .map_err(|error| InspectionError::invalid(format!("could not encode schema v2: {error}")))
 }
 
 struct Builder<'a> {
@@ -900,19 +943,264 @@ impl<'a> Builder<'a> {
     }
 
     fn span(&self, span: Span) -> Result<v1::Span, InspectionError> {
-        if self.source.slice(span).is_none() {
+        document_span(self.source, span)
+    }
+}
+
+fn project_control_flow(
+    control_flow: &ControlFlowProgram,
+    program: &v1::Program,
+    source: &SourceFile,
+) -> Result<Vec<v2::ControlFlowGraph>, InspectionError> {
+    if control_flow.functions().len() != program.functions.len() {
+        return Err(InspectionError::invalid(format!(
+            "schema v2 requires one CFG per function: found {} graphs for {} functions",
+            control_flow.functions().len(),
+            program.functions.len()
+        )));
+    }
+
+    let bindings_by_id = program
+        .bindings
+        .iter()
+        .map(|binding| (binding.id.as_str(), binding))
+        .collect::<BTreeMap<_, _>>();
+    control_flow
+        .functions()
+        .iter()
+        .enumerate()
+        .map(|(index, graph)| {
+            project_function_control_flow(graph, index, program, &bindings_by_id, source)
+        })
+        .collect()
+}
+
+fn project_function_control_flow(
+    graph: &FunctionControlFlow,
+    index: usize,
+    program: &v1::Program,
+    bindings_by_id: &BTreeMap<&str, &v1::Binding>,
+    source: &SourceFile,
+) -> Result<v2::ControlFlowGraph, InspectionError> {
+    let function = program.functions.get(index).ok_or_else(|| {
+        InspectionError::invalid(format!("CFG at slot {index} has no corresponding function"))
+    })?;
+    if graph.function().index() != index || function.id != function_id(index) {
+        return Err(InspectionError::invalid(format!(
+            "CFG identity at slot {index} does not match {}",
+            function.id
+        )));
+    }
+
+    let expected_bindings = program
+        .bindings
+        .iter()
+        .filter(|binding| binding.owner == function.id)
+        .collect::<Vec<_>>();
+    if graph.bindings().len() != expected_bindings.len() {
+        return Err(InspectionError::invalid(format!(
+            "{} CFG binding table has {} entries, expected {}",
+            function.id,
+            graph.bindings().len(),
+            expected_bindings.len()
+        )));
+    }
+    let mut binding_ids = Vec::with_capacity(graph.bindings().len());
+    for (flow_binding, expected) in graph.bindings().iter().zip(expected_bindings) {
+        let id = binding_id(flow_binding.id.index());
+        if id != expected.id
+            || flow_binding.name != expected.name
+            || document_span(source, flow_binding.span)? != expected.span
+        {
             return Err(InspectionError::invalid(format!(
-                "invalid or foreign source span {}..{}",
-                span.start(),
-                span.end()
+                "{} CFG metadata does not match its HIR binding",
+                expected.id
             )));
         }
-        Ok(v1::Span {
-            source: SOURCE_ID.to_owned(),
-            start: span.start(),
-            end: span.end(),
-        })
+        binding_ids.push(id);
     }
+
+    let entry = graph.entry();
+    let entry_node = graph.nodes().get(entry.index()).ok_or_else(|| {
+        InspectionError::invalid(format!("{} CFG entry is out of range", function.id))
+    })?;
+    if !matches!(entry_node.kind, FlowNodeKind::Entry) {
+        return Err(InspectionError::invalid(format!(
+            "{} CFG entry is not an entry node",
+            function.id
+        )));
+    }
+    if graph
+        .nodes()
+        .iter()
+        .filter(|node| matches!(node.kind, FlowNodeKind::Entry))
+        .count()
+        != 1
+    {
+        return Err(InspectionError::invalid(format!(
+            "{} CFG does not contain exactly one entry node",
+            function.id
+        )));
+    }
+
+    let graph_id = control_flow_id(index);
+    let mut nodes = Vec::with_capacity(graph.nodes().len());
+    for (node_index, node) in graph.nodes().iter().enumerate() {
+        if node.id.index() != node_index {
+            return Err(InspectionError::invalid(format!(
+                "{} CFG node identity at slot {node_index} is {}",
+                function.id,
+                node.id.index()
+            )));
+        }
+        if node.id == entry {
+            if !node.predecessors.is_empty() {
+                return Err(InspectionError::invalid(format!(
+                    "{} CFG entry has a predecessor",
+                    function.id
+                )));
+            }
+        } else if node.predecessors.is_empty() {
+            return Err(InspectionError::invalid(format!(
+                "{} has no predecessor",
+                control_flow_node_id(index, node_index)
+            )));
+        }
+
+        let (kind, binding) =
+            project_flow_node_kind(&node.kind, &function.id, &binding_ids, bindings_by_id)?;
+        let mut incoming = node.predecessors.iter().collect::<Vec<_>>();
+        incoming.sort_by_key(|edge| (edge.from.index(), flow_edge_rank(edge.kind)));
+        if incoming
+            .windows(2)
+            .any(|edges| edges[0].from == edges[1].from && edges[0].kind == edges[1].kind)
+        {
+            return Err(InspectionError::invalid(format!(
+                "{} contains a duplicate predecessor edge",
+                control_flow_node_id(index, node_index)
+            )));
+        }
+        let predecessors = incoming
+            .into_iter()
+            .map(|edge| {
+                if edge.from.index() >= graph.nodes().len() {
+                    return Err(InspectionError::invalid(format!(
+                        "{} has an out-of-range predecessor",
+                        control_flow_node_id(index, node_index)
+                    )));
+                }
+                Ok(v2::FlowEdge {
+                    from: control_flow_node_id(index, edge.from.index()),
+                    kind: project_flow_edge_kind(edge.kind),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        nodes.push(v2::FlowNode {
+            id: control_flow_node_id(index, node_index),
+            kind,
+            binding,
+            predecessors,
+            span: node
+                .span
+                .map(|span| document_span(source, span))
+                .transpose()?,
+        });
+    }
+
+    let actual_exits = graph
+        .nodes()
+        .iter()
+        .filter_map(|node| matches!(node.kind, FlowNodeKind::Exit).then_some(node.id.index()))
+        .collect::<BTreeSet<_>>();
+    let declared_exits = graph
+        .normal_exits()
+        .iter()
+        .map(|exit| exit.index())
+        .collect::<BTreeSet<_>>();
+    if declared_exits.len() != graph.normal_exits().len() || declared_exits != actual_exits {
+        return Err(InspectionError::invalid(format!(
+            "{} CFG normal exits do not exactly match exit nodes",
+            function.id
+        )));
+    }
+    let normal_exits = declared_exits
+        .into_iter()
+        .map(|exit| control_flow_node_id(index, exit))
+        .collect();
+
+    Ok(v2::ControlFlowGraph {
+        id: graph_id,
+        function: function.id.clone(),
+        entry: control_flow_node_id(index, entry.index()),
+        bindings: binding_ids,
+        normal_exits,
+        nodes,
+    })
+}
+
+fn project_flow_node_kind(
+    kind: &FlowNodeKind,
+    owner: &str,
+    flow_bindings: &[String],
+    bindings_by_id: &BTreeMap<&str, &v1::Binding>,
+) -> Result<(v2::FlowNodeKind, Option<String>), InspectionError> {
+    let (kind, binding) = match kind {
+        FlowNodeKind::Entry => (v2::FlowNodeKind::Entry, None),
+        FlowNodeKind::Branch => (v2::FlowNodeKind::Branch, None),
+        FlowNodeKind::Join => (v2::FlowNodeKind::Join, None),
+        FlowNodeKind::Initialize(binding) => (
+            v2::FlowNodeKind::Initialize,
+            Some(binding_id(binding.index())),
+        ),
+        FlowNodeKind::Read(binding) => (v2::FlowNodeKind::Read, Some(binding_id(binding.index()))),
+        FlowNodeKind::Transfer(FlowTransfer::Return) => (v2::FlowNodeKind::Return, None),
+        FlowNodeKind::Transfer(FlowTransfer::Break) => (v2::FlowNodeKind::Break, None),
+        FlowNodeKind::Transfer(FlowTransfer::Continue) => (v2::FlowNodeKind::Continue, None),
+        FlowNodeKind::Exit => (v2::FlowNodeKind::Exit, None),
+    };
+    if let Some(binding) = &binding {
+        let declaration = bindings_by_id
+            .get(binding.as_str())
+            .ok_or_else(|| InspectionError::invalid(format!("CFG references unknown {binding}")))?;
+        if declaration.owner != owner || !flow_bindings.contains(binding) {
+            return Err(InspectionError::invalid(format!(
+                "CFG reference to {binding} crosses function ownership"
+            )));
+        }
+    }
+    Ok((kind, binding))
+}
+
+const fn project_flow_edge_kind(kind: FlowEdgeKind) -> v2::FlowEdgeKind {
+    match kind {
+        FlowEdgeKind::Execution => v2::FlowEdgeKind::Execution,
+        FlowEdgeKind::Diagnostic => v2::FlowEdgeKind::Diagnostic,
+        FlowEdgeKind::Backedge => v2::FlowEdgeKind::Backedge,
+    }
+}
+
+const fn flow_edge_rank(kind: FlowEdgeKind) -> u8 {
+    match kind {
+        FlowEdgeKind::Execution => 0,
+        FlowEdgeKind::Diagnostic => 1,
+        FlowEdgeKind::Backedge => 2,
+    }
+}
+
+fn document_span(source: &SourceFile, span: Span) -> Result<v1::Span, InspectionError> {
+    if source.slice(span).is_none() {
+        return Err(InspectionError::invalid(format!(
+            "invalid or foreign source span {}..{}",
+            span.start(),
+            span.end()
+        )));
+    }
+    Ok(v1::Span {
+        source: SOURCE_ID.to_owned(),
+        start: span.start(),
+        end: span.end(),
+    })
 }
 
 fn function_type(function: &hir::Function) -> Type {
@@ -991,6 +1279,14 @@ fn binding_id(index: usize) -> String {
     format!("binding:{index}")
 }
 
+fn control_flow_id(function: usize) -> String {
+    format!("cfg:function:{function}")
+}
+
+fn control_flow_node_id(function: usize, node: usize) -> String {
+    format!("cfg:function:{function}.node:{node}")
+}
+
 fn block_id(index: usize) -> String {
     format!("block:{index}")
 }
@@ -1013,14 +1309,14 @@ fn match_arm_id(matched: usize, arm: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_document, render_json};
+    use super::{build_document, build_document_v2, render_json, render_json_v2};
     use nova_lexer::lex;
     use nova_parser::parse;
-    use nova_sema::{analyze, hir};
+    use nova_sema::{AnalysisOutput, analyze, hir};
     use nova_source::{SourceFile, SourceId, Span};
     use std::collections::BTreeSet;
 
-    fn checked(text: &str) -> (SourceFile, hir::Program) {
+    fn checked_analysis(text: &str) -> (SourceFile, AnalysisOutput) {
         let source = SourceFile::new(SourceId::new(7), "sample\"name.nv", text);
         let lexed = lex(&source);
         assert!(lexed.is_success(), "{:?}", lexed.diagnostics);
@@ -1028,7 +1324,111 @@ mod tests {
         assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
         let analyzed = analyze(&parsed.program);
         assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
+        (source, analyzed)
+    }
+
+    fn checked(text: &str) -> (SourceFile, hir::Program) {
+        let (source, analyzed) = checked_analysis(text);
         (source, analyzed.program)
+    }
+
+    #[test]
+    fn schema_v2_projects_every_verified_cfg_node_and_edge_category() {
+        let (source, analyzed) = checked_analysis(
+            "fn early(flag: Bool) -> Int { return 1; flag; 2 }\n\
+             fn main(flag: Bool) -> Int {\n\
+                 var value: Int;\n\
+                 while true {\n\
+                     if flag { value = early(flag); break; } else { continue; };\n\
+                 }\n\
+                 value\n\
+             }",
+        );
+        let v1 = build_document(&analyzed.program, &source).expect("v1 should inspect");
+        let v2 = build_document_v2(&analyzed, &source).expect("v2 should inspect");
+
+        assert_eq!(v2.schema, "nova.semantic-inspection");
+        assert_eq!(v2.schema_version, 2);
+        assert_eq!(v2.program, v1.program);
+        assert_eq!(v2.control_flow.len(), v2.program.functions.len());
+        assert_eq!(v2.control_flow[0].function, "function:0");
+        assert_eq!(v2.control_flow[1].bindings, ["binding:1", "binding:2"]);
+
+        use super::v2::{FlowEdgeKind, FlowNodeKind};
+        let nodes = v2
+            .control_flow
+            .iter()
+            .flat_map(|graph| graph.nodes.iter())
+            .collect::<Vec<_>>();
+        for expected in [
+            FlowNodeKind::Entry,
+            FlowNodeKind::Branch,
+            FlowNodeKind::Join,
+            FlowNodeKind::Initialize,
+            FlowNodeKind::Read,
+            FlowNodeKind::Return,
+            FlowNodeKind::Break,
+            FlowNodeKind::Continue,
+            FlowNodeKind::Exit,
+        ] {
+            assert!(
+                nodes.iter().any(|node| node.kind == expected),
+                "missing {expected:?}"
+            );
+        }
+        for expected in [
+            FlowEdgeKind::Execution,
+            FlowEdgeKind::Diagnostic,
+            FlowEdgeKind::Backedge,
+        ] {
+            assert!(
+                nodes
+                    .iter()
+                    .any(|node| { node.predecessors.iter().any(|edge| edge.kind == expected) }),
+                "missing {expected:?}"
+            );
+        }
+        assert!(nodes.iter().any(|node| {
+            node.kind == FlowNodeKind::Read && node.binding.as_deref() == Some("binding:1")
+        }));
+
+        let first = render_json_v2(&analyzed, &source).expect("v2 JSON should render");
+        let second = render_json_v2(&analyzed, &source).expect("v2 JSON should be repeatable");
+        assert_eq!(first, second);
+        let parsed: serde_json::Value =
+            serde_json::from_str(&first).expect("rendered v2 document is valid JSON");
+        assert_eq!(parsed["schema_version"], 2);
+    }
+
+    #[test]
+    fn schema_v2_rejects_failed_or_mismatched_analysis_output() {
+        let source = SourceFile::new(
+            SourceId::new(7),
+            "sample\"name.nv",
+            "fn main() -> Int { missing }",
+        );
+        let lexed = lex(&source);
+        let parsed = parse(&source, &lexed.tokens);
+        let rejected = analyze(&parsed.program);
+        assert!(!rejected.is_success());
+        let error = build_document_v2(&rejected, &source)
+            .expect_err("rejected analysis must not produce tooling facts");
+        assert!(error.message().contains("successful semantic analysis"));
+
+        let (source, mut first) = checked_analysis("fn main() -> Int { let alpha = 1; alpha }");
+        let (_, second) = checked_analysis("fn main() -> Int { let bravo = 1; bravo }");
+        first.control_flow = second.control_flow;
+        let error = build_document_v2(&first, &source)
+            .expect_err("mismatched HIR and CFG metadata must fail closed");
+        assert!(error.message().contains("does not match its HIR binding"));
+
+        let (source, mut one_function) = checked_analysis("fn main() -> Int { 0 }");
+        let (_, two_functions) =
+            checked_analysis("fn helper() -> Int { 0 } fn main() -> Int { 0 }");
+        one_function.control_flow = two_functions.control_flow;
+        let error = build_document_v2(&one_function, &source)
+            .expect_err("one graph per function is required");
+        assert!(error.message().contains("one CFG per function"));
     }
 
     #[test]
@@ -1333,6 +1733,45 @@ mod tests {
         ] {
             assert_required_keys(&schema["$defs"][definition], value);
         }
+    }
+
+    #[test]
+    fn published_json_schema_is_well_formed_and_names_v2() {
+        let schema: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../docs/schemas/semantic-inspection-v2.schema.json"
+        ))
+        .expect("published schema must be valid JSON");
+
+        assert_eq!(schema["$id"], "urn:nova:semantic-inspection:v2");
+        assert_eq!(
+            schema["properties"]["schema"]["const"],
+            "nova.semantic-inspection"
+        );
+        assert_eq!(schema["properties"]["schema_version"]["const"], 2);
+        assert_eq!(
+            schema["properties"]["program"]["$ref"],
+            "urn:nova:semantic-inspection:v1#/$defs/program"
+        );
+
+        let (source, analyzed) = checked_analysis("fn main() -> Unit {}");
+        let document = serde_json::to_value(
+            build_document_v2(&analyzed, &source).expect("valid analysis should inspect"),
+        )
+        .expect("document should serialize");
+
+        assert_required_keys(&schema, &document);
+        assert_required_keys(
+            &schema["$defs"]["controlFlowGraph"],
+            &document["control_flow"][0],
+        );
+        assert_required_keys(
+            &schema["$defs"]["flowNode"],
+            &document["control_flow"][0]["nodes"][0],
+        );
+        assert_required_keys(
+            &schema["$defs"]["flowEdge"],
+            &document["control_flow"][0]["nodes"][1]["predecessors"][0],
+        );
     }
 
     fn assert_required_keys(schema: &serde_json::Value, value: &serde_json::Value) {

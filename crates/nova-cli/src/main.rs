@@ -1,5 +1,7 @@
 use nova_diagnostics::{Diagnostic, render_human_all, render_json_lines};
-use nova_inspect::render_json as render_semantic_json;
+use nova_inspect::{
+    render_json as render_semantic_json, render_json_v2 as render_semantic_json_v2,
+};
 use nova_interpreter::execute;
 use nova_lexer::lex;
 use nova_parser::{format_ast, parse};
@@ -18,7 +20,7 @@ Usage:
   nova check <file> [--message-format human|json]
   nova run <file> [--message-format human|json]
   nova ast <file> [--message-format human|json]
-  nova inspect <file> --format json [--message-format human|json]
+  nova inspect <file> --format json [--schema-version 1|2] [--message-format human|json]
   nova --help
 
 `check` validates UTF-8, tokens, syntax, names, types, and definite assignment.
@@ -46,12 +48,19 @@ enum InspectFormat {
     Json,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InspectSchemaVersion {
+    V1,
+    V2,
+}
+
 #[derive(Debug, Eq, PartialEq)]
 struct Options {
     command: Command,
     path: PathBuf,
     message_format: MessageFormat,
     inspect_format: Option<InspectFormat>,
+    inspect_schema_version: Option<InspectSchemaVersion>,
 }
 
 enum ParsedArguments {
@@ -154,7 +163,14 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
         (options.command, options.inspect_format),
         (Command::Inspect, Some(InspectFormat::Json))
     ) {
-        match render_semantic_json(&analyzed.program, &source) {
+        let rendered = match options
+            .inspect_schema_version
+            .unwrap_or(InspectSchemaVersion::V1)
+        {
+            InspectSchemaVersion::V1 => render_semantic_json(&analyzed.program, &source),
+            InspectSchemaVersion::V2 => render_semantic_json_v2(&analyzed, &source),
+        };
+        match rendered {
             Ok(document) => writeln!(stdout, "{document}")?,
             Err(error) => {
                 let diagnostic =
@@ -211,6 +227,7 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
     let mut path = None;
     let mut message_format = MessageFormat::Human;
     let mut inspect_format = None;
+    let mut inspect_schema_version = None;
     let mut index = 1;
 
     while index < arguments.len() {
@@ -232,6 +249,14 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
             inspect_format = Some(parse_inspect_format(value)?);
         } else if let Some(value) = text.and_then(|value| value.strip_prefix("--format=")) {
             inspect_format = Some(parse_inspect_format(value)?);
+        } else if text == Some("--schema-version") {
+            index += 1;
+            let Some(value) = arguments.get(index).and_then(|value| value.to_str()) else {
+                return Err("`--schema-version` requires `1` or `2`".to_owned());
+            };
+            inspect_schema_version = Some(parse_inspect_schema_version(value)?);
+        } else if let Some(value) = text.and_then(|value| value.strip_prefix("--schema-version=")) {
+            inspect_schema_version = Some(parse_inspect_schema_version(value)?);
         } else if text.is_some_and(|value| value.starts_with('-')) {
             return Err(format!("unknown option `{}`", argument.to_string_lossy()));
         } else if path.replace(PathBuf::from(argument)).is_some() {
@@ -248,11 +273,15 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
         (Command::Inspect, Some(_)) | (_, None) => {}
         (_, Some(_)) => return Err("`--format` is only valid with `inspect`".to_owned()),
     }
+    if command != Command::Inspect && inspect_schema_version.is_some() {
+        return Err("`--schema-version` is only valid with `inspect`".to_owned());
+    }
     Ok(ParsedArguments::Run(Options {
         command,
         path,
         message_format,
         inspect_format,
+        inspect_schema_version,
     }))
 }
 
@@ -275,6 +304,16 @@ fn parse_inspect_format(value: &str) -> Result<InspectFormat, String> {
     }
 }
 
+fn parse_inspect_schema_version(value: &str) -> Result<InspectSchemaVersion, String> {
+    match value {
+        "1" => Ok(InspectSchemaVersion::V1),
+        "2" => Ok(InspectSchemaVersion::V2),
+        _ => Err(format!(
+            "unsupported inspection schema version `{value}`; expected `1` or `2`"
+        )),
+    }
+}
+
 fn emit_diagnostics(
     diagnostics: &[Diagnostic],
     source: &SourceFile,
@@ -293,7 +332,10 @@ fn emit_diagnostics(
 
 #[cfg(test)]
 mod tests {
-    use super::{Command, InspectFormat, MessageFormat, Options, ParsedArguments, parse_arguments};
+    use super::{
+        Command, InspectFormat, InspectSchemaVersion, MessageFormat, Options, ParsedArguments,
+        parse_arguments,
+    };
     use std::ffi::OsString;
     use std::path::Path;
 
@@ -320,6 +362,7 @@ mod tests {
                 path,
                 message_format: MessageFormat::Json,
                 inspect_format: None,
+                inspect_schema_version: None,
             }) if path.as_path() == Path::new("sample.nv")
         ));
         assert!(matches!(
@@ -329,6 +372,7 @@ mod tests {
                 path,
                 message_format: MessageFormat::Human,
                 inspect_format: None,
+                inspect_schema_version: None,
             }) if path.as_path() == Path::new("sample.nv")
         ));
 
@@ -341,6 +385,25 @@ mod tests {
                 path,
                 message_format: MessageFormat::Human,
                 inspect_format: Some(InspectFormat::Json),
+                inspect_schema_version: None,
+            }) if path.as_path() == Path::new("sample.nv")
+        ));
+
+        let inspected_v2 = parse_arguments(&arguments(&[
+            "inspect",
+            "--schema-version=2",
+            "sample.nv",
+            "--format=json",
+        ]))
+        .expect("valid schema-v2 inspection arguments");
+        assert!(matches!(
+            inspected_v2,
+            ParsedArguments::Run(Options {
+                command: Command::Inspect,
+                path,
+                message_format: MessageFormat::Human,
+                inspect_format: Some(InspectFormat::Json),
+                inspect_schema_version: Some(InspectSchemaVersion::V2),
             }) if path.as_path() == Path::new("sample.nv")
         ));
     }
@@ -355,7 +418,16 @@ mod tests {
             vec!["check", "x.nv", "--message-format", "xml"],
             vec!["inspect", "x.nv"],
             vec!["inspect", "x.nv", "--format", "text"],
+            vec![
+                "inspect",
+                "x.nv",
+                "--format",
+                "json",
+                "--schema-version",
+                "3",
+            ],
             vec!["check", "x.nv", "--format", "json"],
+            vec!["check", "x.nv", "--schema-version", "2"],
         ] {
             assert!(parse_arguments(&arguments(&values)).is_err(), "{values:?}");
         }
