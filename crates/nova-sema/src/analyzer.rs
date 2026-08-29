@@ -2278,7 +2278,7 @@ impl Analyzer {
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires Int, Bool, Unit, or payload-free enum operands, found {} and {}",
+                        "equality requires matching comparable operands (Int, Bool, Unit, function, or payload-free enum), found {} and {}",
                         left.ty, right.ty
                     ),
                 ));
@@ -2293,7 +2293,7 @@ impl Analyzer {
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires matching Int, Bool, Unit, or payload-free enum operands, found {} and {}",
+                        "equality requires matching comparable operands (Int, Bool, Unit, function, or payload-free enum), found {} and {}",
                         left.ty, right.ty
                     ),
                 ));
@@ -2303,7 +2303,7 @@ impl Analyzer {
 
     fn is_equality_comparable(&self, ty: &Type) -> bool {
         match ty {
-            Type::Int | Type::Bool | Type::Unit => true,
+            Type::Int | Type::Bool | Type::Unit | Type::Function(_) => true,
             Type::Enum(enumeration) => self
                 .enum_definitions
                 .get(enumeration.id.index())

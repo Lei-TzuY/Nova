@@ -1,0 +1,6 @@
+fn first() -> Int { 1 }
+fn second() -> Int { 2 }
+fn main() -> Bool {
+    let alias = first;
+    alias == first && first != second
+}

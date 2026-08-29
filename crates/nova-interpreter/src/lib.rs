@@ -841,6 +841,24 @@ impl<'program> Interpreter<'program> {
             }
             (BinaryOperator::Equal, Value::Unit, Value::Unit) => Ok(Value::Bool(true)),
             (BinaryOperator::NotEqual, Value::Unit, Value::Unit) => Ok(Value::Bool(false)),
+            (BinaryOperator::Equal, Value::Function(left), Value::Function(right)) => {
+                if !self.function_signatures_match(left, right) {
+                    return Err(self.invariant(
+                        expression.span,
+                        "function equality received runtime functions with different signatures",
+                    ));
+                }
+                Ok(Value::Bool(left == right))
+            }
+            (BinaryOperator::NotEqual, Value::Function(left), Value::Function(right)) => {
+                if !self.function_signatures_match(left, right) {
+                    return Err(self.invariant(
+                        expression.span,
+                        "function equality received runtime functions with different signatures",
+                    ));
+                }
+                Ok(Value::Bool(left != right))
+            }
             (
                 BinaryOperator::Equal,
                 Value::Enum {
@@ -920,6 +938,24 @@ impl<'program> Interpreter<'program> {
             },
         );
         Ok(())
+    }
+
+    fn function_signatures_match(&self, left: FunctionId, right: FunctionId) -> bool {
+        let Some(left_function) = self.program.functions.get(left.index()) else {
+            return false;
+        };
+        let Some(right_function) = self.program.functions.get(right.index()) else {
+            return false;
+        };
+        left_function.id == left
+            && right_function.id == right
+            && left_function.parameters.len() == right_function.parameters.len()
+            && left_function
+                .parameters
+                .iter()
+                .zip(&right_function.parameters)
+                .all(|(left_parameter, right_parameter)| left_parameter.ty == right_parameter.ty)
+            && left_function.return_type == right_function.return_type
     }
 
     fn value_conforms_to_type(&self, value: &Value, ty: &Type) -> bool {
