@@ -1,0 +1,40 @@
+name: Apply payload-free enum equality
+
+on:
+  push:
+    branches: [feat/payload-free-enum-equality]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Apply validated feature
+        run: python scripts/apply-payload-free-enum-equality.py
+      - name: Validate focused behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo test -p nova-sema --test payload_free_enum_equality --locked
+          cargo test -p nova-interpreter --all-targets --locked
+      - name: Commit feature and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/apply-payload-free-enum-equality.yml
+          rm .github/workflows/validate-payload-free-enum-equality.yml
+          rm scripts/apply-payload-free-enum-equality.py
+          git config user.name 'LeiZ'
+          git config user.email '52287354+Lei-TzuY@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: add payload-free enum equality'
+          git push origin HEAD:feat/payload-free-enum-equality
