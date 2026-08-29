@@ -25,14 +25,14 @@ interpreter slices. The toolchain is written in Rust and can:
   delayed `var` initialization, narrow assignments, expressions, blocks, calls,
   `if` expressions, pre-test `while` loops, and statement-only `break`/`continue`;
 - lower accepted syntax into a resolved, typed HIR with stable function,
-  binding, record, and enum identities;
+  binding, record, and enum identities, plus a verified function-level CFG;
 - resolve top-level functions and nominal types, parameters, lexical local
   bindings, record field slots, enum variant slots, and match payload bindings;
 - check bootstrap `Int`, `Bool`, `Unit`, and nominal aggregate types, function
   signatures, local inference and annotations, calls, operators, block tails, branches,
   returns, loop conditions, loop-control legality, record construction/projection,
   enum construction, match exhaustiveness and arm types, assignment
-  mutability/type constraints, and definite initialization;
+  mutability/type constraints, and CFG-based definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
   interpreter with function calls, recursion, Unit-valued procedures, records, enums,
   pattern matching, mutation, blocks, conditionals, bounded loops, and structured
@@ -71,7 +71,9 @@ See [the implemented grammar](docs/grammar.md) for the normative frontend
 subset, [the enum and pattern semantics](docs/enums-and-patterns.md) for that
 aggregate slice's semantic contract,
 [the semantic-introspection v1 contract](docs/semantic-introspection.md) for the
-machine-readable tooling boundary, and
+machine-readable tooling boundary,
+[the bootstrap control-flow contract](docs/control-flow.md) for CFG verification
+and definite-initialization dataflow, and
 [the language constitution](docs/language-constitution.md) for decisions that
 extend beyond them.
 
@@ -316,7 +318,7 @@ source bytes
   -> nova-source        source identity, UTF-8 text, spans, locations
   -> nova-lexer         tokens and lexical diagnostics
   -> nova-parser        AST and syntactic diagnostics
-  -> nova-sema          typed HIR, nominal identity, resolution, typing, dataflow
+  -> nova-sema          typed HIR, verified CFG, resolution, typing, dataflow
       -> nova-inspect       versioned facts and fail-closed JSON projection
       -> nova-interpreter   deterministic checked, bounded HIR execution
 
@@ -345,6 +347,8 @@ language semantics.
   execution while skipped source remains statically checked.
 - Non-continuing control-flow paths cannot contribute definite-assignment or loop-
   exit facts to code they cannot reach.
+- Function CFGs are verified before publication; `N3009` is produced by their
+  fixed-point must analysis rather than ad-hoc diagnostic emission during name lookup.
 - Machine-readable semantics cross a separately versioned schema boundary;
   debug AST/HIR output is never silently promoted into a tooling contract.
 - Potentially nonterminating bootstrap execution is bounded and fails with a

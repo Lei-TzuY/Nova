@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty-six vertical slices implemented; broader type-system work remains.**
+**Status: twenty-seven vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -456,12 +456,30 @@ Implemented in the twenty-sixth Phase 2 slice:
   scrutinees, static-diagnostic preservation, runtime return propagation, and reachable
   constant-error behavior end to end.
 
+Implemented in the twenty-seventh Phase 2 slice:
+
+- one verified function-level CFG per HIR function, constructed during lowering so
+  recovery-only source remains diagnosable even when invalid executable HIR is
+  intentionally discarded;
+- deterministic entry, branch, join, binding initialization/read, structured
+  transfer, exit, diagnostic-path, and loop-backedge representation, with exact
+  source-qualified spans on source-associated events;
+- fail-closed graph verification for identity/range, reachability, binding-reference,
+  exit, and transfer-successor invariants, with internal diagnostic `N3999`;
+- a fixed-point must analysis over predecessor intersections that is now the sole
+  producer of definite-initialization diagnostic `N3009`;
+- read-only CFG access from semantic analysis without silently changing the separately
+  versioned semantic-inspection v1 document;
+- unreachable statement/tail lowering unified with diagnostic-only edge semantics,
+  preventing unreachable constant arithmetic from becoming an execution failure; and
+- unit, integration, structural, branch-intersection, loop-backedge, transfer,
+  diagnostic-path, and full regression coverage.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
-- split and stabilize HIR/resolution/type-analysis/dataflow contracts as
-  implementation evidence accumulates, introducing an explicit CFG or flow-state
-  representation if ad-hoc structured snapshots stop scaling;
+- separate recovery HIR typing from the remaining inline initialization flag now that
+  `N3009` proof and diagnostics are owned by the explicit CFG;
 - define language-level numeric types, defaulting, conversions, and overflow
   behavior beyond the provisional interpreter contract;
 - deepen the pattern model only with a specified usefulness and diagnostic

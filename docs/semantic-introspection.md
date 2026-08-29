@@ -133,6 +133,9 @@ control flow; only `never` lacks a surface spelling.
 The bootstrap is single-file and exposes no module graph, effects, ownership or
 region facts, unsafe capabilities, lifetimes, generic substitutions, layout,
 ABI, MIR transformations, runtime values, or incremental-compilation keys.
+The compiler's verified bootstrap CFG and definite-initialization events are also
+deliberately absent: they were introduced after schema v1 and will not be added by
+silently changing an existing tooling contract.
 Assignment targets currently carry their enclosing statement span because HIR
 does not yet retain a separate target-name span. Match facts report exhaustive
 coverage for the implemented qualified single-variant patterns; they do not
