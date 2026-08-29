@@ -1,0 +1,39 @@
+name: Apply CFG backedge topology fix
+
+on:
+  push:
+    branches: [fix/cfg-backedge-topology]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Apply validated verifier fix
+        run: python scripts/apply-cfg-backedge-topology.py
+      - name: Validate focused behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo test -p nova-sema --lib control_flow_backedge_tests --locked
+      - name: Commit fix and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/apply-cfg-backedge-topology.yml
+          rm .github/workflows/validate-cfg-backedge-topology.yml
+          rm scripts/apply-cfg-backedge-topology.py
+          git config user.name 'LeiZ'
+          git config user.email '52287354+Lei-TzuY@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: verify CFG backedge topology'
+          git push origin HEAD:fix/cfg-backedge-topology
