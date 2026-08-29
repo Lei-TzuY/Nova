@@ -1,0 +1,65 @@
+use crate::constant_int;
+use crate::hir::{Expression, ExpressionKind, Type};
+use nova_parser::ast::{BinaryOperator, UnaryOperator};
+
+/// Evaluates only side-effect-free, closed bootstrap conditions whose value is
+/// already determined by literal Bool/Int operations. The HIR is never folded.
+pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
+    if expression.ty != Type::Bool {
+        return None;
+    }
+
+    match &expression.kind {
+        ExpressionKind::Boolean(value) => Some(*value),
+        ExpressionKind::Unary {
+            operator: UnaryOperator::Not,
+            operand,
+        } => evaluate(operand).map(|value| !value),
+        ExpressionKind::Binary {
+            operator,
+            left,
+            right,
+        } => evaluate_binary(*operator, left, right),
+        _ => None,
+    }
+}
+
+fn evaluate_binary(
+    operator: BinaryOperator,
+    left: &Expression,
+    right: &Expression,
+) -> Option<bool> {
+    match operator {
+        BinaryOperator::And => match evaluate(left) {
+            Some(false) => Some(false),
+            Some(true) => evaluate(right),
+            None => None,
+        },
+        BinaryOperator::Or => match evaluate(left) {
+            Some(true) => Some(true),
+            Some(false) => evaluate(right),
+            None => None,
+        },
+        BinaryOperator::Equal | BinaryOperator::NotEqual => {
+            let equal = match (&left.ty, &right.ty) {
+                (Type::Int, Type::Int) => int_value(left)? == int_value(right)?,
+                (Type::Bool, Type::Bool) => evaluate(left)? == evaluate(right)?,
+                _ => return None,
+            };
+            Some(if operator == BinaryOperator::Equal {
+                equal
+            } else {
+                !equal
+            })
+        }
+        BinaryOperator::Less => Some(int_value(left)? < int_value(right)?),
+        BinaryOperator::LessEqual => Some(int_value(left)? <= int_value(right)?),
+        BinaryOperator::Greater => Some(int_value(left)? > int_value(right)?),
+        BinaryOperator::GreaterEqual => Some(int_value(left)? >= int_value(right)?),
+        _ => None,
+    }
+}
+
+fn int_value(expression: &Expression) -> Option<i64> {
+    constant_int::evaluate(expression)?.ok()
+}

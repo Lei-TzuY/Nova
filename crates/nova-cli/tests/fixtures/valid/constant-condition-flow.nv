@@ -1,0 +1,21 @@
+fn main() -> Int {
+    var value: Int;
+
+    if 1 + 1 == 2 {
+        value = 40;
+        ()
+    } else {
+        ()
+    };
+
+    (2 < 1) || {
+        value = value + 2;
+        true
+    };
+
+    while 2 > 3 {
+        1 / 0;
+    }
+
+    value
+}

@@ -643,12 +643,17 @@ impl Analyzer {
                 );
 
                 let post_condition_scopes = self.scopes.clone();
-                let guaranteed_entry = matches!(&condition.kind, ExpressionKind::Boolean(true));
+                let condition_literal = crate::constant_condition::evaluate(&condition);
+                let guaranteed_entry = condition_literal == Some(true);
                 self.loop_stack.push(LoopContext {
                     visible_scope_count: self.scopes.len(),
                     break_states: Vec::new(),
                 });
-                let body = self.lower_block(body, return_type, true);
+                let body = if condition_literal == Some(false) {
+                    self.lower_block_for_diagnostics(body, return_type, true)
+                } else {
+                    self.lower_block(body, return_type, true)
+                };
                 let loop_context = self
                     .loop_stack
                     .pop()
@@ -785,10 +790,7 @@ impl Analyzer {
                 let operator_entry_state = self.capture_reachable_state();
                 let left = self.lower_expression(left, return_type);
                 let left_scopes = self.scopes.clone();
-                let left_literal = match &left.kind {
-                    ExpressionKind::Boolean(value) => Some(*value),
-                    _ => None,
-                };
+                let left_literal = crate::constant_condition::evaluate(&left);
                 let skips_right = matches!(
                     (*operator, left_literal),
                     (BinaryOperator::And, Some(false)) | (BinaryOperator::Or, Some(true))
@@ -870,10 +872,7 @@ impl Analyzer {
                 let condition = self.lower_expression(condition, return_type);
                 self.require_type(&condition.ty, &Type::Bool, condition.span, "if condition");
 
-                let condition_literal = match &condition.kind {
-                    ExpressionKind::Boolean(value) => Some(*value),
-                    _ => None,
-                };
+                let condition_literal = crate::constant_condition::evaluate(&condition);
                 let entry_scopes = self.scopes.clone();
                 let post_condition_loop_stack = self.loop_stack.clone();
 

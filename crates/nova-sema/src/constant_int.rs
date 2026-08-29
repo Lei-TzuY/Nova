@@ -38,7 +38,7 @@ pub(crate) fn evaluate_binary(
     })
 }
 
-fn evaluate(expression: &Expression) -> Option<Result<i64, ConstantIntError>> {
+pub(crate) fn evaluate(expression: &Expression) -> Option<Result<i64, ConstantIntError>> {
     match &expression.kind {
         ExpressionKind::Integer(value) => Some(Ok(*value)),
         ExpressionKind::Unary { operator, operand } => evaluate_unary(*operator, operand),

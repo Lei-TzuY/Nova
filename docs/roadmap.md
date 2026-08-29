@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty-four vertical slices implemented; broader type-system work remains.**
+**Status: twenty-five vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -417,6 +417,26 @@ Implemented in the twenty-fourth Phase 2 slice:
   representation-independent; and
 - structural gates plus the full existing static/runtime and semantic-inspection suites
   verify the refactor is behavior-preserving while removing future drift risk.
+
+Implemented in the twenty-fifth Phase 2 slice:
+
+- semantic reachability gains a pure closed-condition evaluator over already typed HIR,
+  recognizing Bool literals, Boolean negation/short-circuiting, and Int/Bool equality
+  or Int ordering when all required operands are side-effect-free known values;
+- checked literal arithmetic feeding those comparisons reuses the existing constant-Int
+  evaluator and shared `nova-int-semantics` policy instead of inventing another numeric
+  implementation;
+- `if`, `while`, and `&&`/`||` share the derived truth result, extending earlier direct-
+  literal flow precision without propagating names or executing calls, blocks, matches,
+  field access, or aggregate construction;
+- a loop condition proven false lowers its body in diagnostic-only mode under a lexical
+  loop context, so dead execution failures such as `1 / 0` do not manufacture N3032
+  while `break`/`continue` remain statically legal and ordinary type/name diagnostics run;
+- a condition proven true extends guaranteed-loop/noncontinuation reasoning beyond raw
+  `true`, and derived short-circuit truths control optional RHS dataflow exactly as the
+  interpreter does; and
+- semantic regressions plus a CLI check/run fixture lock flow precision, dead-path
+  execution-diagnostic suppression, dynamic-boundary conservatism, and HIR non-folding.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
