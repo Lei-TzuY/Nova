@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty-eight vertical slices implemented; broader type-system work remains.**
+**Status: twenty-nine vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -493,6 +493,22 @@ Implemented in the twenty-eighth Phase 2 slice:
   reporting, and noncontinuing-initializer graph validity; and
 - the CFG is now the single source of truth for definite initialization in both accepted
   and recovery analysis, completing the transition introduced by slice twenty-seven.
+
+Implemented in the twenty-ninth Phase 2 slice:
+
+- a `return expression;` emits its own CFG `Return` transfer only when evaluating the
+  expression can complete normally;
+- if the return expression already transfers control through an inner `return`,
+  `break`, or `continue`, the parent statement remains non-continuing in HIR but does
+  not append an impossible execution successor after that child transfer;
+- nested-return CFGs therefore satisfy the verifier's transfer-successor invariant
+  instead of failing closed with internal diagnostic `N3999`;
+- a `break` reached while evaluating a return expression continues to target and exit
+  the nearest lexical loop rather than being overwritten by the syntactic parent
+  return;
+- ordinary completed return expressions still emit exactly one `Return` transfer; and
+- focused CFG regressions plus the full workspace suite lock child-transfer precedence
+  without changing syntax, runtime semantics, or semantic-inspection schema v1.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
