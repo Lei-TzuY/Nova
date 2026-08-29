@@ -3,7 +3,8 @@ use crate::hir::{Expression, ExpressionKind, FunctionId, Type};
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
-/// already determined by literal Bool/Int operations. The HIR is never folded.
+/// already determined by supported literal, identity, comparison, and Boolean proofs.
+/// The HIR is never folded.
 pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
     if expression.ty != Type::Bool {
         return None;
