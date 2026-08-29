@@ -1,0 +1,10 @@
+fn main() -> Int {
+    if {
+        return 42;
+        false
+    } {
+        1 / 0
+    } else {
+        2 / 0
+    }
+}

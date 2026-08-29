@@ -251,8 +251,11 @@ execution-failure diagnostics. The same side-effect-free literal Bool/Int evalua
 may determine `if`, `while`, and short-circuit reachability from closed comparisons
 and Boolean operations; this changes flow analysis only and never folds the retained
 HIR. Names, calls, blocks, aggregates, and other dynamic operands stop the proof.
-Successful constant arithmetic is not folded, and any expression with a dynamic
-operand remains runtime checked. Such
+More generally, when an `if`/`while` condition or `match` scrutinee is already
+non-continuing (`!`), its successor branches/body/arms are lowered only for static
+diagnostics: execution-only constant failures and flow mutations cannot come from a
+path runtime control never reaches. Successful constant arithmetic is not folded, and
+any expression with a dynamic operand remains runtime checked. Such
 dynamic overflow produces `N4002`; dynamic division or remainder by zero produces
 `N4003`. The arithmetic truth table itself lives once in the dependency-free
 `nova-int-semantics` leaf crate; semantic preflight supplies only closed-HIR traversal
