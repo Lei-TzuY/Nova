@@ -77,7 +77,11 @@ fn pure_unit_blocks_participate_in_closed_equality_reachability() {
         "fn main() -> Int { var value: Int; if ({ { () } }) != () { () } else { value = 42; () }; value }",
     ] {
         let output = analyze_text(text);
-        assert!(output.is_success(), "source: {text}; diagnostics: {:?}", output.diagnostics);
+        assert!(
+            output.is_success(),
+            "source: {text}; diagnostics: {:?}",
+            output.diagnostics
+        );
     }
 }
 
