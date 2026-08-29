@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty-three vertical slices implemented; broader type-system work remains.**
+**Status: thirty-four vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -574,6 +574,19 @@ Implemented in the thirty-third Phase 2 slice:
   span for N3009;
 - direct verifier corruption regressions prove both duplicate and out-of-order tables were
   previously accepted and are now rejected; and
+- the change affects no syntax, HIR, runtime behavior, dataflow transfer function, or
+  semantic-inspection schema.
+
+Implemented in the thirty-fourth Phase 2 slice:
+
+- the verified CFG now requires `graph.entry` to identify the unique `Entry`-kind node,
+  making the fixed-point solver's distinguished empty-lattice root a checked invariant;
+- a graph whose designated root has another node kind is rejected, as is any graph that
+  contains a second `Entry` marker elsewhere in the node table;
+- the verifier deliberately does not require the entry to have index zero, avoiding an
+  unnecessary coupling between semantic graph meaning and the current builder's numbering;
+- direct corruption regressions prove both root-kind mismatch and duplicate Entry markers
+  were previously accepted and are now fail-closed; and
 - the change affects no syntax, HIR, runtime behavior, dataflow transfer function, or
   semantic-inspection schema.
 

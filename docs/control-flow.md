@@ -59,6 +59,8 @@ continuation.
 Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
 
 - entry and predecessor identities are in range;
+- the designated graph entry is the unique `Entry`-kind node, keeping the solver's
+  empty-lattice root aligned with the graph model;
 - node identities equal their deterministic vector positions;
 - only the entry lacks predecessors;
 - every node is graph-reachable from the entry, including diagnostic source;
