@@ -71,10 +71,23 @@ fn derived_short_circuit_truth_controls_flow_and_dead_rhs_diagnostics() {
 }
 
 #[test]
-fn names_calls_and_blocks_do_not_become_compile_time_conditions() {
+fn pure_unit_blocks_participate_in_closed_equality_reachability() {
+    for text in [
+        "fn main() -> Int { var value: Int; if ({}) == ({ () }) { value = 42; () } else { () }; value }",
+        "fn main() -> Int { var value: Int; if ({ { () } }) != () { () } else { value = 42; () }; value }",
+    ] {
+        let output = analyze_text(text);
+        assert!(output.is_success(), "source: {text}; diagnostics: {:?}", output.diagnostics);
+    }
+}
+
+#[test]
+fn names_calls_and_statement_bearing_blocks_remain_dynamic_conditions() {
     for text in [
         "fn truth() -> Bool { true } fn main() -> Int { var value: Int; if truth() { value = 1; () } else { () }; value }",
         "fn main() -> Int { var flag = true; var value: Int; if flag { value = 1; () } else { () }; value }",
+        "fn main() -> Int { var value: Int; if ({ (); }) == () { value = 1; () } else { () }; value }",
+        "fn unit() -> Unit {} fn main() -> Int { var value: Int; if ({ unit(); }) == () { value = 1; () } else { () }; value }",
     ] {
         let output = analyze_text(text);
         assert!(
