@@ -104,6 +104,12 @@ a continuing rejected operator are rolled back. Non-continuation from an operand
 must be evaluated keeps `!` precedence; short-circuit operators retain their existing
 conditional right-hand evaluation rules.
 
+Matching `Int`, `Bool`, and `Unit` values support `==` and `!=`. `Unit` has a
+single runtime value, so Unit equality is always true and Unit inequality is always false
+once both operands have evaluated normally. Record, enum, and function values remain
+non-comparable. Closed-condition analysis recognizes only literal `()` equality; Unit
+locals and calls remain dynamic and are still evaluated at runtime.
+
 Invalid continuing control conditions are fail-closed too. A non-Bool or erroneous
 `if` condition makes the expression Error-typed and discards condition/branch flow
 facts; a rejected `while` condition likewise cannot export pre-test initialization or

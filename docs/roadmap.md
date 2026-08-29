@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty-four vertical slices implemented; broader type-system work remains.**
+**Status: thirty-five vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -590,6 +590,19 @@ Implemented in the thirty-fourth Phase 2 slice:
 - the change affects no syntax, HIR, runtime behavior, dataflow transfer function, or
   semantic-inspection schema.
 
+Implemented in the thirty-fifth Phase 2 slice:
+
+- `Unit` joins `Int` and `Bool` as an equality-comparable bootstrap value type without
+  making nominal aggregates or function references comparable;
+- semantic `==` / `!=` accepts matching Unit operands, including parameters and call
+  results, while preserving existing Never/Error recovery precedence;
+- closed-condition reasoning recognizes only literal `()` equality and inequality, so
+  known Unit comparisons can refine reachability without treating Unit-returning calls,
+  locals, or blocks as compile-time values;
+- semantic regressions lock Unit comparison, literal-condition flow, dynamic-call
+  conservatism, and continued rejection of record/function equality; and
+- no parser, HIR, CFG shape, or semantic-inspection schema change is required.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -608,7 +621,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: seven vertical slices implemented; execution surface remains small.**
+**Status: eight vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -712,6 +725,18 @@ Implemented in the seventh Phase 3 slice:
   the quotient/remainder identity, and checked add/subtract/multiply/negate; and
 - CLI fixtures lock negative division/remainder results plus both extreme overflow
   and zero-divisor classes end to end without adding new syntax or numeric types.
+
+Implemented in the eighth Phase 3 slice:
+
+- the interpreter executes equality and inequality for the existing first-class Unit
+  runtime value, yielding `true` for Unit equality and `false` for Unit inequality after
+  normal left-to-right operand evaluation;
+- Unit parameters and call results use the same equality path as literal `()`, with no
+  special source-only shortcut;
+- record, enum, and function values remain rejected by semantic analysis rather than
+  acquiring structural or identity equality accidentally; and
+- a CLI check/run fixture locks Unit equality end to end while preserving the existing
+  `main -> Int | Bool` entry-point contract.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

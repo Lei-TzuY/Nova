@@ -710,6 +710,8 @@ impl<'program> Interpreter<'program> {
             (BinaryOperator::NotEqual, Value::Bool(left), Value::Bool(right)) => {
                 Ok(Value::Bool(left != right))
             }
+            (BinaryOperator::Equal, Value::Unit, Value::Unit) => Ok(Value::Bool(true)),
+            (BinaryOperator::NotEqual, Value::Unit, Value::Unit) => Ok(Value::Bool(false)),
             (BinaryOperator::And, Value::Bool(left), Value::Bool(right)) => {
                 Ok(Value::Bool(left && right))
             }
