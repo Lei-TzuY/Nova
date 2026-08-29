@@ -801,11 +801,13 @@ impl Analyzer {
                         .expect("semantic lowering must own a function flow graph")
                         .add_backedge(body_exit, loop_context.header);
                 }
-                for continue_cursor in &loop_context.continue_cursors {
-                    self.flow
-                        .as_mut()
-                        .expect("semantic lowering must own a function flow graph")
-                        .add_backedge(*continue_cursor, loop_context.header);
+                if condition.ty == Type::Bool && !guaranteed_skip {
+                    for continue_cursor in &loop_context.continue_cursors {
+                        self.flow
+                            .as_mut()
+                            .expect("semantic lowering must own a function flow graph")
+                            .add_backedge(*continue_cursor, loop_context.header);
+                    }
                 }
 
                 let diverges = if condition.ty.is_never() {
