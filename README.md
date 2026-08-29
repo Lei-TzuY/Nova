@@ -118,10 +118,11 @@ Matching `Int`, `Bool`, and `Unit` values support `==` and `!=`. `Unit` has a
 single runtime value, so Unit equality is always true and Unit inequality is always false
 once both operands have evaluated normally. A nominal enum also supports equality when
 every declared variant is payload-free; operands must have the same enum identity and
-comparison uses the resolved variant slot. Enums with any payload variant, records, and
-functions remain non-comparable. Closed-condition analysis can prove literal Unit and
-direct payload-free enum-constructor comparisons, while locals and calls remain dynamic
-and are still evaluated at runtime.
+comparison uses the resolved variant slot. Function values are comparable only at the
+same fully resolved signature and compare top-level declaration identity. Enums with any
+payload variant and records remain non-comparable. Closed-condition analysis can prove
+literal Unit, direct payload-free enum-constructor, and direct function-reference
+comparisons, while locals and calls remain dynamic and are still evaluated at runtime.
 
 Invalid continuing control conditions are fail-closed too. A non-Bool or erroneous
 `if` condition makes the expression Error-typed and discards condition/branch flow
@@ -281,9 +282,14 @@ Every expression that completes with an ordinary runtime value also has a final
 interpreter postcondition: the value must recursively conform to that expression's
 typed-HIR result type. This closes gaps for local or discarded literals, projections,
 operators, blocks, conditionals, matches, and other values that may never cross a
-function, aggregate, or frame-storage boundary. Structured `return`, `break`, and
-`continue` propagation is not a runtime value and therefore remains outside this
-postcondition. A mismatched value fails closed with `N4005` at the expression span.
+function, aggregate, or frame-storage boundary. Equality adds an operator-level
+precondition on ordinary value-producing paths as well: when both operands can complete
+normally, their resolved types must satisfy the same shared semantic comparability rule,
+including the declaration-wide payload-free requirement for enums. Malformed HIR therefore
+cannot compare a payload-free variant of an enum whose other variants carry payloads.
+A `Never` operand still evaluates normally for structured `return`, `break`, or `continue`
+propagation and never reaches the comparison itself. Any interpreter/HIR contract drift
+on a value-producing equality path fails closed with `N4005`.
 
 For deterministic execution while the numeric design remains provisional, the
 bootstrap frontend now covers the complete signed 64-bit literal endpoints: positive

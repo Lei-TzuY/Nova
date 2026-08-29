@@ -4,6 +4,7 @@ use nova_diagnostics::Diagnostic;
 use nova_int_semantics as int_semantics;
 use nova_int_semantics::IntArithmeticError;
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
+use nova_sema::equality_rules::matching_equality_types;
 use nova_sema::hir::{
     BindingId, Block, EnumId, Expression, ExpressionKind, Function, FunctionId, Program, RecordId,
     Statement, StatementKind, Type,
@@ -769,6 +770,20 @@ impl<'program> Interpreter<'program> {
         expression: &Expression,
         frame: &mut Frame,
     ) -> Result<Flow, Diagnostic> {
+        if matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
+            && !left.ty.is_never()
+            && !right.ty.is_never()
+            && !self.equality_types_match(&left.ty, &right.ty)
+        {
+            return Err(self.invariant(
+                expression.span,
+                format!(
+                    "equality operator received HIR operand types outside the semantic equality contract: {} and {}",
+                    left.ty, right.ty
+                ),
+            ));
+        }
+
         let left = match self.eval_expression(left, frame)? {
             Flow::Value(value) => value,
             flow => return Ok(flow),
@@ -938,6 +953,21 @@ impl<'program> Interpreter<'program> {
             },
         );
         Ok(())
+    }
+
+    fn equality_types_match(&self, left: &Type, right: &Type) -> bool {
+        matching_equality_types(left, right, |enum_id| {
+            self.program
+                .enums
+                .get(enum_id.index())
+                .is_some_and(|definition| {
+                    definition.id == enum_id
+                        && definition
+                            .variants
+                            .iter()
+                            .all(|variant| variant.payload.is_none())
+                })
+        })
     }
 
     fn function_signatures_match(&self, left: FunctionId, right: FunctionId) -> bool {
