@@ -62,6 +62,8 @@ Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
 - node identities equal their deterministic vector positions;
 - only the entry lacks predecessors;
 - every node is graph-reachable from the entry, including diagnostic source;
+- every node reachable from entry without crossing a `Diagnostic` edge has only
+  non-diagnostic predecessors that are themselves reachable on such executable flow;
 - every read/initialization event names graph binding metadata;
 - declared normal exits name `Exit` nodes; and
 - `return`, `break`, `continue`, and `Exit` successor edge classes respect their
@@ -71,6 +73,12 @@ Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
 
 An internal verification failure is fail-closed diagnostic `N3999`; no invalid
 graph is published for that function.
+The verifier computes this executable-reachability set independently of lowering.
+This makes diagnostic isolation a graph invariant rather than an analyzer convention:
+a discarded recovery subtree may branch away from executable flow, but it cannot feed
+an executable join, exit, or loop header through any edge class. The fixed-point
+must-analysis can therefore safely intersect every recorded predecessor without
+allowing recovery-only facts to constrain reachable continuation.
 
 ## Definite-initialization dataflow
 

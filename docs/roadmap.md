@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty vertical slices implemented; broader type-system work remains.**
+**Status: thirty-one vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -526,6 +526,25 @@ Implemented in the thirtieth Phase 2 slice:
   positive control; and
 - the language constitution is synchronized with slice twenty-eight by removing the
   obsolete claim that lexical symbols still carry a parallel initialization bit.
+
+Implemented in the thirty-first Phase 2 slice:
+
+- CFG verification now derives the set of nodes reachable from function entry without
+  crossing a `Diagnostic` edge, independently of the structured lowerer's snapshots;
+- every executable-reachable node is required to have only non-diagnostic predecessors
+  that are themselves executable-reachable, structurally forbidding discarded recovery
+  subgraphs from reconnecting to live continuation through joins, exits, or backedges;
+- this invariant protects the fixed-point definite-initialization solver, which can
+  continue intersecting all recorded predecessors because recovery-only facts cannot
+  enter an executable node;
+- a direct verifier regression constructs the rejected-loop-style diagnostic branch and
+  recovery backedge that slice thirty removed from the analyzer, proving the verifier
+  now fails closed even if a future lowering regression recreates that shape;
+- a second corruption regression injects a diagnostic predecessor into an otherwise
+  executable join, locking the generic invariant rather than only the loop case; and
+- existing valid cyclic CFG tests plus the full workspace suite preserve ordinary
+  execution/backedge graphs without changing syntax, HIR, runtime semantics, or the
+  semantic-inspection schema.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

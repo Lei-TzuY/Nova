@@ -691,6 +691,22 @@ mod tests {
     }
 
     #[test]
+    fn verifier_rejects_diagnostic_predecessor_on_executable_join() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        let entry = builder.cursor();
+        let left = builder.fork_from(entry, Some(span(1, 2)), FlowEdgeKind::Execution);
+        let right = builder.fork_from(entry, Some(span(3, 4)), FlowEdgeKind::Execution);
+        let join = builder.join([left, right], Some(span(5, 6)), FlowEdgeKind::Execution);
+        let graph_exit = builder.cursor();
+        let mut graph = builder.finish(Some(graph_exit)).expect("valid seed graph");
+        graph.nodes[join.index()].predecessors[0].kind = FlowEdgeKind::Diagnostic;
+
+        let error = super::verify(&graph, span(0, 20))
+            .expect_err("executable continuation cannot consume a diagnostic predecessor");
+        assert!(error.message().contains("diagnostic-only"));
+    }
+
+    #[test]
     fn builder_fails_closed_on_an_invalid_backedge_endpoint() {
         let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
         builder.add_backedge(builder.cursor(), super::FlowNodeId(99));
