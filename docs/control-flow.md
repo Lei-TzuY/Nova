@@ -64,6 +64,8 @@ Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
 - every node is graph-reachable from the entry, including diagnostic source;
 - every node reachable from entry without crossing a `Diagnostic` edge has only
   non-diagnostic predecessors that are themselves reachable on such executable flow;
+- binding metadata identities are strictly increasing, making the table canonical and
+  preventing duplicate identities from being silently overwritten during dataflow;
 - every read/initialization event names graph binding metadata;
 - the normal-exit table contains each `Exit` node exactly once and no other node;
 - every declared normal exit is executable-reachable and every `Exit` is terminal;
