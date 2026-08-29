@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty-nine vertical slices implemented; broader type-system work remains.**
+**Status: thirty vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -509,6 +509,23 @@ Implemented in the twenty-ninth Phase 2 slice:
 - ordinary completed return expressions still emit exactly one `Return` transfer; and
 - focused CFG regressions plus the full workspace suite lock child-transfer precedence
   without changing syntax, runtime semantics, or semantic-inspection schema v1.
+
+Implemented in the thirtieth Phase 2 slice:
+
+- rejected `while` conditions continue to retain their body in the CFG for static
+  diagnostics and lexical `break`/`continue` checking without treating that body as
+  an executable loop iteration;
+- a `continue` reached only inside such an invalid-condition recovery body no longer
+  receives a `Backedge` to the loop header, so discarded diagnostic flow cannot
+  reconnect itself to reachable continuation;
+- valid dynamic and proven-entered Boolean loops retain their ordinary continue
+  backedges, preserving runtime loop semantics and fixed-point graph shape;
+- the change tightens the documented fail-closed invalid-control contract without
+  changing syntax, HIR, runtime behavior, or semantic-inspection schema v1;
+- CFG-shape regressions lock both the rejected-loop isolation rule and the valid-loop
+  positive control; and
+- the language constitution is synchronized with slice twenty-eight by removing the
+  obsolete claim that lexical symbols still carry a parallel initialization bit.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

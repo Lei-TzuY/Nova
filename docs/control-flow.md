@@ -47,6 +47,11 @@ An invalid construct may leave a reachable-from-entry diagnostic subgraph with
 no continuation edge. This is intentional: rollback moves the lowering cursor
 back to the last valid state, but does not erase source events or binding
 identities needed for diagnostics.
+A `while` whose condition is rejected as non-`Bool` may likewise retain body
+nodes for static and lexical loop-control diagnostics, but that recovery-only
+body is not an executable loop iteration. In particular, a `continue` retained
+there has no `Backedge` successor to the condition header; rejected control flow
+must not reconnect discarded recovery paths to reachable continuation.
 
 ## Verification
 
