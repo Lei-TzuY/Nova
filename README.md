@@ -38,8 +38,11 @@ interpreter slices. The toolchain is written in Rust and can:
   pattern matching, mutation, blocks, conditionals, bounded loops, and structured
   `break`/`continue`;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
-  text or JSON Lines; and
-- print a deterministic debug representation of the parsed AST.
+  text or JSON Lines;
+- print a deterministic debug representation of the parsed AST; and
+- emit a fail-closed, versioned semantic-inspection document with resolved
+  declarations, bindings, types, spans, expression relationships, and exhaustive
+  match facts without exposing debug HIR as a protocol.
 
 `nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
 definite-assignment validation. `nova run` performs those same checks and then
@@ -66,7 +69,9 @@ fn main() -> Int {
 
 See [the implemented grammar](docs/grammar.md) for the normative frontend
 subset, [the enum and pattern semantics](docs/enums-and-patterns.md) for that
-aggregate slice's semantic contract, and
+aggregate slice's semantic contract,
+[the semantic-introspection v1 contract](docs/semantic-introspection.md) for the
+machine-readable tooling boundary, and
 [the language constitution](docs/language-constitution.md) for decisions that
 extend beyond them.
 
@@ -266,6 +271,7 @@ cargo build --workspace
 cargo run -p nova-cli -- check examples/basics.nv
 cargo run -p nova-cli -- run examples/basics.nv
 cargo run -p nova-cli -- ast examples/basics.nv
+cargo run -p nova-cli -- inspect examples/enums.nv --format json
 ```
 
 The `run` command prints the returned value from `main`.
@@ -283,12 +289,16 @@ The installed binary is named `nova`:
 nova check <file> [--message-format human|json]
 nova run <file> [--message-format human|json]
 nova ast <file> [--message-format human|json]
+nova inspect <file> --format json [--message-format human|json]
 ```
 
 Exit status `0` means the requested operation succeeded, `1` means the source or
 execution was rejected, and `2` means the command line was invalid. `nova ast`
 intentionally stops after parsing, so it can inspect a syntactically valid AST
 even when `nova check` or `nova run` would reject that program later.
+`nova inspect` instead requires the complete semantic pipeline to succeed and
+writes no partial document when source diagnostics or an inspection invariant
+failure occurs.
 
 ## Bootstrap architecture
 
@@ -298,8 +308,10 @@ source bytes
   -> nova-lexer         tokens and lexical diagnostics
   -> nova-parser        AST and syntactic diagnostics
   -> nova-sema          typed HIR, nominal identity, resolution, typing, dataflow
-  -> nova-interpreter   deterministic checked, bounded execution of accepted HIR
-  -> nova-cli           check/run/ast commands and diagnostic presentation
+      -> nova-inspect       versioned facts and fail-closed JSON projection
+      -> nova-interpreter   deterministic checked, bounded HIR execution
+
+nova-cli                check/run/ast/inspect orchestration and presentation
 
 nova-diagnostics        shared structured diagnostic model and renderers
 ```
@@ -323,6 +335,8 @@ language semantics.
   execution while skipped source remains statically checked.
 - Non-continuing control-flow paths cannot contribute definite-assignment or loop-
   exit facts to code they cannot reach.
+- Machine-readable semantics cross a separately versioned schema boundary;
+  debug AST/HIR output is never silently promoted into a tooling contract.
 - Potentially nonterminating bootstrap execution is bounded and fails with a
   structured diagnostic rather than intentionally hanging the host.
 - CI checks Rust 1.85 compatibility, rejects formatting and Clippy warnings on

@@ -1,0 +1,467 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nova:semantic-inspection:v1",
+  "title": "Nova semantic inspection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "producer", "source", "program"],
+  "properties": {
+    "schema": { "const": "nova.semantic-inspection" },
+    "schema_version": { "const": 1 },
+    "producer": { "$ref": "#/$defs/producer" },
+    "source": { "$ref": "#/$defs/source" },
+    "program": { "$ref": "#/$defs/program" }
+  },
+  "$defs": {
+    "nullableString": {
+      "type": ["string", "null"]
+    },
+    "typeId": {
+      "type": "string",
+      "pattern": "^type:[0-9]+$"
+    },
+    "recordId": {
+      "type": "string",
+      "pattern": "^record:[0-9]+$"
+    },
+    "enumId": {
+      "type": "string",
+      "pattern": "^enum:[0-9]+$"
+    },
+    "functionId": {
+      "type": "string",
+      "pattern": "^function:[0-9]+$"
+    },
+    "bindingId": {
+      "type": "string",
+      "pattern": "^binding:[0-9]+$"
+    },
+    "blockId": {
+      "type": "string",
+      "pattern": "^block:[0-9]+$"
+    },
+    "statementId": {
+      "type": "string",
+      "pattern": "^statement:[0-9]+$"
+    },
+    "expressionId": {
+      "type": "string",
+      "pattern": "^expression:[0-9]+$"
+    },
+    "matchId": {
+      "type": "string",
+      "pattern": "^match:[0-9]+$"
+    },
+    "fieldId": {
+      "type": "string",
+      "pattern": "^record:[0-9]+\\.field:[0-9]+$"
+    },
+    "variantId": {
+      "type": "string",
+      "pattern": "^enum:[0-9]+\\.variant:[0-9]+$"
+    },
+    "armId": {
+      "type": "string",
+      "pattern": "^match:[0-9]+\\.arm:[0-9]+$"
+    },
+    "semanticTarget": {
+      "anyOf": [
+        { "$ref": "#/$defs/bindingId" },
+        { "$ref": "#/$defs/functionId" },
+        { "$ref": "#/$defs/recordId" },
+        { "$ref": "#/$defs/fieldId" },
+        { "$ref": "#/$defs/variantId" },
+        { "$ref": "#/$defs/blockId" },
+        { "$ref": "#/$defs/matchId" },
+        { "type": "null" }
+      ]
+    },
+    "scopeId": {
+      "type": "string",
+      "pattern": "^(?:function|block):[0-9]+$|^match:[0-9]+\\.arm:[0-9]+$"
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "nova" },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "byte_length"],
+      "properties": {
+        "id": { "const": "source:0" },
+        "name": { "type": "string" },
+        "byte_length": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "start", "end"],
+      "properties": {
+        "source": { "const": "source:0" },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span",
+        "types",
+        "records",
+        "enums",
+        "functions",
+        "bindings",
+        "blocks",
+        "statements",
+        "expressions",
+        "matches"
+      ],
+      "properties": {
+        "span": { "$ref": "#/$defs/span" },
+        "types": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/type" }
+        },
+        "records": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/record" }
+        },
+        "enums": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/enum" }
+        },
+        "functions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/function" }
+        },
+        "bindings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/binding" }
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" }
+        },
+        "statements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/statement" }
+        },
+        "expressions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/expression" }
+        },
+        "matches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/match" }
+        }
+      }
+    },
+    "type": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "display", "declaration", "parameters", "return_type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typeId" },
+        "kind": {
+          "enum": ["int", "bool", "record", "enum", "unit", "never", "function"]
+        },
+        "display": { "type": "string" },
+        "declaration": {
+          "type": ["string", "null"],
+          "pattern": "^(?:record|enum):[0-9]+$"
+        },
+        "parameters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/typeId" }
+        },
+        "return_type": {
+          "anyOf": [
+            { "$ref": "#/$defs/typeId" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "type_id", "span", "fields"],
+      "properties": {
+        "id": { "$ref": "#/$defs/recordId" },
+        "name": { "type": "string" },
+        "type_id": { "$ref": "#/$defs/typeId" },
+        "span": { "$ref": "#/$defs/span" },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/recordField" }
+        }
+      }
+    },
+    "recordField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "type_id", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/fieldId" },
+        "name": { "type": "string" },
+        "type_id": { "$ref": "#/$defs/typeId" },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "enum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "type_id", "span", "variants"],
+      "properties": {
+        "id": { "$ref": "#/$defs/enumId" },
+        "name": { "type": "string" },
+        "type_id": { "$ref": "#/$defs/typeId" },
+        "span": { "$ref": "#/$defs/span" },
+        "variants": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/enumVariant" }
+        }
+      }
+    },
+    "enumVariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "payload_type", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/variantId" },
+        "name": { "type": "string" },
+        "payload_type": {
+          "anyOf": [
+            { "$ref": "#/$defs/typeId" },
+            { "type": "null" }
+          ]
+        },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "function": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "type_id", "return_type", "parameters", "body", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/functionId" },
+        "name": { "type": "string" },
+        "type_id": { "$ref": "#/$defs/typeId" },
+        "return_type": { "$ref": "#/$defs/typeId" },
+        "parameters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/bindingId" }
+        },
+        "body": { "$ref": "#/$defs/blockId" },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "role", "owner", "scope", "type_id", "mutable", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/bindingId" },
+        "name": { "type": "string" },
+        "role": { "enum": ["parameter", "local", "match_payload"] },
+        "owner": { "$ref": "#/$defs/functionId" },
+        "scope": { "$ref": "#/$defs/scopeId" },
+        "type_id": { "$ref": "#/$defs/typeId" },
+        "mutable": { "type": "boolean" },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "type_id", "span", "statements", "tail_expression"],
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "owner": { "$ref": "#/$defs/functionId" },
+        "type_id": { "$ref": "#/$defs/typeId" },
+        "span": { "$ref": "#/$defs/span" },
+        "statements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/statementId" }
+        },
+        "tail_expression": {
+          "anyOf": [
+            { "$ref": "#/$defs/expressionId" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "owner",
+        "block",
+        "kind",
+        "binding",
+        "target",
+        "expressions",
+        "blocks",
+        "span"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/statementId" },
+        "owner": { "$ref": "#/$defs/functionId" },
+        "block": { "$ref": "#/$defs/blockId" },
+        "kind": {
+          "enum": [
+            "initialized_binding",
+            "uninitialized_binding",
+            "assignment",
+            "while",
+            "break",
+            "continue",
+            "return",
+            "expression"
+          ]
+        },
+        "binding": {
+          "anyOf": [
+            { "$ref": "#/$defs/bindingId" },
+            { "type": "null" }
+          ]
+        },
+        "target": {
+          "anyOf": [
+            { "$ref": "#/$defs/bindingId" },
+            { "type": "null" }
+          ]
+        },
+        "expressions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/expressionId" }
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/blockId" }
+        },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "expression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "owner",
+        "kind",
+        "type_id",
+        "target",
+        "operator",
+        "children",
+        "blocks",
+        "field_initializers",
+        "span"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/expressionId" },
+        "owner": { "$ref": "#/$defs/functionId" },
+        "kind": {
+          "enum": [
+            "integer",
+            "boolean",
+            "unit",
+            "binding_reference",
+            "function_reference",
+            "record_construction",
+            "enum_construction",
+            "field_access",
+            "unary",
+            "binary",
+            "call",
+            "block",
+            "if",
+            "match"
+          ]
+        },
+        "type_id": { "$ref": "#/$defs/typeId" },
+        "target": { "$ref": "#/$defs/semanticTarget" },
+        "operator": { "$ref": "#/$defs/nullableString" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/expressionId" }
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/blockId" }
+        },
+        "field_initializers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/recordFieldInitializer" }
+        },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "recordFieldInitializer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "value"],
+      "properties": {
+        "field": { "$ref": "#/$defs/fieldId" },
+        "value": { "$ref": "#/$defs/expressionId" }
+      }
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "owner",
+        "expression",
+        "enumeration",
+        "exhaustive",
+        "scrutinee",
+        "scrutinee_type",
+        "arms",
+        "span"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/matchId" },
+        "owner": { "$ref": "#/$defs/functionId" },
+        "expression": { "$ref": "#/$defs/expressionId" },
+        "enumeration": { "$ref": "#/$defs/enumId" },
+        "exhaustive": { "const": true },
+        "scrutinee": { "$ref": "#/$defs/expressionId" },
+        "scrutinee_type": { "$ref": "#/$defs/typeId" },
+        "arms": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/matchArm" }
+        },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "matchArm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "variant", "binding", "value", "result_type", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/armId" },
+        "variant": { "$ref": "#/$defs/variantId" },
+        "binding": {
+          "anyOf": [
+            { "$ref": "#/$defs/bindingId" },
+            { "type": "null" }
+          ]
+        },
+        "value": { "$ref": "#/$defs/expressionId" },
+        "result_type": { "$ref": "#/$defs/typeId" },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    }
+  }
+}

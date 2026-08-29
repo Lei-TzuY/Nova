@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 nova-diagnostics = { path = "../nova-diagnostics" }
+nova-inspect = { path = "../nova-inspect" }
 nova-interpreter = { path = "../nova-interpreter" }
 nova-lexer = { path = "../nova-lexer" }
 nova-parser = { path = "../nova-parser" }

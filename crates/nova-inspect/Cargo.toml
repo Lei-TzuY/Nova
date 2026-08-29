@@ -1,0 +1,21 @@
+[package]
+name = "nova-inspect"
+description = "Versioned semantic introspection documents for Nova tooling"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+nova-parser = { path = "../nova-parser" }
+nova-sema = { path = "../nova-sema" }
+nova-source = { path = "../nova-source" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+nova-lexer = { path = "../nova-lexer" }
+
+[lints]
+workspace = true

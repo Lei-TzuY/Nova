@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty-two vertical slices implemented; broader type-system work remains.**
+**Status: twenty-three vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -381,6 +381,25 @@ Implemented in the twenty-second Phase 2 slice:
 - semantic integration tests plus CLI static/runtime fixtures lock overflow, zero
   divisors, extreme signed edges, non-folding, and dynamic deferral end to end.
 
+Implemented in the twenty-third Phase 2 slice:
+
+- `nova-inspect`, a tooling-owned projection from accepted typed HIR rather than
+  a serialization of compiler debug structures;
+- `nova inspect <file> --format json`, which reuses the complete check pipeline
+  and emits no partial document for rejected source;
+- semantic-inspection schema v1 with an explicit family/version envelope and a
+  checked-in normative JSON Schema;
+- deterministic document-local identities for types, nominal declarations and
+  members, functions, bindings, blocks, statements, expressions, matches, and
+  arms;
+- resolved type, owner, scope, target, record-field input, span, and
+  exhaustive-match fact tables with schema documentation and an exact CLI golden
+  fixture; and
+- fail-closed validation of source spans, identity order, binding ownership,
+  lexical visibility and assignment mutability, nominal slots, constructor arity,
+  and match coverage before serialization, reported as `N5001` on internal
+  inconsistency.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 
@@ -393,8 +412,8 @@ prematurely. In particular:
   strategy rather than adding ad-hoc wildcard or guard behavior;
 - specify aggregate mutation/ownership and layout semantics before field mutation
   or ABI claims are added;
-- define a versioned semantic-introspection schema rather than exposing debug
-  HIR as a tooling protocol; and
+- evolve semantic introspection only when implemented modules, effects,
+  ownership, or transformations provide real facts to expose; and
 - expand negative and adversarial tests as each rule becomes implemented.
 
 Phase 2 is not complete until its implemented type, name, mutation, aggregate,
