@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty-one vertical slices implemented; broader type-system work remains.**
+**Status: thirty-two vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -545,6 +545,23 @@ Implemented in the thirty-first Phase 2 slice:
 - existing valid cyclic CFG tests plus the full workspace suite preserve ordinary
   execution/backedge graphs without changing syntax, HIR, runtime semantics, or the
   semantic-inspection schema.
+
+Implemented in the thirty-second Phase 2 slice:
+
+- CFG normal completion is now verified as a structural invariant rather than inferred
+  only from the `normal_exits` metadata vector;
+- the verifier requires the normal-exit table to equal the graph's `Exit` node set
+  exactly, rejecting missing, extra, or duplicate declarations;
+- every normal `Exit` must be reachable from function entry without crossing a
+  `Diagnostic` edge, so recovery-only source cannot masquerade as successful function
+  completion;
+- `Exit` nodes are strictly terminal and may not have even diagnostic successors,
+  separating source-level `return` recovery from the compiler-generated function-end
+  marker;
+- direct corruption regressions cover diagnostic-only exits, unlisted exit nodes, and
+  post-exit diagnostic successors; and
+- existing function completion, divergent-function, CFG isolation, and full workspace
+  tests remain green without changing syntax, HIR, runtime semantics, or inspection v1.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
