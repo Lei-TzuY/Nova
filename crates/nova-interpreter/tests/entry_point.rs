@@ -7,7 +7,11 @@ use nova_source::{SourceFile, SourceId};
 fn analyze_text(text: &str) -> nova_sema::AnalysisOutput {
     let source = SourceFile::new(SourceId::new(0), "entry-point.nv", text);
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
     assert!(
         parsed.is_success(),
@@ -32,9 +36,8 @@ fn unit_main_is_an_executable_entry_point() {
 
 #[test]
 fn aggregate_main_remains_outside_the_bootstrap_entry_point_contract() {
-    let analyzed = analyze_text(
-        "record Box { value: Int } fn main() -> Box { new Box { value: 42 } }",
-    );
+    let analyzed =
+        analyze_text("record Box { value: Int } fn main() -> Box { new Box { value: 42 } }");
     let error = execute(&analyzed.program).expect_err("record-valued main must remain rejected");
     assert_eq!(error.code, "N4001");
 }
