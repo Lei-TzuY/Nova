@@ -127,8 +127,12 @@ for `if`, `while`, and `&&`/`||`, including checked arithmetic feeding compariso
 This evaluator never propagates names, executes calls or blocks, inspects aggregates,
 or folds the retained HIR. A `while` condition proven false therefore lowers its body
 only for static diagnostics, while a proven true condition participates in the same
-guaranteed-loop reasoning previously reserved for literal `true`. Successful arithmetic
-trees are deliberately not folded, and dynamic operands stop these proofs rather than
+guaranteed-loop reasoning previously reserved for literal `true`. Independently of
+constant evaluation, an `if`/`while` condition or `match` scrutinee already typed `!`
+proves every successor branch/body/arm unreachable; those successors remain statically
+checked but are lowered in diagnostic-only mode so execution-failure diagnostics and
+flow mutations cannot escape a path that cannot run. Successful arithmetic trees are
+deliberately not folded, and dynamic operands stop constant proofs rather than
 triggering general constant propagation.
 Dynamic arithmetic remains checked by the
 interpreter: overflow is `N4002`, and division or remainder by zero is `N4003`.

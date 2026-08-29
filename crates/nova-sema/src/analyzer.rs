@@ -649,7 +649,7 @@ impl Analyzer {
                     visible_scope_count: self.scopes.len(),
                     break_states: Vec::new(),
                 });
-                let body = if condition_literal == Some(false) {
+                let body = if condition.ty.is_never() || condition_literal == Some(false) {
                     self.lower_block_for_diagnostics(body, return_type, true)
                 } else {
                     self.lower_block(body, return_type, true)
@@ -876,41 +876,57 @@ impl Analyzer {
                 let entry_scopes = self.scopes.clone();
                 let post_condition_loop_stack = self.loop_stack.clone();
 
-                let (then_branch, then_scopes, else_branch, else_scopes) = match condition_literal {
-                    Some(true) => {
-                        let then_branch = self.lower_block(then_branch, return_type, true);
-                        let then_scopes = self.scopes.clone();
-                        let then_loop_stack = self.loop_stack.clone();
+                let (then_branch, then_scopes, else_branch, else_scopes) = if condition
+                    .ty
+                    .is_never()
+                {
+                    let then_branch =
+                        self.lower_block_for_diagnostics(then_branch, return_type, true);
+                    let then_scopes = self.scopes.clone();
 
-                        self.scopes = entry_scopes.clone();
-                        self.loop_stack = post_condition_loop_stack.clone();
-                        let else_branch =
-                            self.lower_expression_for_diagnostics(else_branch, return_type);
-                        let else_scopes = self.scopes.clone();
+                    self.scopes = entry_scopes.clone();
+                    self.loop_stack = post_condition_loop_stack.clone();
+                    let else_branch =
+                        self.lower_expression_for_diagnostics(else_branch, return_type);
+                    let else_scopes = self.scopes.clone();
+                    (then_branch, then_scopes, else_branch, else_scopes)
+                } else {
+                    match condition_literal {
+                        Some(true) => {
+                            let then_branch = self.lower_block(then_branch, return_type, true);
+                            let then_scopes = self.scopes.clone();
+                            let then_loop_stack = self.loop_stack.clone();
 
-                        self.scopes = then_scopes.clone();
-                        self.loop_stack = then_loop_stack;
-                        (then_branch, then_scopes, else_branch, else_scopes)
-                    }
-                    Some(false) => {
-                        let then_branch =
-                            self.lower_block_for_diagnostics(then_branch, return_type, true);
-                        let then_scopes = self.scopes.clone();
+                            self.scopes = entry_scopes.clone();
+                            self.loop_stack = post_condition_loop_stack.clone();
+                            let else_branch =
+                                self.lower_expression_for_diagnostics(else_branch, return_type);
+                            let else_scopes = self.scopes.clone();
 
-                        self.scopes = entry_scopes.clone();
-                        self.loop_stack = post_condition_loop_stack.clone();
-                        let else_branch = self.lower_expression(else_branch, return_type);
-                        let else_scopes = self.scopes.clone();
-                        (then_branch, then_scopes, else_branch, else_scopes)
-                    }
-                    None => {
-                        let then_branch = self.lower_block(then_branch, return_type, true);
-                        let then_scopes = self.scopes.clone();
+                            self.scopes = then_scopes.clone();
+                            self.loop_stack = then_loop_stack;
+                            (then_branch, then_scopes, else_branch, else_scopes)
+                        }
+                        Some(false) => {
+                            let then_branch =
+                                self.lower_block_for_diagnostics(then_branch, return_type, true);
+                            let then_scopes = self.scopes.clone();
 
-                        self.scopes = entry_scopes.clone();
-                        let else_branch = self.lower_expression(else_branch, return_type);
-                        let else_scopes = self.scopes.clone();
-                        (then_branch, then_scopes, else_branch, else_scopes)
+                            self.scopes = entry_scopes.clone();
+                            self.loop_stack = post_condition_loop_stack.clone();
+                            let else_branch = self.lower_expression(else_branch, return_type);
+                            let else_scopes = self.scopes.clone();
+                            (then_branch, then_scopes, else_branch, else_scopes)
+                        }
+                        None => {
+                            let then_branch = self.lower_block(then_branch, return_type, true);
+                            let then_scopes = self.scopes.clone();
+
+                            self.scopes = entry_scopes.clone();
+                            let else_branch = self.lower_expression(else_branch, return_type);
+                            let else_scopes = self.scopes.clone();
+                            (then_branch, then_scopes, else_branch, else_scopes)
+                        }
                     }
                 };
 
@@ -1520,11 +1536,12 @@ impl Analyzer {
 
             let selected_arm = selected_variant_index
                 .is_some_and(|selected| valid_pattern && resolved_index == Some(selected));
-            let value = if selected_variant_index.is_some() && !selected_arm {
-                self.lower_expression_for_diagnostics(&arm.value, return_type)
-            } else {
-                self.lower_expression(&arm.value, return_type)
-            };
+            let value =
+                if scrutinee.ty.is_never() || (selected_variant_index.is_some() && !selected_arm) {
+                    self.lower_expression_for_diagnostics(&arm.value, return_type)
+                } else {
+                    self.lower_expression(&arm.value, return_type)
+                };
             let popped = self.scopes.pop();
             debug_assert!(popped.is_some());
             let branch_state = (self.scopes.clone(), value.ty.is_never());

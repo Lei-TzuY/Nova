@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty-five vertical slices implemented; broader type-system work remains.**
+**Status: twenty-six vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -437,6 +437,24 @@ Implemented in the twenty-fifth Phase 2 slice:
   interpreter does; and
 - semantic regressions plus a CLI check/run fixture lock flow precision, dead-path
   execution-diagnostic suppression, dynamic-boundary conservatism, and HIR non-folding.
+
+Implemented in the twenty-sixth Phase 2 slice:
+
+- successor lowering now treats an already non-continuing (`!`) discriminator as a
+  first-class reachability boundary for `if`, `while`, and `match`;
+- both `if` branches, a `while` body, and every match arm are still lowered for static
+  name/type/pattern/exhaustiveness diagnostics when their predecessor cannot continue,
+  but use diagnostic-only state so execution-failure preflight and flow mutations do
+  not leak from runtime-impossible successors;
+- dead loop bodies retain their lexical loop context, so `break`/`continue` stay legal
+  even though their exit facts are discarded along with the unreachable path;
+- reachable successors continue to report N3031/N3032 normally, preventing the
+  diagnostic-only mechanism from becoming a blanket constant-error suppression rule;
+- the change complements closed constant-condition reachability without broadening the
+  constant evaluator or changing HIR/schema shape; and
+- semantic regressions plus a CLI check/run fixture lock noncontinuing conditions and
+  scrutinees, static-diagnostic preservation, runtime return propagation, and reachable
+  constant-error behavior end to end.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
