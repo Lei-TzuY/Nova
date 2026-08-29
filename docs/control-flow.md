@@ -65,9 +65,10 @@ Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
 - every node reachable from entry without crossing a `Diagnostic` edge has only
   non-diagnostic predecessors that are themselves reachable on such executable flow;
 - every read/initialization event names graph binding metadata;
-- declared normal exits name `Exit` nodes; and
-- `return`, `break`, `continue`, and `Exit` successor edge classes respect their
-  transfer behavior; and
+- the normal-exit table contains each `Exit` node exactly once and no other node;
+- every declared normal exit is executable-reachable and every `Exit` is terminal;
+- `return`, `break`, and `continue` successor edge classes respect their transfer
+  behavior; and
 - a syntactic parent transfer does not append an execution node when evaluating its
   child expression has already transferred control.
 
@@ -79,6 +80,12 @@ a discarded recovery subtree may branch away from executable flow, but it cannot
 an executable join, exit, or loop header through any edge class. The fixed-point
 must-analysis can therefore safely intersect every recorded predecessor without
 allowing recovery-only facts to constrain reachable continuation.
+Normal completion has a similarly closed contract. `normal_exits` is not advisory
+metadata: it must exactly enumerate the graph's `Exit` nodes without duplicates, each
+such node must belong to executable-reachable flow, and an `Exit` has no successor of
+any edge class. A diagnostic-only recovery path therefore cannot be mislabeled as a
+successful function completion, and post-exit diagnostic nodes cannot extend a graph
+past its terminal boundary.
 
 ## Definite-initialization dataflow
 
