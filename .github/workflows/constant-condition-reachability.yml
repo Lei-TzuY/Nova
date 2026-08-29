@@ -1,0 +1,47 @@
+name: Validate constant condition reachability
+
+on:
+  push:
+    branches:
+      - feat/constant-condition-reachability
+
+permissions:
+  contents: write
+
+jobs:
+  red-green:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile new regression target
+        run: cargo test -p nova-sema --test constant_condition_reachability --locked --no-run
+      - name: Confirm reachability regression is red
+        shell: bash
+        run: |
+          set -euo pipefail
+          if cargo test -p nova-sema --test constant_condition_reachability --locked; then
+            echo "constant-condition regression unexpectedly passed before production patch" >&2
+            exit 1
+          fi
+      - name: Apply constant condition reachability
+        run: python scripts/apply_constant_condition_reachability.py
+      - name: Validate semantic and CLI behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Commit implementation and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/constant-condition-reachability.yml scripts/apply_constant_condition_reachability.py
+          git add -A
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git commit -m "feat: derive constant condition reachability"
+          git push origin HEAD:feat/constant-condition-reachability
