@@ -878,14 +878,18 @@ impl<'program> Interpreter<'program> {
                 ));
             }
         }
-        if frame.contains_key(&binding.id) {
-            return Err(self.invariant(
-                span,
-                format!(
-                    "binding id {} is already present in the runtime frame",
-                    binding.id.index()
-                ),
-            ));
+        if let Some(slot) = frame.get_mut(&binding.id) {
+            if slot.ty != binding.ty || slot.mutable != binding.mutable {
+                return Err(self.invariant(
+                    span,
+                    format!(
+                        "binding id {} was reused with runtime slot metadata that does not match its resolved binding",
+                        binding.id.index()
+                    ),
+                ));
+            }
+            slot.value = value;
+            return Ok(());
         }
         frame.insert(
             binding.id,

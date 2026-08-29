@@ -260,11 +260,12 @@ catches malformed HIR even when the aggregate never crosses a function boundary.
 
 Runtime frames preserve the resolved binding contract too. Each slot records its
 resolved type, mutability, and initialization state. Parameters, local bindings,
-delayed `var` declarations, and match payload bindings reject duplicate binding
-identities or non-conforming initial values; assignment additionally requires a
-mutable slot and a conforming replacement value. Binding reads verify that the HIR
-expression type and stored runtime value still agree with the slot contract. Any
-such interpreter/HIR drift fails closed with `N4005`.
+delayed `var` declarations, and match payload bindings reject non-conforming initial
+values or incompatible reuse of one binding identity; repeated execution of the same
+lexical binding may refresh its slot only with identical type/mutability metadata.
+Assignment additionally requires a mutable slot and a conforming replacement value.
+Binding reads verify that the HIR expression type and stored runtime value still agree
+with the slot contract. Any such interpreter/HIR drift fails closed with `N4005`.
 
 For deterministic execution while the numeric design remains provisional, the
 bootstrap frontend now covers the complete signed 64-bit literal endpoints: positive

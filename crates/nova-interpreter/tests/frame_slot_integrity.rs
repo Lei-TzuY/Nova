@@ -93,8 +93,9 @@ fn rejects_assignment_retargeted_to_immutable_runtime_slot() {
 }
 
 #[test]
-fn rejects_duplicate_binding_identity_in_runtime_frame() {
-    let mut analyzed = analyze_text("fn main() -> Unit { let left: Int = 1; let right: Int = 2; }");
+fn rejects_binding_identity_reused_with_incompatible_slot_metadata() {
+    let mut analyzed =
+        analyze_text("fn main() -> Unit { let left: Int = 1; let right: Bool = true; }");
     let main = analyzed
         .program
         .functions
@@ -110,7 +111,7 @@ fn rejects_duplicate_binding_identity_in_runtime_frame() {
     };
     binding.id = left;
 
-    let error = execute(&analyzed.program).expect_err("duplicate binding id must fail");
+    let error = execute(&analyzed.program).expect_err("binding metadata alias must fail");
     assert_eq!(error.code, "N4005");
 }
 
@@ -136,6 +137,15 @@ fn rejects_match_payload_binding_type_drift_before_arm_execution() {
 
     let error = execute(&analyzed.program).expect_err("payload binding type drift must fail");
     assert_eq!(error.code, "N4005");
+}
+
+#[test]
+fn repeated_lexical_binding_execution_refreshes_the_same_runtime_slot() {
+    let analyzed = analyze_text(
+        "fn main() -> Int { var total: Int = 0; while total < 3 { let step: Int = 1; total = total + step; } total }",
+    );
+    let value = execute(&analyzed.program).expect("loop-local binding should re-enter cleanly");
+    assert_eq!(value, Value::Int(3));
 }
 
 #[test]
