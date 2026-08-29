@@ -47,6 +47,9 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<Result<i64, ConstantIn
             left,
             right,
         } => evaluate_binary(*operator, left, right),
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            evaluate(block.tail.as_deref()?)
+        }
         _ => None,
     }
 }
