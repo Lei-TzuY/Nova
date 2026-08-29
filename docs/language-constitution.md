@@ -284,9 +284,9 @@ analysis. Initialization, read, branch, join, structured transfer, normal-exit,
 diagnostic-only, and loop-backedge events are explicit compiler data. Rejected or
 statically skipped source remains present on discarded diagnostic paths so it can
 still receive deterministic static diagnostics without contributing facts to
-reachable continuation. The lowerer temporarily retains an inline initialized bit
-only to select Error-typed recovery HIR at an invalid read; it is not a second
-diagnostic authority or accepted-program proof.
+reachable continuation. Lexical symbols carry no parallel initialized flag: resolved reads retain their
+declared HIR type, and the verified CFG is the single source of definite-
+initialization truth.
 
 Chained assignment, arbitrary lvalues, field mutation, indexing, and general
 uninitialized storage remain unsupported.

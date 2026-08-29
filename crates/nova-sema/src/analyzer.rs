@@ -785,6 +785,7 @@ impl Analyzer {
                     continue_cursors: Vec::new(),
                 });
                 let diagnostic_body = condition.ty.is_never() || guaranteed_skip;
+                let executable_body = condition.ty == Type::Bool && !guaranteed_skip;
                 let body = if diagnostic_body {
                     self.lower_block_for_diagnostics(body, return_type, true)
                 } else {
@@ -794,18 +795,20 @@ impl Analyzer {
                     .loop_stack
                     .pop()
                     .expect("while lowering must own one loop context");
-                if !diagnostic_body && !body.ty.is_never() {
+                if executable_body && !body.ty.is_never() {
                     let body_exit = self.flow_cursor();
                     self.flow
                         .as_mut()
                         .expect("semantic lowering must own a function flow graph")
                         .add_backedge(body_exit, loop_context.header);
                 }
-                for continue_cursor in &loop_context.continue_cursors {
-                    self.flow
-                        .as_mut()
-                        .expect("semantic lowering must own a function flow graph")
-                        .add_backedge(*continue_cursor, loop_context.header);
+                if executable_body {
+                    for continue_cursor in &loop_context.continue_cursors {
+                        self.flow
+                            .as_mut()
+                            .expect("semantic lowering must own a function flow graph")
+                            .add_backedge(*continue_cursor, loop_context.header);
+                    }
                 }
 
                 let diverges = if condition.ty.is_never() {
