@@ -1,0 +1,73 @@
+name: Validate Unit equality
+
+on:
+  push:
+    branches:
+      - feat/unit-equality
+
+permissions:
+  contents: write
+
+jobs:
+  red-green:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Compile semantic regression target first
+        run: cargo test -p nova-sema --test unit_equality --no-run --locked
+
+      - name: Confirm Unit equality is red
+        shell: bash
+        run: |
+          set +e
+          cargo test -p nova-sema --test unit_equality --locked
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "expected Unit equality regression to fail before implementation"
+            exit 1
+          fi
+
+      - name: Apply Unit equality vertical slice
+        run: python .github/scripts/validate_unit_equality.py fix
+
+      - name: Format and validate workspace
+        shell: bash
+        run: |
+          cargo fmt --all
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo build --workspace --all-targets --locked
+          RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+
+      - name: Validate CLI Unit equality directly
+        shell: bash
+        run: |
+          cargo run -p nova-cli -- run crates/nova-cli/tests/fixtures/valid/unit-equality.nv > /tmp/unit-equality.out
+          test "$(cat /tmp/unit-equality.out)" = "true"
+
+      - name: Assert intended contract
+        shell: bash
+        run: |
+          grep -q 'Type::Int | Type::Bool | Type::Unit' crates/nova-sema/src/analyzer.rs
+          grep -q 'BinaryOperator::Equal, Value::Unit, Value::Unit' crates/nova-interpreter/src/lib.rs
+          grep -q 'unit_literal(left)?' crates/nova-sema/src/constant_condition.rs
+          grep -q 'thirty-five vertical slices implemented' docs/roadmap.md
+          grep -q 'eight vertical slices implemented' docs/roadmap.md
+
+      - name: Commit implementation and remove helpers
+        shell: bash
+        run: |
+          rm .github/workflows/unit-equality.yml
+          rm .github/scripts/validate_unit_equality.py
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: make Unit equality executable"
+          git push origin HEAD:feat/unit-equality
