@@ -1,0 +1,11 @@
+fn same(left: Unit, right: Unit) -> Bool {
+    left == right
+}
+
+fn different(left: Unit, right: Unit) -> Bool {
+    left != right
+}
+
+fn main() -> Bool {
+    same((), ()) && !different((), ())
+}
