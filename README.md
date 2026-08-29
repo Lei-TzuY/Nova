@@ -40,9 +40,10 @@ interpreter slices. The toolchain is written in Rust and can:
 - emit structured, coded compile-time and runtime diagnostics rendered as human
   text or JSON Lines;
 - print a deterministic debug representation of the parsed AST; and
-- emit a fail-closed, versioned semantic-inspection document with resolved
-  declarations, bindings, types, spans, expression relationships, and exhaustive
-  match facts without exposing debug HIR as a protocol.
+- emit fail-closed semantic-inspection v1 documents with resolved declarations,
+  bindings, types, spans, expression relationships, and exhaustive match facts,
+  plus explicitly selected v2 documents that add the verified CFG without
+  exposing debug HIR or compiler-owned graph layouts as a protocol.
 
 `nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
 definite-assignment validation. `nova run` performs those same checks and then
@@ -70,8 +71,9 @@ fn main() -> Int {
 See [the implemented grammar](docs/grammar.md) for the normative frontend
 subset, [the enum and pattern semantics](docs/enums-and-patterns.md) for that
 aggregate slice's semantic contract,
-[the semantic-introspection v1 contract](docs/semantic-introspection.md) for the
-machine-readable tooling boundary,
+[the semantic-introspection v1 contract](docs/semantic-introspection.md) and
+[v2 CFG extension](docs/semantic-introspection-v2.md) for the machine-readable
+tooling boundary,
 [the bootstrap control-flow contract](docs/control-flow.md) for CFG verification
 and definite-initialization dataflow, and
 [the language constitution](docs/language-constitution.md) for decisions that
@@ -314,6 +316,7 @@ cargo run -p nova-cli -- check examples/basics.nv
 cargo run -p nova-cli -- run examples/basics.nv
 cargo run -p nova-cli -- ast examples/basics.nv
 cargo run -p nova-cli -- inspect examples/enums.nv --format json
+cargo run -p nova-cli -- inspect examples/enums.nv --format json --schema-version 2
 ```
 
 The `run` command prints the returned value from `main`.
@@ -331,7 +334,7 @@ The installed binary is named `nova`:
 nova check <file> [--message-format human|json]
 nova run <file> [--message-format human|json]
 nova ast <file> [--message-format human|json]
-nova inspect <file> --format json [--message-format human|json]
+nova inspect <file> --format json [--schema-version 1|2] [--message-format human|json]
 ```
 
 Exit status `0` means the requested operation succeeded, `1` means the source or
@@ -340,7 +343,7 @@ intentionally stops after parsing, so it can inspect a syntactically valid AST
 even when `nova check` or `nova run` would reject that program later.
 `nova inspect` instead requires the complete semantic pipeline to succeed and
 writes no partial document when source diagnostics or an inspection invariant
-failure occurs.
+failure occurs. Schema v1 remains the default; v2 must be requested explicitly.
 
 ## Bootstrap architecture
 

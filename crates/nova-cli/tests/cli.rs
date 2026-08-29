@@ -42,6 +42,7 @@ fn accepts_positive_fixtures() {
         "valid/unit.nv",
         "valid/unit-equality.nv",
         "valid/unit-main.nv",
+        "valid/inspection-v2.nv",
         "valid/payload-free-enum-equality.nv",
         "valid/records.nv",
         "valid/enums-match.nv",
@@ -228,13 +229,58 @@ fn emits_semantic_diagnostics_as_json() {
 #[test]
 fn inspect_command_matches_the_versioned_golden_document() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let output = nova_in(
+    let default_output = nova_in(
         manifest,
         &[
             "inspect",
             "tests/fixtures/valid/enums-match.nv",
             "--format",
             "json",
+        ],
+    );
+    let explicit_output = nova_in(
+        manifest,
+        &[
+            "inspect",
+            "tests/fixtures/valid/enums-match.nv",
+            "--format=json",
+            "--schema-version=1",
+        ],
+    );
+
+    assert!(
+        default_output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&default_output.stderr)
+    );
+    let expected = include_str!("golden/semantic-inspection-v1.json");
+    assert_eq!(
+        String::from_utf8(default_output.stdout).expect("inspection output is UTF-8"),
+        expected
+    );
+    assert!(default_output.stderr.is_empty());
+    assert!(
+        explicit_output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&explicit_output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(explicit_output.stdout).expect("inspection output is UTF-8"),
+        expected
+    );
+    assert!(explicit_output.stderr.is_empty());
+}
+
+#[test]
+fn inspect_command_emits_explicit_schema_v2_cfg_facts() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let output = nova_in(
+        manifest,
+        &[
+            "inspect",
+            "tests/fixtures/valid/inspection-v2.nv",
+            "--format=json",
+            "--schema-version=2",
         ],
     );
 
@@ -245,7 +291,7 @@ fn inspect_command_matches_the_versioned_golden_document() {
     );
     assert_eq!(
         String::from_utf8(output.stdout).expect("inspection output is UTF-8"),
-        include_str!("golden/semantic-inspection-v1.json")
+        include_str!("golden/semantic-inspection-v2.json")
     );
     assert!(output.stderr.is_empty());
 }
@@ -253,17 +299,21 @@ fn inspect_command_matches_the_versioned_golden_document() {
 #[test]
 fn inspect_rejects_invalid_source_without_partial_output() {
     let path = fixture("invalid/unknown-name.nv");
-    let output = nova(&[
-        "inspect",
-        path.to_str().expect("fixture path is UTF-8"),
-        "--format=json",
-        "--message-format=json",
-    ]);
-    let stderr = String::from_utf8(output.stderr).expect("diagnostics are UTF-8");
+    for version in ["1", "2"] {
+        let output = nova(&[
+            "inspect",
+            path.to_str().expect("fixture path is UTF-8"),
+            "--format=json",
+            "--schema-version",
+            version,
+            "--message-format=json",
+        ]);
+        let stderr = String::from_utf8(output.stderr).expect("diagnostics are UTF-8");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(stderr.contains("\"code\":\"N3003\""), "{stderr}");
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        assert!(stderr.contains("\"code\":\"N3003\""), "{stderr}");
+    }
 }
 
 #[test]

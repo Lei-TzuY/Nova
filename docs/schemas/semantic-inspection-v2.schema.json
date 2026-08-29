@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nova:semantic-inspection:v2",
+  "title": "Nova semantic inspection v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "producer",
+    "source",
+    "program",
+    "control_flow"
+  ],
+  "properties": {
+    "schema": { "const": "nova.semantic-inspection" },
+    "schema_version": { "const": 2 },
+    "producer": {
+      "$ref": "urn:nova:semantic-inspection:v1#/$defs/producer"
+    },
+    "source": {
+      "$ref": "urn:nova:semantic-inspection:v1#/$defs/source"
+    },
+    "program": {
+      "$ref": "urn:nova:semantic-inspection:v1#/$defs/program"
+    },
+    "control_flow": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/controlFlowGraph" }
+    }
+  },
+  "$defs": {
+    "functionId": {
+      "type": "string",
+      "pattern": "^function:[0-9]+$"
+    },
+    "bindingId": {
+      "type": "string",
+      "pattern": "^binding:[0-9]+$"
+    },
+    "controlFlowId": {
+      "type": "string",
+      "pattern": "^cfg:function:[0-9]+$"
+    },
+    "flowNodeId": {
+      "type": "string",
+      "pattern": "^cfg:function:[0-9]+\\.node:[0-9]+$"
+    },
+    "controlFlowGraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "function",
+        "entry",
+        "bindings",
+        "normal_exits",
+        "nodes"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/controlFlowId" },
+        "function": { "$ref": "#/$defs/functionId" },
+        "entry": { "$ref": "#/$defs/flowNodeId" },
+        "bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/bindingId" }
+        },
+        "normal_exits": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/flowNodeId" }
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/flowNode" }
+        }
+      }
+    },
+    "flowNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "binding", "predecessors", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/flowNodeId" },
+        "kind": {
+          "enum": [
+            "entry",
+            "branch",
+            "join",
+            "initialize",
+            "read",
+            "return",
+            "break",
+            "continue",
+            "exit"
+          ]
+        },
+        "binding": {
+          "anyOf": [
+            { "$ref": "#/$defs/bindingId" },
+            { "type": "null" }
+          ]
+        },
+        "predecessors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/flowEdge" }
+        },
+        "span": {
+          "anyOf": [
+            { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "flowEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "kind"],
+      "properties": {
+        "from": { "$ref": "#/$defs/flowNodeId" },
+        "kind": { "enum": ["execution", "diagnostic", "backedge"] }
+      }
+    }
+  }
+}

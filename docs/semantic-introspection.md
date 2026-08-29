@@ -15,8 +15,13 @@ the documented array ordering remains semantic.
 ## Invocation and failure behavior
 
 ```text
-nova inspect <file> --format json [--message-format human|json]
+nova inspect <file> --format json [--schema-version 1] [--message-format human|json]
 ```
+
+Schema v1 remains the default when `--schema-version` is omitted. Explicit
+`--schema-version 1` produces the same v1 document. Schema v2 is a separately
+selected contract that preserves this program projection and adds verified CFG
+facts; see [`semantic-introspection-v2.md`](semantic-introspection-v2.md).
 
 `inspect` runs the same UTF-8, lexical, syntactic, name-resolution, type, and
 definite-assignment checks as `nova check`. It writes exactly one JSON document
@@ -134,8 +139,8 @@ The bootstrap is single-file and exposes no module graph, effects, ownership or
 region facts, unsafe capabilities, lifetimes, generic substitutions, layout,
 ABI, MIR transformations, runtime values, or incremental-compilation keys.
 The compiler's verified bootstrap CFG and definite-initialization events are also
-deliberately absent: they were introduced after schema v1 and will not be added by
-silently changing an existing tooling contract.
+deliberately absent: they were introduced after schema v1 and are available only
+through explicitly selected schema v2 rather than a silent v1 change.
 Assignment targets currently carry their enclosing statement span because HIR
 does not yet retain a separate target-name span. Match facts report exhaustive
 coverage for the implemented qualified single-variant patterns; they do not

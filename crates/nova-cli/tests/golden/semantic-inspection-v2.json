@@ -1,0 +1,137 @@
+{
+  "schema": "nova.semantic-inspection",
+  "schema_version": 2,
+  "producer": {
+    "name": "nova",
+    "version": "0.1.0"
+  },
+  "source": {
+    "id": "source:0",
+    "name": "tests/fixtures/valid/inspection-v2.nv",
+    "byte_length": 21
+  },
+  "program": {
+    "span": {
+      "source": "source:0",
+      "start": 0,
+      "end": 21
+    },
+    "types": [
+      {
+        "id": "type:0",
+        "kind": "int",
+        "display": "Int",
+        "declaration": null,
+        "parameters": [],
+        "return_type": null
+      },
+      {
+        "id": "type:1",
+        "kind": "bool",
+        "display": "Bool",
+        "declaration": null,
+        "parameters": [],
+        "return_type": null
+      },
+      {
+        "id": "type:2",
+        "kind": "unit",
+        "display": "Unit",
+        "declaration": null,
+        "parameters": [],
+        "return_type": null
+      },
+      {
+        "id": "type:3",
+        "kind": "never",
+        "display": "!",
+        "declaration": null,
+        "parameters": [],
+        "return_type": null
+      },
+      {
+        "id": "type:4",
+        "kind": "function",
+        "display": "fn() -> Unit",
+        "declaration": null,
+        "parameters": [],
+        "return_type": "type:2"
+      }
+    ],
+    "records": [],
+    "enums": [],
+    "functions": [
+      {
+        "id": "function:0",
+        "name": "main",
+        "type_id": "type:4",
+        "return_type": "type:2",
+        "parameters": [],
+        "body": "block:0",
+        "span": {
+          "source": "source:0",
+          "start": 0,
+          "end": 20
+        }
+      }
+    ],
+    "bindings": [],
+    "blocks": [
+      {
+        "id": "block:0",
+        "owner": "function:0",
+        "type_id": "type:2",
+        "span": {
+          "source": "source:0",
+          "start": 18,
+          "end": 20
+        },
+        "statements": [],
+        "tail_expression": null
+      }
+    ],
+    "statements": [],
+    "expressions": [],
+    "matches": []
+  },
+  "control_flow": [
+    {
+      "id": "cfg:function:0",
+      "function": "function:0",
+      "entry": "cfg:function:0.node:0",
+      "bindings": [],
+      "normal_exits": [
+        "cfg:function:0.node:1"
+      ],
+      "nodes": [
+        {
+          "id": "cfg:function:0.node:0",
+          "kind": "entry",
+          "binding": null,
+          "predecessors": [],
+          "span": {
+            "source": "source:0",
+            "start": 0,
+            "end": 20
+          }
+        },
+        {
+          "id": "cfg:function:0.node:1",
+          "kind": "exit",
+          "binding": null,
+          "predecessors": [
+            {
+              "from": "cfg:function:0.node:0",
+              "kind": "execution"
+            }
+          ],
+          "span": {
+            "source": "source:0",
+            "start": 0,
+            "end": 20
+          }
+        }
+      ]
+    }
+  ]
+}

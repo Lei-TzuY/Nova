@@ -410,7 +410,7 @@ do not reorder their expressions when resolved to declaration slots. A match
 evaluates its scrutinee once and only its selected arm. `&&` and `||`
 short-circuit, and semantic dataflow models that same conditional RHS execution
 rather than granting facts from code the interpreter may skip. The entry point
-is a zero-argument top-level `main` returning `Int` or `Bool`.
+is a zero-argument top-level `main` returning `Int`, `Bool`, or `Unit`.
 
 The interpreter propagates `return`, `break`, and `continue` as structured
 control flow through nested expressions and selected match arms. A `while`
@@ -451,18 +451,22 @@ cases while preserving source-qualified labels. `N3013` identifies a bootstrap
 documented by tests but codes are not yet covered by the language compatibility
 promise.
 
-The bootstrap now exposes semantic-inspection schema v1 for successfully checked
+The bootstrap exposes semantic-inspection schema v1 for successfully checked
 single-file programs. It projects resolved declarations, bindings, types,
 nominal identities, typed blocks/statements/expressions, spans, and exhaustive
-match facts into a tooling-owned JSON model. Document-local IDs and deterministic
-ordering are specified independently of Rust HIR layout. Rejected source or an
-inspection invariant failure produces diagnostics and no partial document.
-Compiler debug text is not this protocol.
+match facts into a tooling-owned JSON model. Explicitly selected schema v2
+preserves that program projection and adds verified function CFG nodes, binding
+events, structured transfers, normal exits, and execution/diagnostic/backedge
+classes. Document-local IDs and deterministic ordering are specified
+independently of Rust HIR and CFG layouts. Rejected source or an inspection
+invariant failure produces diagnostics and no partial document. Compiler debug
+text is not this protocol.
 
 Effects, ownership facts, module graphs, transformations, and incremental keys
-cannot appear until the corresponding compiler semantics exist. The v1 schema
-is provisional before Nova 1.0 and is versioned independently from the language,
-diagnostics, packages, and future IRs.
+cannot appear until the corresponding compiler semantics exist. Both schemas
+are provisional before Nova 1.0 and are versioned independently from the
+language, diagnostics, packages, and future IRs. V1 remains unchanged and the
+CLI never selects v2 implicitly.
 
 ## 13. Compatibility and versioning
 
