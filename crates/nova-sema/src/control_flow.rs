@@ -440,6 +440,24 @@ fn verify(graph: &FunctionControlFlow, fallback_span: Span) -> Result<(), FlowEr
             "flow entry is out of range",
         ));
     }
+    if !matches!(graph.nodes[graph.entry.index()].kind, FlowNodeKind::Entry) {
+        return Err(FlowError::invalid(
+            graph.nodes[graph.entry.index()]
+                .span
+                .unwrap_or(fallback_span),
+            "flow entry does not reference the unique Entry node",
+        ));
+    }
+    if let Some(node) = graph
+        .nodes
+        .iter()
+        .find(|node| matches!(node.kind, FlowNodeKind::Entry) && node.id != graph.entry)
+    {
+        return Err(FlowError::invalid(
+            node.span.unwrap_or(fallback_span),
+            "control-flow graph contains more than one Entry node",
+        ));
+    }
     let mut successors = vec![Vec::<(FlowNodeId, FlowEdgeKind)>::new(); graph.nodes.len()];
     for (index, node) in graph.nodes.iter().enumerate() {
         if node.id.index() != index {
@@ -788,6 +806,30 @@ mod tests {
         let error = super::verify(&graph, span(0, 20))
             .expect_err("a function Exit must be terminal even for diagnostic source");
         assert!(error.message().contains("successor"));
+    }
+
+    #[test]
+    fn verifier_rejects_root_kind_mismatch_and_duplicate_entry() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        builder.advance(
+            FlowNodeKind::Branch,
+            Some(span(1, 2)),
+            FlowEdgeKind::Execution,
+        );
+        let graph_exit = builder.cursor();
+        let graph = builder.finish(Some(graph_exit)).expect("valid seed graph");
+
+        let mut wrong_root_kind = graph.clone();
+        wrong_root_kind.nodes[wrong_root_kind.entry.index()].kind = FlowNodeKind::Branch;
+        let error = super::verify(&wrong_root_kind, span(0, 20))
+            .expect_err("graph.entry must identify an Entry-kind node");
+        assert!(error.message().contains("entry"));
+
+        let mut duplicate_entry = graph;
+        duplicate_entry.nodes[1].kind = FlowNodeKind::Entry;
+        let error = super::verify(&duplicate_entry, span(0, 20))
+            .expect_err("a verified CFG must contain exactly one Entry-kind node");
+        assert!(error.message().contains("Entry"));
     }
 
     #[test]
