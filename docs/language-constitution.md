@@ -85,7 +85,7 @@ initialization. A function declared to return `Unit` may complete through a body
 with no tail expression; `return ();` is the explicit Unit return. Functions with
 other return types still require a compatible value on every continuing path.
 `Unit` is reserved alongside `Int` and `Bool` and cannot be redefined as a nominal
-record or enum. Unit equality is not part of this bootstrap operator subset.
+record or enum.
 
 A bootstrap record declares explicitly typed, uniquely named fields.
 `new Record { field: expression, ... }` must initialize every declared field
@@ -108,9 +108,13 @@ nested-pattern, usefulness, layout, or ownership semantics prematurely.
 
 Matching `Int`, `Bool`, and `Unit` values are equality-comparable with `==` and
 `!=`. Unit has exactly one bootstrap value, so two normally evaluated Unit values compare
-equal. Nominal records, enums, and function values remain non-comparable. Closed-condition
-reasoning may prove equality only for literal `()` operands; it does not erase evaluation
-of Unit-returning calls, names, or blocks.
+equal. A nominal enum is also equality-comparable when every one of its declared variants
+is payload-free; both operands must have that same nominal enum identity, and equality
+compares the resolved variant identity after ordinary left-to-right evaluation. Enums with
+any payload variant, nominal records, and function values remain non-comparable. Closed-
+condition reasoning may prove equality for literal Unit values and direct payload-free enum
+constructors; it does not erase evaluation of calls, names, parameters, or other dynamic
+values.
 
 The bootstrap frontend preserves decimal integer magnitudes through parsing and
 assigns signed meaning during semantic lowering. Positive `Int` literals are

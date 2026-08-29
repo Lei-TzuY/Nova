@@ -2228,21 +2228,21 @@ impl Analyzer {
             } else {
                 &left.ty
             };
-            if other.is_never() || matches!(other, Type::Int | Type::Bool | Type::Unit) {
+            if other.is_never() || self.is_equality_comparable(other) {
                 return Type::Never;
             }
             self.diagnostics
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires Int, Bool, or Unit operands, found {} and {}",
+                        "equality requires Int, Bool, Unit, or payload-free enum operands, found {} and {}",
                         left.ty, right.ty
                     ),
                 ));
             return Type::Error;
         }
 
-        let comparable = matches!(left.ty, Type::Int | Type::Bool | Type::Unit);
+        let comparable = self.is_equality_comparable(&left.ty);
         if comparable && left.ty == right.ty {
             Type::Bool
         } else {
@@ -2250,11 +2250,28 @@ impl Analyzer {
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires matching Int, Bool, or Unit operands, found {} and {}",
+                        "equality requires matching Int, Bool, Unit, or payload-free enum operands, found {} and {}",
                         left.ty, right.ty
                     ),
                 ));
             Type::Error
+        }
+    }
+
+    fn is_equality_comparable(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Int | Type::Bool | Type::Unit => true,
+            Type::Enum(enumeration) => self
+                .enum_definitions
+                .get(enumeration.id.index())
+                .is_some_and(|definition| {
+                    definition.id == enumeration.id
+                        && definition
+                            .variants
+                            .iter()
+                            .all(|variant| variant.payload.is_none())
+                }),
+            _ => false,
         }
     }
 

@@ -712,6 +712,32 @@ impl<'program> Interpreter<'program> {
             }
             (BinaryOperator::Equal, Value::Unit, Value::Unit) => Ok(Value::Bool(true)),
             (BinaryOperator::NotEqual, Value::Unit, Value::Unit) => Ok(Value::Bool(false)),
+            (
+                BinaryOperator::Equal,
+                Value::Enum {
+                    enumeration: left_enum,
+                    variant_index: left_variant,
+                    payload: None,
+                },
+                Value::Enum {
+                    enumeration: right_enum,
+                    variant_index: right_variant,
+                    payload: None,
+                },
+            ) if left_enum == right_enum => Ok(Value::Bool(left_variant == right_variant)),
+            (
+                BinaryOperator::NotEqual,
+                Value::Enum {
+                    enumeration: left_enum,
+                    variant_index: left_variant,
+                    payload: None,
+                },
+                Value::Enum {
+                    enumeration: right_enum,
+                    variant_index: right_variant,
+                    payload: None,
+                },
+            ) if left_enum == right_enum => Ok(Value::Bool(left_variant != right_variant)),
             (BinaryOperator::And, Value::Bool(left), Value::Bool(right)) => {
                 Ok(Value::Bool(left && right))
             }
