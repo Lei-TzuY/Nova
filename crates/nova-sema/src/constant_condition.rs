@@ -20,6 +20,9 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
             left,
             right,
         } => evaluate_binary(*operator, left, right),
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            evaluate(block.tail.as_deref()?)
+        }
         _ => None,
     }
 }
@@ -98,6 +101,9 @@ fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
             variant_index,
             payload,
         } if payload.is_none() => Some((*enumeration, *variant_index)),
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            enum_tag(block.tail.as_deref()?)
+        }
         _ => None,
     }
 }

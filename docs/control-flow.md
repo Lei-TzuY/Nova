@@ -41,10 +41,12 @@ edges return loop fallthrough or `continue` to the pre-test condition header.
 Closed side-effect-free condition refinements for `if`, `while`, and
 short-circuit operators, direct enum-constructor match selection, and
 non-continuing discriminators use diagnostic edges for successors that cannot
-execute. Unit equality may prove its operands only from the literal `()` or from
-a statement-free nested block whose optional tail recursively has that same pure
-Unit form; a block containing any statement, call, binding read, or other dynamic
-source remains outside closed-condition reasoning.
+execute. Closed-value reasoning may look through a nested block only when that
+block contains no statements: its tail must itself be a closed Bool, Int, Unit,
+or directly known payload-free enum value, while an empty statement-free block
+is the closed Unit value. The original block HIR is retained. Any statement in
+the block stops this structural proof without attempting purity analysis, and
+calls, binding reads, or other dynamic leaves remain runtime-evaluated.
 
 An invalid construct may leave a reachable-from-entry diagnostic subgraph with
 no continuation edge. This is intentional: rollback moves the lowering cursor
@@ -130,10 +132,12 @@ backend blocks. Loop reasoning remains the documented bootstrap rule: ordinary
 pre-test loops preserve the zero-iteration path, while a side-effect-free closed
 condition proven true may continue only through reachable `break` exits.
 
-The pure-Unit block proof is intentionally structural and narrow. It recognizes
-only statement-free blocks that are empty or whose tail recursively reduces to
-that same form or to `()`. It does not inspect statements for purity, execute
-calls, follow names, or infer that an arbitrary Unit-typed expression is
+Statement-free block transparency is intentionally structural rather than a purity
+analysis. The evaluator may recurse through zero-statement block tails while proving
+closed Bool/Int expressions, Unit values, or direct payload-free enum constructors,
+but it never removes those blocks from HIR. A single statement stops the proof even
+when that statement appears harmless. The evaluator does not execute calls, follow
+names, inspect mutable state, or infer that arbitrary same-typed expressions are
 constant; those cases remain runtime-evaluated.
 
 Additional flow-sensitive checks should migrate onto explicit analyses only when
