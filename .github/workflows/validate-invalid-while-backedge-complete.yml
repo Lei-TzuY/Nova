@@ -1,0 +1,36 @@
+name: Validate invalid while backedge isolation
+
+on:
+  push:
+    branches: [fix/invalid-while-continue-backedge]
+
+jobs:
+  red-green:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Compile regression target
+        run: cargo test -p nova-sema --test invalid_while_continue_flow --locked --no-run
+      - name: Confirm fallthrough recovery regression is red
+        shell: bash
+        run: |
+          set -euo pipefail
+          if cargo test -p nova-sema --test invalid_while_continue_flow --locked; then
+            echo "expected invalid-while fallthrough regression to fail before the complete fix" >&2
+            exit 1
+          fi
+      - name: Apply complete recovery-backedge fix in validation workspace
+        run: python scripts/apply-invalid-while-backedge-complete.py
+      - name: Validate behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo test -p nova-sema --test invalid_while_continue_flow --locked
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo build --workspace --all-targets --locked
+          RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
