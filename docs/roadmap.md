@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty-five vertical slices implemented; broader type-system work remains.**
+**Status: thirty-six vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -602,6 +602,23 @@ Implemented in the thirty-fifth Phase 2 slice:
 - semantic regressions lock Unit comparison, literal-condition flow, dynamic-call
   conservatism, and continued rejection of record/function equality; and
 - no parser, HIR, CFG shape, or semantic-inspection schema change is required.
+
+Implemented in the thirty-sixth Phase 2 slice:
+
+- CFG verification treats `Backedge` topology as an explicit invariant rather than a
+  convention of the structured loop builder;
+- every backedge must target a `Join` node, matching the current pre-test loop-header
+  representation, instead of being accepted on reads, initialization events, branches,
+  transfers, or exits;
+- both backedge endpoints must belong to executable-reachable control flow, rejecting
+  cycles that exist only inside retained diagnostic/recovery source;
+- the rule composes with diagnostic-reconnection verification so the fixed-point solver
+  consumes only graph cycles that can represent real loop execution;
+- direct corruption regressions prove the previous verifier accepted both malformed
+  target kinds and diagnostic-only cycles, while existing valid cyclic CFG tests remain
+  green; and
+- the change affects no syntax, HIR shape, analyzer reachability policy, runtime
+  behavior, dataflow transfer function, or semantic-inspection schema.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
