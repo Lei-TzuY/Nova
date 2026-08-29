@@ -49,7 +49,8 @@ fn nested_return_expression_does_not_append_a_second_return_transfer() {
 fn break_from_return_expression_consumes_the_parent_return() {
     let output = analyze_text("fn main() -> Int { while true { return { break; 0 }; } 42 }");
 
-    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(output.is_success(), "{:?}", output.diagnostics);
+    assert_eq!(codes(&output), vec!["N3033"]);
     assert_eq!(transfer_count(&output, FlowTransfer::Break), 1);
     assert_eq!(transfer_count(&output, FlowTransfer::Return), 0);
 }

@@ -350,4 +350,15 @@ mod tests {
         assert!(rendered.contains("\"message\":\"\\\\quoted\\\"\""));
         assert!(rendered.ends_with("}"));
     }
+
+    #[test]
+    fn warning_severity_is_preserved_by_both_renderers() {
+        let source = SourceFile::new(SourceId::new(0), "sample.nv", "x");
+        let span = source.span(0, 1).expect("valid span");
+        let diagnostic =
+            Diagnostic::warning("N3033", "example warning").with_primary(span, "selected");
+
+        assert!(render_human(&diagnostic, &source).starts_with("warning[N3033]"));
+        assert!(render_json(&diagnostic, &source).starts_with("{\"severity\":\"warning\""));
+    }
 }

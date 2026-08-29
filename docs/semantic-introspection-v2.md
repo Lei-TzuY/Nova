@@ -31,7 +31,8 @@ on unknown fields.
 
 Inspection still runs the complete lexical, syntactic, name-resolution, type,
 and definite-initialization pipeline. Rejected source writes diagnostics and no
-document. Before v2 serialization, `nova-inspect` also checks that:
+document. Non-fatal warnings remain on standard error and do not prevent an
+accepted v2 document. Before v2 serialization, `nova-inspect` also checks that:
 
 - there is exactly one CFG for every HIR function, in function order;
 - each CFG and graph-local node identity matches its deterministic slot;

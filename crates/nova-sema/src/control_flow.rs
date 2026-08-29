@@ -210,6 +210,12 @@ impl FunctionFlowBuilder {
         self.cursor
     }
 
+    pub(crate) fn cursor_is_transfer(&self) -> bool {
+        self.nodes
+            .get(self.cursor.index())
+            .is_some_and(|node| matches!(node.kind, FlowNodeKind::Transfer(_)))
+    }
+
     pub(crate) fn set_cursor(&mut self, cursor: FlowNodeId) {
         self.cursor = cursor;
     }
@@ -404,6 +410,84 @@ pub(crate) fn definite_initialization_diagnostics(
                     .with_secondary(binding.span, "binding declared here"),
             );
         }
+    }
+    Ok(diagnostics)
+}
+
+pub(crate) fn unreachable_code_diagnostics(
+    graph: &FunctionControlFlow,
+    fallback_span: Span,
+) -> Result<Vec<Diagnostic>, FlowError> {
+    verify(graph, fallback_span)?;
+
+    let mut successors = vec![Vec::<(FlowNodeId, FlowEdgeKind)>::new(); graph.nodes.len()];
+    for node in &graph.nodes {
+        for edge in &node.predecessors {
+            let outgoing = successors.get_mut(edge.from.index()).ok_or_else(|| {
+                FlowError::invalid(
+                    node.span.unwrap_or(fallback_span),
+                    format!(
+                        "flow node {} has an out-of-range predecessor",
+                        node.id.index()
+                    ),
+                )
+            })?;
+            outgoing.push((node.id, edge.kind));
+        }
+    }
+
+    let mut execution_reached = BTreeSet::new();
+    let mut queue = VecDeque::from([graph.entry]);
+    while let Some(node) = queue.pop_front() {
+        if !execution_reached.insert(node) {
+            continue;
+        }
+        queue.extend(
+            successors[node.index()]
+                .iter()
+                .filter(|(_, kind)| *kind != FlowEdgeKind::Diagnostic)
+                .map(|(successor, _)| *successor),
+        );
+    }
+
+    let mut warned_spans = BTreeSet::new();
+    let mut diagnostics = Vec::new();
+    for transfer in &graph.nodes {
+        let FlowNodeKind::Transfer(kind) = &transfer.kind else {
+            continue;
+        };
+        if !execution_reached.contains(&transfer.id) {
+            continue;
+        }
+
+        let first_unreachable = successors[transfer.id.index()]
+            .iter()
+            .filter(|(_, edge)| *edge == FlowEdgeKind::Diagnostic)
+            .filter_map(|(successor, _)| graph.nodes.get(successor.index()))
+            .filter_map(|node| node.span)
+            .min_by_key(|span| (span.source().raw(), span.start(), span.end()));
+        let Some(unreachable_span) = first_unreachable else {
+            continue;
+        };
+        let span_key = (
+            unreachable_span.source().raw(),
+            unreachable_span.start(),
+            unreachable_span.end(),
+        );
+        if !warned_spans.insert(span_key) {
+            continue;
+        }
+
+        let reason = match kind {
+            FlowTransfer::Return => "this return leaves the function",
+            FlowTransfer::Break => "this break leaves the enclosing loop",
+            FlowTransfer::Continue => "this continue starts the next loop iteration",
+        };
+        diagnostics.push(
+            Diagnostic::warning("N3033", "unreachable code")
+                .with_primary(unreachable_span, "this code cannot be reached")
+                .with_secondary(transfer.span.unwrap_or(fallback_span), reason),
+        );
     }
     Ok(diagnostics)
 }
@@ -656,9 +740,10 @@ fn verify(graph: &FunctionControlFlow, fallback_span: Span) -> Result<(), FlowEr
 mod tests {
     use super::{
         FlowEdgeKind, FlowNodeKind, FlowTransfer, FunctionFlowBuilder,
-        definite_initialization_diagnostics,
+        definite_initialization_diagnostics, unreachable_code_diagnostics,
     };
     use crate::hir::{Binding, BindingId, FunctionId, Type};
+    use nova_diagnostics::Severity;
     use nova_source::{SourceId, Span};
 
     fn span(start: usize, end: usize) -> Span {
@@ -748,6 +833,39 @@ mod tests {
             .finish(None)
             .expect_err("return cannot have an execution successor");
         assert!(error.message().contains("incompatible"));
+    }
+
+    #[test]
+    fn unreachable_warnings_are_deduplicated_per_executable_transfer() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 30));
+        let returned = builder.advance(
+            FlowNodeKind::Transfer(FlowTransfer::Return),
+            Some(span(1, 7)),
+            FlowEdgeKind::Execution,
+        );
+        let first = builder.fork_from(returned, Some(span(8, 9)), FlowEdgeKind::Diagnostic);
+        builder.advance(
+            FlowNodeKind::Transfer(FlowTransfer::Break),
+            Some(span(10, 16)),
+            FlowEdgeKind::Diagnostic,
+        );
+        builder.advance(
+            FlowNodeKind::Branch,
+            Some(span(17, 18)),
+            FlowEdgeKind::Diagnostic,
+        );
+        builder.fork_from(returned, Some(span(20, 21)), FlowEdgeKind::Diagnostic);
+
+        let graph = builder.finish(None).expect("valid diagnostic-only graph");
+        let diagnostics =
+            unreachable_code_diagnostics(&graph, span(0, 30)).expect("valid warning analysis");
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].severity, Severity::Warning);
+        assert_eq!(diagnostics[0].code, "N3033");
+        assert_eq!(diagnostics[0].labels[0].span, span(8, 9));
+        assert_eq!(diagnostics[0].labels[1].span, span(1, 7));
+        assert_ne!(first, returned);
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use crate::constant_int::{self, ConstantIntError};
 use crate::control_flow::{
     ControlFlowProgram, FlowEdgeKind, FlowNodeId, FlowNodeKind, FlowTransfer, FunctionControlFlow,
-    FunctionFlowBuilder, definite_initialization_diagnostics,
+    FunctionFlowBuilder, definite_initialization_diagnostics, unreachable_code_diagnostics,
 };
 use crate::hir::{
     self, BindingId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType, MatchArm,
@@ -10,7 +10,7 @@ use crate::hir::{
 use crate::type_rules::{
     JoinObservation, TypeJoin, expected_type_compatible, strict_binary_result_type,
 };
-use nova_diagnostics::{Diagnostic, LabelStyle};
+use nova_diagnostics::{Diagnostic, LabelStyle, Severity};
 use nova_parser::ast::{self, BinaryOperator, UnaryOperator};
 use nova_source::Span;
 use std::collections::BTreeMap;
@@ -27,10 +27,16 @@ pub struct AnalysisOutput {
 }
 
 impl AnalysisOutput {
+    /// Reports whether semantic analysis produced any rejecting diagnostic.
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        diagnostics_have_errors(&self.diagnostics)
+    }
+
     /// Reports whether semantic analysis accepted the program.
     #[must_use]
     pub fn is_success(&self) -> bool {
-        self.diagnostics.is_empty()
+        !self.has_errors()
     }
 }
 
@@ -58,6 +64,23 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
         .map(|(index, function)| analyzer.lower_function(FunctionId::new(index), function))
         .collect();
 
+    if !diagnostics_have_errors(&analyzer.diagnostics) {
+        let warnings = analyzer
+            .control_flow
+            .iter()
+            .zip(&program.functions)
+            .map(|(graph, function)| unreachable_code_diagnostics(graph, function.span))
+            .collect::<Result<Vec<_>, _>>();
+        match warnings {
+            Ok(warnings) => analyzer.diagnostics.extend(warnings.into_iter().flatten()),
+            Err(error) => analyzer.diagnostics.push(
+                Diagnostic::error("N3999", "invalid semantic control-flow graph")
+                    .with_primary(error.span(), error.message())
+                    .with_note("the compiler rejected an invalid internal graph"),
+            ),
+        }
+    }
+
     analyzer.diagnostics.sort_by_key(diagnostic_sort_key);
     AnalysisOutput {
         program: hir::Program {
@@ -69,6 +92,12 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
         control_flow: ControlFlowProgram::new(analyzer.control_flow),
         diagnostics: analyzer.diagnostics,
     }
+}
+
+fn diagnostics_have_errors(diagnostics: &[Diagnostic]) -> bool {
+    diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.severity == Severity::Error)
 }
 
 fn diagnostic_sort_key(diagnostic: &Diagnostic) -> (u32, usize, usize) {
@@ -1247,6 +1276,7 @@ impl Analyzer {
         return_type: &Type,
     ) -> hir::Expression {
         let reachable_state = self.capture_reachable_state();
+        self.mark_unreachable_after_transfer(expression.span);
         self.diagnostic_only_depth += 1;
         let lowered = self.lower_expression(expression, return_type);
         self.diagnostic_only_depth -= 1;
@@ -1260,11 +1290,24 @@ impl Analyzer {
         return_type: &Type,
     ) -> (hir::Statement, bool) {
         let reachable_state = self.capture_reachable_state();
+        self.mark_unreachable_after_transfer(statement.span);
         self.diagnostic_only_depth += 1;
         let lowered = self.lower_statement(statement, return_type);
         self.diagnostic_only_depth -= 1;
         self.restore_reachable_state(reachable_state);
         lowered
+    }
+
+    fn mark_unreachable_after_transfer(&mut self, span: Span) {
+        let cursor_is_transfer = self
+            .flow
+            .as_ref()
+            .expect("semantic lowering must own a function flow graph")
+            .cursor_is_transfer();
+        if cursor_is_transfer {
+            let predecessor = self.flow_cursor();
+            self.flow_fork_from(predecessor, Some(span), FlowEdgeKind::Diagnostic);
+        }
     }
 
     fn lower_block_for_diagnostics(
@@ -2456,6 +2499,7 @@ impl Analyzer {
 mod tests {
     use super::{AnalysisOutput, analyze};
     use crate::hir::{ExpressionKind, StatementKind, Type};
+    use nova_diagnostics::Severity;
     use nova_lexer::lex;
     use nova_parser::parse;
     use nova_source::{SourceFile, SourceId};
@@ -2483,6 +2527,64 @@ mod tests {
             .iter()
             .map(|diagnostic| diagnostic.code.as_str())
             .collect()
+    }
+
+    #[test]
+    fn unreachable_warnings_are_nonfatal_and_errors_suppress_them() {
+        let warned_source = "fn main() -> Int { return 1; 2; 3 }";
+        let warned = analyze_text(warned_source);
+        assert!(warned.is_success(), "{:?}", warned.diagnostics);
+        assert!(!warned.has_errors());
+        assert_eq!(codes(&warned), vec!["N3033"]);
+        assert_eq!(warned.diagnostics[0].severity, Severity::Warning);
+        assert_eq!(warned.diagnostics[0].labels.len(), 2);
+        let unreachable_start = warned_source.find("2;").expect("unreachable statement");
+        assert_eq!(
+            warned.diagnostics[0].labels[0].span.start(),
+            unreachable_start
+        );
+        assert_eq!(
+            warned.diagnostics[0].labels[0].span.end(),
+            unreachable_start + 2
+        );
+        let return_start = warned_source.find("return").expect("return statement");
+        assert_eq!(warned.diagnostics[0].labels[1].span.start(), return_start);
+        assert_eq!(warned.diagnostics[0].labels[1].span.end(), return_start + 9);
+
+        let rejected = analyze_text("fn main() -> Int { return 1; missing; 3 }");
+        assert!(!rejected.is_success());
+        assert!(rejected.has_errors());
+        assert_eq!(codes(&rejected), vec!["N3003"]);
+        assert!(
+            rejected
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity == Severity::Error)
+        );
+    }
+
+    #[test]
+    fn break_and_continue_each_identify_the_first_unreachable_region() {
+        let output = analyze_text(
+            "fn breaks() -> Int { while true { break; 0; } 1 }\n\
+             fn continues() -> Int { while true { continue; 0; } }",
+        );
+
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        assert_eq!(codes(&output), vec!["N3033", "N3033"]);
+        assert!(output.diagnostics[0].labels[1].message.contains("break"));
+        assert!(output.diagnostics[1].labels[1].message.contains("continue"));
+    }
+
+    #[test]
+    fn constant_selection_and_proven_loops_do_not_expand_warning_policy() {
+        let output = analyze_text(
+            "fn selected() -> Int { if true { 1 } else { 2 } }\n\
+             fn skipped() -> Int { while false { 0; } 1 }\n\
+             fn endless() -> Int { while true {} 1 }",
+        );
+
+        assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
     }
 
     #[test]

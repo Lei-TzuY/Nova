@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: thirty-eight vertical slices implemented; broader type-system work remains.**
+**Status: thirty-nine vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -652,6 +652,21 @@ Implemented in the thirty-eighth Phase 2 slice:
   while `--schema-version 2` is required to select the new contract; and
 - separate JSON Schema, golden CLI output, cross-model corruption tests, all node/edge
   category coverage, and documentation lock compatibility and fail-closed behavior.
+
+Implemented in the thirty-ninth Phase 2 slice:
+
+- semantic diagnostic success is severity-aware: errors reject, while warnings remain
+  attached to an accepted `AnalysisOutput` without blocking HIR consumers;
+- `N3033` reuses verified CFG executable reachability to identify the first diagnostic-
+  only source region following an executable `return`, `break`, or `continue`;
+- warning roots are span-deduplicated, diagnostic-only transfers cannot cascade nested
+  warnings, and any semantic error suppresses the warning pass;
+- `nova check`, `nova run`, and `nova inspect` render warnings to stderr in human or
+  JSON Lines form while retaining status `0` and their ordinary successful stdout;
+- semantic-inspection v1 and v2 continue to accept warning-bearing analysis without
+  embedding diagnostic presentation into either schema; and
+- semantic, CFG, renderer, and CLI regressions lock severity, spans, deduplication,
+  suppression, execution, inspection, and exit-status behavior.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

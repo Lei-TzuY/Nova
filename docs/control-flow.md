@@ -100,6 +100,21 @@ any edge class. A diagnostic-only recovery path therefore cannot be mislabeled a
 successful function completion, and post-exit diagnostic nodes cannot extend a graph
 past its terminal boundary.
 
+## Unreachable-code warning query
+
+After all graphs and semantic errors have been resolved, accepted analysis reuses
+the verifier's executable-edge interpretation for non-fatal diagnostic `N3033`.
+For every execution-reachable `return`, `break`, or `continue` node, the query
+examines direct `Diagnostic` successors and reports the earliest source span at
+most once. The transfer span is retained as a secondary label explaining why
+the selected region cannot execute.
+
+Diagnostic-only transfers never produce nested warnings, and any semantic error
+suppresses the warning pass. This keeps statically checked recovery source in the
+graph without cascading one warning from another unreachable region. The query
+does not currently warn for every node outside executable reachability: constant-
+selected branches and loops remain outside this deliberately narrow policy.
+
 ## Definite-initialization dataflow
 
 For binding set `B`, the solver starts non-entry nodes at `B` and iterates
