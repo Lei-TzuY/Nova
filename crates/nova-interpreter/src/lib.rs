@@ -372,6 +372,24 @@ impl<'program> Interpreter<'program> {
                         Flow::Value(value) => value,
                         flow => return Ok(flow),
                     };
+                    let Some(field_definition) = definition.fields.get(field.field_index) else {
+                        return Err(self.invariant(
+                            expression.span,
+                            format!(
+                                "record initializer targets field slot {} outside record `{}`",
+                                field.field_index, definition.name
+                            ),
+                        ));
+                    };
+                    if !self.value_conforms_to_type(&value, &field_definition.ty) {
+                        return Err(self.invariant(
+                            field.value.span,
+                            format!(
+                                "record field `{}` of `{}` received a runtime value that does not conform to declared type {}",
+                                field_definition.name, definition.name, field_definition.ty
+                            ),
+                        ));
+                    }
                     let Some(slot) = slots.get_mut(field.field_index) else {
                         return Err(self.invariant(
                             expression.span,
@@ -451,6 +469,19 @@ impl<'program> Interpreter<'program> {
                 } else {
                     None
                 };
+                if let (Some(payload_type), Some(payload_value)) =
+                    (&variant.payload, payload.as_deref())
+                {
+                    if !self.value_conforms_to_type(payload_value, payload_type) {
+                        return Err(self.invariant(
+                            expression.span,
+                            format!(
+                                "enum variant `{}` of `{}` received a runtime payload that does not conform to declared type {}",
+                                variant.name, definition.name, payload_type
+                            ),
+                        ));
+                    }
+                }
                 Ok(Flow::Value(Value::Enum {
                     enumeration: *enumeration,
                     variant_index: *variant_index,

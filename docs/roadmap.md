@@ -654,7 +654,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: eleven vertical slices implemented; execution surface remains small.**
+**Status: twelve vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -812,6 +812,19 @@ Implemented in the eleventh Phase 3 slice:
 - malformed-HIR regressions lock argument, return, nested-record, and nominal
   identity drift to deterministic invariant diagnostic `N4005` without changing
   valid source behavior.
+
+Implemented in the twelfth Phase 3 slice:
+
+- record construction validates each evaluated runtime field against the declared
+  destination slot type before storing it in the aggregate value;
+- enum construction validates an evaluated payload against the selected variant's
+  declared payload type before creating the runtime enum value;
+- validation reuses the recursive runtime/HIR conformance contract, so nested
+  nominal record/enum identity and payload drift also fail closed at construction;
+- malformed aggregates are rejected with invariant diagnostic `N4005` even when
+  their values are discarded locally and never cross a function boundary; and
+- adversarial malformed-HIR regressions plus a valid local-aggregate control case
+  lock the new construction boundary without changing accepted source behavior.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

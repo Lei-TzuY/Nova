@@ -253,6 +253,11 @@ and enum identities, record slots, and enum payloads are checked rather than
 trusted from their outer value tag alone. Valid semantically produced HIR is
 unaffected; malformed or contract-drifted HIR fails closed with `N4005`.
 
+Aggregate construction enforces the same invariant locally: each evaluated record
+field must conform to its declaration slot type, and each enum payload must conform
+to its selected variant payload type before the aggregate value is created. This
+catches malformed HIR even when the aggregate never crosses a function boundary.
+
 For deterministic execution while the numeric design remains provisional, the
 bootstrap frontend now covers the complete signed 64-bit literal endpoints: positive
 literals end at `9223372036854775807`, while `-9223372036854775808` is normalized
