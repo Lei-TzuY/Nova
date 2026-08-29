@@ -45,8 +45,8 @@ fn evaluate_binary(
                 (Type::Int, Type::Int) => int_value(left)? == int_value(right)?,
                 (Type::Bool, Type::Bool) => evaluate(left)? == evaluate(right)?,
                 (Type::Unit, Type::Unit) => {
-                    unit_literal(left)?;
-                    unit_literal(right)?;
+                    unit_value(left)?;
+                    unit_value(right)?;
                     true
                 }
                 _ => return None,
@@ -69,6 +69,19 @@ fn int_value(expression: &Expression) -> Option<i64> {
     constant_int::evaluate(expression)?.ok()
 }
 
-fn unit_literal(expression: &Expression) -> Option<()> {
-    matches!(expression.kind, ExpressionKind::Unit).then_some(())
+fn unit_value(expression: &Expression) -> Option<()> {
+    if expression.ty != Type::Unit {
+        return None;
+    }
+
+    match &expression.kind {
+        ExpressionKind::Unit => Some(()),
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            match block.tail.as_deref() {
+                Some(tail) => unit_value(tail),
+                None => Some(()),
+            }
+        }
+        _ => None,
+    }
 }
