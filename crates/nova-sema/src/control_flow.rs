@@ -528,9 +528,10 @@ fn verify(graph: &FunctionControlFlow, fallback_span: Span) -> Result<(), FlowEr
             successors[node.id.index()]
                 .iter()
                 .any(|(_, edge)| match &node.kind {
-                    FlowNodeKind::Transfer(FlowTransfer::Return) | FlowNodeKind::Exit => {
+                    FlowNodeKind::Transfer(FlowTransfer::Return) => {
                         *edge != FlowEdgeKind::Diagnostic
                     }
+                    FlowNodeKind::Exit => true,
                     FlowNodeKind::Transfer(FlowTransfer::Continue) => {
                         !matches!(edge, FlowEdgeKind::Diagnostic | FlowEdgeKind::Backedge)
                     }
@@ -564,15 +565,34 @@ fn verify(graph: &FunctionControlFlow, fallback_span: Span) -> Result<(), FlowEr
             "control-flow graph contains a node unreachable from its entry",
         ));
     }
-    if graph.normal_exits.iter().any(|exit| {
-        !matches!(
-            graph.nodes.get(exit.index()).map(|node| &node.kind),
-            Some(FlowNodeKind::Exit)
-        )
-    }) {
+    let actual_exits = graph
+        .nodes
+        .iter()
+        .filter_map(|node| matches!(node.kind, FlowNodeKind::Exit).then_some(node.id))
+        .collect::<BTreeSet<_>>();
+    let declared_exits = graph.normal_exits.iter().copied().collect::<BTreeSet<_>>();
+    if declared_exits.len() != graph.normal_exits.len() {
         return Err(FlowError::invalid(
             fallback_span,
-            "normal exit does not reference an exit node",
+            "normal exit table contains duplicate entries",
+        ));
+    }
+    if declared_exits != actual_exits {
+        return Err(FlowError::invalid(
+            fallback_span,
+            "normal exit table does not exactly match exit nodes",
+        ));
+    }
+    if let Some(exit) = declared_exits
+        .iter()
+        .find(|exit| !execution_reached.contains(exit))
+    {
+        return Err(FlowError::invalid(
+            graph.nodes[exit.index()].span.unwrap_or(fallback_span),
+            format!(
+                "normal exit node {} is not executable-reachable",
+                exit.index()
+            ),
         ));
     }
     Ok(())
@@ -704,6 +724,62 @@ mod tests {
         let error = super::verify(&graph, span(0, 20))
             .expect_err("executable continuation cannot consume a diagnostic predecessor");
         assert!(error.message().contains("diagnostic-only"));
+    }
+
+    #[test]
+    fn verifier_rejects_diagnostic_only_normal_exit() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        let entry = builder.cursor();
+        let recovery = builder.fork_from(entry, Some(span(1, 2)), FlowEdgeKind::Diagnostic);
+
+        let error = builder
+            .finish(Some(recovery))
+            .expect_err("a normal exit must be reachable without crossing diagnostic flow");
+        assert!(error.message().contains("normal exit"));
+    }
+
+    #[test]
+    fn verifier_rejects_unlisted_exit_node() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        builder.advance(
+            FlowNodeKind::Branch,
+            Some(span(1, 2)),
+            FlowEdgeKind::Execution,
+        );
+        let graph_exit = builder.cursor();
+        let mut graph = builder.finish(Some(graph_exit)).expect("valid seed graph");
+        graph.normal_exits.clear();
+
+        let error = super::verify(&graph, span(0, 20))
+            .expect_err("every Exit node must appear in the normal-exit table");
+        assert!(error.message().contains("normal exit"));
+    }
+
+    #[test]
+    fn verifier_rejects_successor_after_exit() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        builder.advance(
+            FlowNodeKind::Branch,
+            Some(span(1, 2)),
+            FlowEdgeKind::Execution,
+        );
+        let graph_exit = builder.cursor();
+        let mut graph = builder.finish(Some(graph_exit)).expect("valid seed graph");
+        let exit = graph.normal_exits[0];
+        let successor = super::FlowNodeId(graph.nodes.len());
+        graph.nodes.push(super::FlowNode {
+            id: successor,
+            kind: FlowNodeKind::Branch,
+            predecessors: vec![super::FlowEdge {
+                from: exit,
+                kind: FlowEdgeKind::Diagnostic,
+            }],
+            span: Some(span(3, 4)),
+        });
+
+        let error = super::verify(&graph, span(0, 20))
+            .expect_err("a function Exit must be terminal even for diagnostic source");
+        assert!(error.message().contains("successor"));
     }
 
     #[test]
