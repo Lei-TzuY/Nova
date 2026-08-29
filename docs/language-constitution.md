@@ -106,6 +106,12 @@ scrutinee runs once and only the selected arm runs. These rules establish a
 small executable algebraic-data-type core without selecting wildcard, guard,
 nested-pattern, usefulness, layout, or ownership semantics prematurely.
 
+Matching `Int`, `Bool`, and `Unit` values are equality-comparable with `==` and
+`!=`. Unit has exactly one bootstrap value, so two normally evaluated Unit values compare
+equal. Nominal records, enums, and function values remain non-comparable. Closed-condition
+reasoning may prove equality only for literal `()` operands; it does not erase evaluation
+of Unit-returning calls, names, or blocks.
+
 The bootstrap frontend preserves decimal integer magnitudes through parsing and
 assigns signed meaning during semantic lowering. Positive `Int` literals are
 `0..=2^63-1`; the magnitude `2^63` is reserved for prefix negation, so

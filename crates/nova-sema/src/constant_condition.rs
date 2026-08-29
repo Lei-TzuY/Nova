@@ -44,6 +44,11 @@ fn evaluate_binary(
             let equal = match (&left.ty, &right.ty) {
                 (Type::Int, Type::Int) => int_value(left)? == int_value(right)?,
                 (Type::Bool, Type::Bool) => evaluate(left)? == evaluate(right)?,
+                (Type::Unit, Type::Unit) => {
+                    unit_literal(left)?;
+                    unit_literal(right)?;
+                    true
+                }
                 _ => return None,
             };
             Some(if operator == BinaryOperator::Equal {
@@ -62,4 +67,8 @@ fn evaluate_binary(
 
 fn int_value(expression: &Expression) -> Option<i64> {
     constant_int::evaluate(expression)?.ok()
+}
+
+fn unit_literal(expression: &Expression) -> Option<()> {
+    matches!(expression.kind, ExpressionKind::Unit).then_some(())
 }

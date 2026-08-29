@@ -2228,29 +2228,29 @@ impl Analyzer {
             } else {
                 &left.ty
             };
-            if other.is_never() || matches!(other, Type::Int | Type::Bool) {
+            if other.is_never() || matches!(other, Type::Int | Type::Bool | Type::Unit) {
                 return Type::Never;
             }
             self.diagnostics
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires Int or Bool operands, found {} and {}",
+                        "equality requires Int, Bool, or Unit operands, found {} and {}",
                         left.ty, right.ty
                     ),
                 ));
             return Type::Error;
         }
 
-        let primitive = matches!(left.ty, Type::Int | Type::Bool);
-        if primitive && left.ty == right.ty {
+        let comparable = matches!(left.ty, Type::Int | Type::Bool | Type::Unit);
+        if comparable && left.ty == right.ty {
             Type::Bool
         } else {
             self.diagnostics
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires matching Int or Bool operands, found {} and {}",
+                        "equality requires matching Int, Bool, or Unit operands, found {} and {}",
                         left.ty, right.ty
                     ),
                 ));
