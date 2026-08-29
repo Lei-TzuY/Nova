@@ -1,0 +1,44 @@
+name: Finalize payload-free enum equality
+
+on:
+  push:
+    branches: [feat/payload-free-enum-equality]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Apply CLI and documentation synchronization
+        run: python scripts/finalize-payload-free-enum-equality.py
+      - name: Validate vertical slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo test -p nova-sema --test payload_free_enum_equality --locked
+          cargo test -p nova-interpreter --all-targets --locked
+          cargo test -p nova-cli --test cli --locked
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo build --workspace --all-targets --locked
+          RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
+      - name: Commit final slice and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/finalize-payload-free-enum-equality.yml
+          rm scripts/finalize-payload-free-enum-equality.py
+          git config user.name 'LeiZ'
+          git config user.email '52287354+Lei-TzuY@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs: finalize payload-free enum equality slice'
+          git push origin HEAD:feat/payload-free-enum-equality
