@@ -413,10 +413,18 @@ cases while preserving source-qualified labels. `N3013` identifies a bootstrap
 documented by tests but codes are not yet covered by the language compatibility
 promise.
 
-Semantic introspection for editors and AI systems must ultimately expose
-resolved symbols, types, effects, ownership facts, nominal type identities, and
-transformations through versioned schemas. Compiler debug text is not that
-eventual protocol.
+The bootstrap now exposes semantic-inspection schema v1 for successfully checked
+single-file programs. It projects resolved declarations, bindings, types,
+nominal identities, typed blocks/statements/expressions, spans, and exhaustive
+match facts into a tooling-owned JSON model. Document-local IDs and deterministic
+ordering are specified independently of Rust HIR layout. Rejected source or an
+inspection invariant failure produces diagnostics and no partial document.
+Compiler debug text is not this protocol.
+
+Effects, ownership facts, module graphs, transformations, and incremental keys
+cannot appear until the corresponding compiler semantics exist. The v1 schema
+is provisional before Nova 1.0 and is versioned independently from the language,
+diagnostics, packages, and future IRs.
 
 ## 13. Compatibility and versioning
 
@@ -468,7 +476,9 @@ Every compiler and execution stage must uphold these constraints:
     layout, allocation, ownership, serialization, or ABI guarantees.
 17. Optimization must preserve specified behavior and later operate on verified
     IR rather than repair invalid earlier output.
-18. Roadmap documents distinguish implemented, provisional, and researched
+18. A semantic-inspection document is emitted only for accepted, internally
+    consistent HIR and must conform to an explicitly versioned tooling schema.
+19. Roadmap documents distinguish implemented, provisional, and researched
     properties; benchmarks and safety claims require reproducible evidence.
 
 ## 15. Current unresolved research register
@@ -485,7 +495,8 @@ The highest-impact unresolved questions are:
 - HIR/MIR contracts shared across execution modes and targets;
 - stable ABI and C ownership conventions;
 - deterministic, incremental, reproducible package builds; and
-- versioned semantic-introspection schemas.
+- evolution of semantic-introspection across modules, effects, ownership,
+  transformations, and incremental compilation.
 
 These questions intentionally have no stable surface commitment in the current
 bootstrap subset.

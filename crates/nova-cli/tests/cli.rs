@@ -16,6 +16,14 @@ fn nova(arguments: &[&str]) -> Output {
         .expect("nova binary should execute")
 }
 
+fn nova_in(directory: &Path, arguments: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_nova"))
+        .current_dir(directory)
+        .args(arguments)
+        .output()
+        .expect("nova binary should execute")
+}
+
 #[test]
 fn accepts_positive_fixtures() {
     for relative in [
@@ -205,6 +213,47 @@ fn emits_semantic_diagnostics_as_json() {
     assert_eq!(stderr.lines().count(), 1);
     assert!(stderr.contains("\"code\":\"N3003\""));
     assert!(stderr.contains("\"message\":\"unknown name\""));
+}
+
+#[test]
+fn inspect_command_matches_the_versioned_golden_document() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let output = nova_in(
+        manifest,
+        &[
+            "inspect",
+            "tests/fixtures/valid/enums-match.nv",
+            "--format",
+            "json",
+        ],
+    );
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("inspection output is UTF-8"),
+        include_str!("golden/semantic-inspection-v1.json")
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn inspect_rejects_invalid_source_without_partial_output() {
+    let path = fixture("invalid/unknown-name.nv");
+    let output = nova(&[
+        "inspect",
+        path.to_str().expect("fixture path is UTF-8"),
+        "--format=json",
+        "--message-format=json",
+    ]);
+    let stderr = String::from_utf8(output.stderr).expect("diagnostics are UTF-8");
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(stderr.contains("\"code\":\"N3003\""), "{stderr}");
 }
 
 #[test]

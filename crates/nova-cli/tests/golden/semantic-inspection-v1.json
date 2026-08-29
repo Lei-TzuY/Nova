@@ -1,0 +1,383 @@
+{
+  "schema": "nova.semantic-inspection",
+  "schema_version": 1,
+  "producer": {
+    "name": "nova",
+    "version": "0.1.0"
+  },
+  "source": {
+    "id": "source:0",
+    "name": "tests/fixtures/valid/enums-match.nv",
+    "byte_length": 225
+  },
+  "program": {
+    "span": {
+      "source": "source:0",
+      "start": 0,
+      "end": 225
+    },
+    "types": [
+      {
+        "id": "type:0",
+        "kind": "int",
+        "display": "Int",
+        "declaration": null,
+        "parameters": [],
+        "return_type": null
+      },
+      {
+        "id": "type:1",
+        "kind": "bool",
+        "display": "Bool",
+        "declaration": null,
+        "parameters": [],
+        "return_type": null
+      },
+      {
+        "id": "type:2",
+        "kind": "unit",
+        "display": "Unit",
+        "declaration": null,
+        "parameters": [],
+        "return_type": null
+      },
+      {
+        "id": "type:3",
+        "kind": "never",
+        "display": "!",
+        "declaration": null,
+        "parameters": [],
+        "return_type": null
+      },
+      {
+        "id": "type:4",
+        "kind": "enum",
+        "display": "Result",
+        "declaration": "enum:0",
+        "parameters": [],
+        "return_type": null
+      },
+      {
+        "id": "type:5",
+        "kind": "function",
+        "display": "fn(Result) -> Int",
+        "declaration": null,
+        "parameters": [
+          "type:4"
+        ],
+        "return_type": "type:0"
+      },
+      {
+        "id": "type:6",
+        "kind": "function",
+        "display": "fn() -> Int",
+        "declaration": null,
+        "parameters": [],
+        "return_type": "type:0"
+      }
+    ],
+    "records": [],
+    "enums": [
+      {
+        "id": "enum:0",
+        "name": "Result",
+        "type_id": "type:4",
+        "span": {
+          "source": "source:0",
+          "start": 0,
+          "end": 42
+        },
+        "variants": [
+          {
+            "id": "enum:0.variant:0",
+            "name": "Empty",
+            "payload_type": null,
+            "span": {
+              "source": "source:0",
+              "start": 18,
+              "end": 23
+            }
+          },
+          {
+            "id": "enum:0.variant:1",
+            "name": "Value",
+            "payload_type": "type:0",
+            "span": {
+              "source": "source:0",
+              "start": 29,
+              "end": 39
+            }
+          }
+        ]
+      }
+    ],
+    "functions": [
+      {
+        "id": "function:0",
+        "name": "unwrap",
+        "type_id": "type:5",
+        "return_type": "type:0",
+        "parameters": [
+          "binding:0"
+        ],
+        "body": "block:0",
+        "span": {
+          "source": "source:0",
+          "start": 44,
+          "end": 172
+        }
+      },
+      {
+        "id": "function:1",
+        "name": "main",
+        "type_id": "type:6",
+        "return_type": "type:0",
+        "parameters": [],
+        "body": "block:1",
+        "span": {
+          "source": "source:0",
+          "start": 174,
+          "end": 224
+        }
+      }
+    ],
+    "bindings": [
+      {
+        "id": "binding:0",
+        "name": "result",
+        "role": "parameter",
+        "owner": "function:0",
+        "scope": "function:0",
+        "type_id": "type:4",
+        "mutable": false,
+        "span": {
+          "source": "source:0",
+          "start": 54,
+          "end": 60
+        }
+      },
+      {
+        "id": "binding:1",
+        "name": "value",
+        "role": "match_payload",
+        "owner": "function:0",
+        "scope": "match:0.arm:1",
+        "type_id": "type:0",
+        "mutable": false,
+        "span": {
+          "source": "source:0",
+          "start": 148,
+          "end": 153
+        }
+      }
+    ],
+    "blocks": [
+      {
+        "id": "block:0",
+        "owner": "function:0",
+        "type_id": "type:0",
+        "span": {
+          "source": "source:0",
+          "start": 77,
+          "end": 172
+        },
+        "statements": [],
+        "tail_expression": "expression:0"
+      },
+      {
+        "id": "block:1",
+        "owner": "function:1",
+        "type_id": "type:0",
+        "span": {
+          "source": "source:0",
+          "start": 191,
+          "end": 224
+        },
+        "statements": [],
+        "tail_expression": "expression:4"
+      }
+    ],
+    "statements": [],
+    "expressions": [
+      {
+        "id": "expression:0",
+        "owner": "function:0",
+        "kind": "match",
+        "type_id": "type:0",
+        "target": "match:0",
+        "operator": null,
+        "children": [
+          "expression:1",
+          "expression:2",
+          "expression:3"
+        ],
+        "blocks": [],
+        "field_initializers": [],
+        "span": {
+          "source": "source:0",
+          "start": 83,
+          "end": 170
+        }
+      },
+      {
+        "id": "expression:1",
+        "owner": "function:0",
+        "kind": "binding_reference",
+        "type_id": "type:4",
+        "target": "binding:0",
+        "operator": null,
+        "children": [],
+        "blocks": [],
+        "field_initializers": [],
+        "span": {
+          "source": "source:0",
+          "start": 89,
+          "end": 95
+        }
+      },
+      {
+        "id": "expression:2",
+        "owner": "function:0",
+        "kind": "integer",
+        "type_id": "type:0",
+        "target": null,
+        "operator": null,
+        "children": [],
+        "blocks": [],
+        "field_initializers": [],
+        "span": {
+          "source": "source:0",
+          "start": 123,
+          "end": 124
+        }
+      },
+      {
+        "id": "expression:3",
+        "owner": "function:0",
+        "kind": "binding_reference",
+        "type_id": "type:0",
+        "target": "binding:1",
+        "operator": null,
+        "children": [],
+        "blocks": [],
+        "field_initializers": [],
+        "span": {
+          "source": "source:0",
+          "start": 158,
+          "end": 163
+        }
+      },
+      {
+        "id": "expression:4",
+        "owner": "function:1",
+        "kind": "call",
+        "type_id": "type:0",
+        "target": null,
+        "operator": null,
+        "children": [
+          "expression:5",
+          "expression:6"
+        ],
+        "blocks": [],
+        "field_initializers": [],
+        "span": {
+          "source": "source:0",
+          "start": 197,
+          "end": 222
+        }
+      },
+      {
+        "id": "expression:5",
+        "owner": "function:1",
+        "kind": "function_reference",
+        "type_id": "type:5",
+        "target": "function:0",
+        "operator": null,
+        "children": [],
+        "blocks": [],
+        "field_initializers": [],
+        "span": {
+          "source": "source:0",
+          "start": 197,
+          "end": 203
+        }
+      },
+      {
+        "id": "expression:6",
+        "owner": "function:1",
+        "kind": "enum_construction",
+        "type_id": "type:4",
+        "target": "enum:0.variant:1",
+        "operator": null,
+        "children": [
+          "expression:7"
+        ],
+        "blocks": [],
+        "field_initializers": [],
+        "span": {
+          "source": "source:0",
+          "start": 204,
+          "end": 221
+        }
+      },
+      {
+        "id": "expression:7",
+        "owner": "function:1",
+        "kind": "integer",
+        "type_id": "type:0",
+        "target": null,
+        "operator": null,
+        "children": [],
+        "blocks": [],
+        "field_initializers": [],
+        "span": {
+          "source": "source:0",
+          "start": 218,
+          "end": 220
+        }
+      }
+    ],
+    "matches": [
+      {
+        "id": "match:0",
+        "owner": "function:0",
+        "expression": "expression:0",
+        "enumeration": "enum:0",
+        "exhaustive": true,
+        "scrutinee": "expression:1",
+        "scrutinee_type": "type:4",
+        "arms": [
+          {
+            "id": "match:0.arm:0",
+            "variant": "enum:0.variant:0",
+            "binding": null,
+            "value": "expression:2",
+            "result_type": "type:0",
+            "span": {
+              "source": "source:0",
+              "start": 106,
+              "end": 124
+            }
+          },
+          {
+            "id": "match:0.arm:1",
+            "variant": "enum:0.variant:1",
+            "binding": "binding:1",
+            "value": "expression:3",
+            "result_type": "type:0",
+            "span": {
+              "source": "source:0",
+              "start": 134,
+              "end": 163
+            }
+          }
+        ],
+        "span": {
+          "source": "source:0",
+          "start": 83,
+          "end": 170
+        }
+      }
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 use nova_diagnostics::{Diagnostic, render_human_all, render_json_lines};
+use nova_inspect::render_json as render_semantic_json;
 use nova_interpreter::execute;
 use nova_lexer::lex;
 use nova_parser::{format_ast, parse};
@@ -17,17 +18,20 @@ Usage:
   nova check <file> [--message-format human|json]
   nova run <file> [--message-format human|json]
   nova ast <file> [--message-format human|json]
+  nova inspect <file> --format json [--message-format human|json]
   nova --help
 
 `check` validates UTF-8, tokens, syntax, names, types, and definite assignment.
 `run` performs the same checks and executes zero-argument `main` in the bootstrap interpreter.
-`ast` prints the parsed syntax tree after lexical and syntactic validation.";
+`ast` prints the parsed syntax tree after lexical and syntactic validation.
+`inspect` emits versioned semantic facts for a successfully checked program.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {
     Check,
     Run,
     Ast,
+    Inspect,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -37,11 +41,17 @@ enum MessageFormat {
     Json,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InspectFormat {
+    Json,
+}
+
 #[derive(Debug, Eq, PartialEq)]
 struct Options {
     command: Command,
     path: PathBuf,
     message_format: MessageFormat,
+    inspect_format: Option<InspectFormat>,
 }
 
 enum ParsedArguments {
@@ -140,6 +150,29 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
         return Ok(1);
     }
 
+    if matches!(
+        (options.command, options.inspect_format),
+        (Command::Inspect, Some(InspectFormat::Json))
+    ) {
+        match render_semantic_json(&analyzed.program, &source) {
+            Ok(document) => writeln!(stdout, "{document}")?,
+            Err(error) => {
+                let diagnostic =
+                    Diagnostic::error("N5001", "semantic inspection invariant failure")
+                        .with_primary(analyzed.program.span, "inspection stopped for this source")
+                        .with_note(error.to_string());
+                emit_diagnostics(
+                    std::slice::from_ref(&diagnostic),
+                    &source,
+                    options.message_format,
+                    stderr,
+                )?;
+                return Ok(1);
+            }
+        }
+        return Ok(0);
+    }
+
     if matches!(options.command, Command::Run) {
         match execute(&analyzed.program) {
             Ok(value) => writeln!(stdout, "{value}")?,
@@ -172,10 +205,12 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
         "check" => Command::Check,
         "run" => Command::Run,
         "ast" => Command::Ast,
+        "inspect" => Command::Inspect,
         unknown => return Err(format!("unknown command `{unknown}`")),
     };
     let mut path = None;
     let mut message_format = MessageFormat::Human;
+    let mut inspect_format = None;
     let mut index = 1;
 
     while index < arguments.len() {
@@ -189,6 +224,14 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
             message_format = parse_message_format(value)?;
         } else if let Some(value) = text.and_then(|value| value.strip_prefix("--message-format=")) {
             message_format = parse_message_format(value)?;
+        } else if text == Some("--format") {
+            index += 1;
+            let Some(value) = arguments.get(index).and_then(|value| value.to_str()) else {
+                return Err("`--format` requires `json`".to_owned());
+            };
+            inspect_format = Some(parse_inspect_format(value)?);
+        } else if let Some(value) = text.and_then(|value| value.strip_prefix("--format=")) {
+            inspect_format = Some(parse_inspect_format(value)?);
         } else if text.is_some_and(|value| value.starts_with('-')) {
             return Err(format!("unknown option `{}`", argument.to_string_lossy()));
         } else if path.replace(PathBuf::from(argument)).is_some() {
@@ -200,10 +243,16 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
     let Some(path) = path else {
         return Err("missing source file".to_owned());
     };
+    match (command, inspect_format) {
+        (Command::Inspect, None) => return Err("`inspect` requires `--format json`".to_owned()),
+        (Command::Inspect, Some(_)) | (_, None) => {}
+        (_, Some(_)) => return Err("`--format` is only valid with `inspect`".to_owned()),
+    }
     Ok(ParsedArguments::Run(Options {
         command,
         path,
         message_format,
+        inspect_format,
     }))
 }
 
@@ -213,6 +262,15 @@ fn parse_message_format(value: &str) -> Result<MessageFormat, String> {
         "json" => Ok(MessageFormat::Json),
         _ => Err(format!(
             "unsupported message format `{value}`; expected `human` or `json`"
+        )),
+    }
+}
+
+fn parse_inspect_format(value: &str) -> Result<InspectFormat, String> {
+    match value {
+        "json" => Ok(InspectFormat::Json),
+        _ => Err(format!(
+            "unsupported inspection format `{value}`; expected `json`"
         )),
     }
 }
@@ -235,7 +293,7 @@ fn emit_diagnostics(
 
 #[cfg(test)]
 mod tests {
-    use super::{Command, MessageFormat, Options, ParsedArguments, parse_arguments};
+    use super::{Command, InspectFormat, MessageFormat, Options, ParsedArguments, parse_arguments};
     use std::ffi::OsString;
     use std::path::Path;
 
@@ -261,6 +319,7 @@ mod tests {
                 command: Command::Run,
                 path,
                 message_format: MessageFormat::Json,
+                inspect_format: None,
             }) if path.as_path() == Path::new("sample.nv")
         ));
         assert!(matches!(
@@ -269,6 +328,19 @@ mod tests {
                 command: Command::Ast,
                 path,
                 message_format: MessageFormat::Human,
+                inspect_format: None,
+            }) if path.as_path() == Path::new("sample.nv")
+        ));
+
+        let inspected = parse_arguments(&arguments(&["inspect", "sample.nv", "--format=json"]))
+            .expect("valid inspection arguments");
+        assert!(matches!(
+            inspected,
+            ParsedArguments::Run(Options {
+                command: Command::Inspect,
+                path,
+                message_format: MessageFormat::Human,
+                inspect_format: Some(InspectFormat::Json),
             }) if path.as_path() == Path::new("sample.nv")
         ));
     }
@@ -281,6 +353,9 @@ mod tests {
             vec!["execute", "x.nv"],
             vec!["check", "a.nv", "b.nv"],
             vec!["check", "x.nv", "--message-format", "xml"],
+            vec!["inspect", "x.nv"],
+            vec!["inspect", "x.nv", "--format", "text"],
+            vec!["check", "x.nv", "--format", "json"],
         ] {
             assert!(parse_arguments(&arguments(&values)).is_err(), "{values:?}");
         }
