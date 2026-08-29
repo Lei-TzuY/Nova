@@ -74,3 +74,14 @@ fn payload_free_enum_equality_remains_executable() {
     let value = execute(&analyzed.program).expect("payload-free enum equality should execute");
     assert_eq!(value, Value::Bool(true));
 }
+
+#[test]
+fn noncontinuing_equality_operand_still_propagates_structured_return() {
+    let analyzed = analyze_text(
+        "fn main() -> Bool {\n\
+             (if true { return true; } else { false }) == false\n\
+         }",
+    );
+    let value = execute(&analyzed.program).expect("return inside equality operand should propagate");
+    assert_eq!(value, Value::Bool(true));
+}
