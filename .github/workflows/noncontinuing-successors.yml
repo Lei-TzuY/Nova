@@ -1,0 +1,47 @@
+name: Validate noncontinuing successors
+
+on:
+  push:
+    branches:
+      - fix/noncontinuing-successors
+
+permissions:
+  contents: write
+
+jobs:
+  red-green:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile new regression target
+        run: cargo test -p nova-sema --test noncontinuing_successors --locked --no-run
+      - name: Confirm successor regression is red
+        shell: bash
+        run: |
+          set -euo pipefail
+          if cargo test -p nova-sema --test noncontinuing_successors --locked; then
+            echo "noncontinuing successor regression unexpectedly passed before production patch" >&2
+            exit 1
+          fi
+      - name: Apply noncontinuing successor fix
+        run: python scripts/apply_noncontinuing_successors.py
+      - name: Validate behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Commit implementation and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/noncontinuing-successors.yml scripts/apply_noncontinuing_successors.py
+          git add -A
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git commit -m "fix: isolate noncontinuing successors"
+          git push origin HEAD:fix/noncontinuing-successors
