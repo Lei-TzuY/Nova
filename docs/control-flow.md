@@ -49,9 +49,10 @@ back to the last valid state, but does not erase source events or binding
 identities needed for diagnostics.
 A `while` whose condition is rejected as non-`Bool` may likewise retain body
 nodes for static and lexical loop-control diagnostics, but that recovery-only
-body is not an executable loop iteration. In particular, a `continue` retained
-there has no `Backedge` successor to the condition header; rejected control flow
-must not reconnect discarded recovery paths to reachable continuation.
+body is not an executable loop iteration. Neither ordinary body fallthrough nor
+a retained `continue` receives a `Backedge` successor to the condition header;
+rejected control flow must not reconnect discarded recovery paths to reachable
+continuation.
 
 ## Verification
 

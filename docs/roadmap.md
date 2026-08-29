@@ -515,9 +515,9 @@ Implemented in the thirtieth Phase 2 slice:
 - rejected `while` conditions continue to retain their body in the CFG for static
   diagnostics and lexical `break`/`continue` checking without treating that body as
   an executable loop iteration;
-- a `continue` reached only inside such an invalid-condition recovery body no longer
-  receives a `Backedge` to the loop header, so discarded diagnostic flow cannot
-  reconnect itself to reachable continuation;
+- neither ordinary body fallthrough nor a `continue` reached only inside such an
+  invalid-condition recovery body receives a `Backedge` to the loop header, so
+  discarded diagnostic flow cannot reconnect itself to reachable continuation;
 - valid dynamic and proven-entered Boolean loops retain their ordinary continue
   backedges, preserving runtime loop semantics and fixed-point graph shape;
 - the change tightens the documented fail-closed invalid-control contract without
