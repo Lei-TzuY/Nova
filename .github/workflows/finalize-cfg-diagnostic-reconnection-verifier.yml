@@ -1,0 +1,42 @@
+name: Finalize CFG diagnostic isolation verifier
+
+on:
+  push:
+    branches: [fix/cfg-diagnostic-reconnection-verifier]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Add generic verifier coverage and docs
+        run: python scripts/finalize-cfg-diagnostic-reconnection-verifier.py
+
+      - name: Validate verifier regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo test -p nova-sema verifier_rejects_diagnostic --locked
+          cargo test -p nova-sema backedges_do_not_erase_first_entry_path --locked
+
+      - name: Commit final slice and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/finalize-cfg-diagnostic-reconnection-verifier.yml
+          rm scripts/finalize-cfg-diagnostic-reconnection-verifier.py
+          git config user.name 'LeiZ'
+          git config user.email '52287354+Lei-TzuY@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs: lock CFG diagnostic isolation invariant'
+          git push origin HEAD:fix/cfg-diagnostic-reconnection-verifier
