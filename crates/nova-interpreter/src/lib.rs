@@ -70,7 +70,13 @@ pub fn execute(program: &Program) -> Result<Value, Diagnostic> {
     Interpreter::new(program).execute_main()
 }
 
-type Frame = BTreeMap<BindingId, Option<Value>>;
+struct RuntimeSlot {
+    ty: Type,
+    mutable: bool,
+    value: Option<Value>,
+}
+
+type Frame = BTreeMap<BindingId, RuntimeSlot>;
 
 enum Flow {
     Value(Value),
@@ -184,7 +190,7 @@ impl<'program> Interpreter<'program> {
 
         let mut frame = Frame::new();
         for (parameter, argument) in function.parameters.iter().zip(arguments) {
-            frame.insert(parameter.id, Some(argument));
+            self.bind_runtime_slot(&mut frame, parameter, Some(argument), function.span)?;
         }
 
         self.call_depth += 1;
@@ -242,13 +248,19 @@ impl<'program> Interpreter<'program> {
                 initializer,
             } => match self.eval_expression(initializer, frame)? {
                 Flow::Value(value) => {
-                    frame.insert(binding.id, Some(value));
+                    self.bind_runtime_slot(frame, binding, Some(value), binding.span)?;
                     Ok(None)
                 }
                 flow => Ok(Some(flow)),
             },
             StatementKind::UninitializedBinding(binding) => {
-                frame.insert(binding.id, None);
+                if !binding.mutable {
+                    return Err(self.invariant(
+                        binding.span,
+                        "semantically accepted uninitialized binding is not mutable",
+                    ));
+                }
+                self.bind_runtime_slot(frame, binding, None, binding.span)?;
                 Ok(None)
             }
             StatementKind::Assignment { target, value } => {
@@ -269,7 +281,25 @@ impl<'program> Interpreter<'program> {
                                 ),
                             ));
                         };
-                        *slot = Some(value);
+                        if !slot.mutable {
+                            return Err(self.invariant(
+                                statement.span,
+                                format!(
+                                    "assignment target {} resolved to an immutable runtime slot",
+                                    target.index()
+                                ),
+                            ));
+                        }
+                        if !self.value_conforms_to_type(&value, &slot.ty) {
+                            return Err(self.invariant(
+                                statement.span,
+                                format!(
+                                    "assignment target {} received a runtime value that does not conform to slot type {}",
+                                    target.index(), slot.ty
+                                ),
+                            ));
+                        }
+                        slot.value = Some(value);
                         Ok(None)
                     }
                     flow => Ok(Some(flow)),
@@ -337,7 +367,18 @@ impl<'program> Interpreter<'program> {
                         ),
                     ));
                 };
-                let Some(value) = slot else {
+                if &expression.ty != &slot.ty {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!(
+                            "binding {} expression type {} does not match runtime slot type {}",
+                            binding.index(),
+                            expression.ty,
+                            slot.ty
+                        ),
+                    ));
+                }
+                let Some(value) = slot.value.as_ref() else {
                     return Err(self.invariant(
                         expression.span,
                         format!(
@@ -346,6 +387,15 @@ impl<'program> Interpreter<'program> {
                         ),
                     ));
                 };
+                if !self.value_conforms_to_type(value, &slot.ty) {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!(
+                            "binding {} stored a runtime value that does not conform to slot type {}",
+                            binding.index(), slot.ty
+                        ),
+                    ));
+                }
                 Ok(Flow::Value(value.clone()))
             }
             ExpressionKind::Function(function) => Ok(Flow::Value(Value::Function(*function))),
@@ -654,7 +704,7 @@ impl<'program> Interpreter<'program> {
                 };
                 match (&arm.binding, payload) {
                     (Some(binding), Some(payload)) => {
-                        frame.insert(binding.id, Some(*payload));
+                        self.bind_runtime_slot(frame, binding, Some(*payload), arm.span)?;
                     }
                     (None, None) => {}
                     _ => {
@@ -808,6 +858,44 @@ impl<'program> Interpreter<'program> {
                 "semantically accepted binary operator received incompatible runtime values",
             )),
         }
+    }
+
+    fn bind_runtime_slot(
+        &self,
+        frame: &mut Frame,
+        binding: &nova_sema::hir::Binding,
+        value: Option<Value>,
+        span: nova_source::Span,
+    ) -> Result<(), Diagnostic> {
+        if let Some(value) = value.as_ref() {
+            if !self.value_conforms_to_type(value, &binding.ty) {
+                return Err(self.invariant(
+                    span,
+                    format!(
+                        "binding `{}` received a runtime value that does not conform to declared type {}",
+                        binding.name, binding.ty
+                    ),
+                ));
+            }
+        }
+        if frame.contains_key(&binding.id) {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "binding id {} is already present in the runtime frame",
+                    binding.id.index()
+                ),
+            ));
+        }
+        frame.insert(
+            binding.id,
+            RuntimeSlot {
+                ty: binding.ty.clone(),
+                mutable: binding.mutable,
+                value,
+            },
+        );
+        Ok(())
     }
 
     fn value_conforms_to_type(&self, value: &Value, ty: &Type) -> bool {

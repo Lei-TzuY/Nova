@@ -654,7 +654,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: twelve vertical slices implemented; execution surface remains small.**
+**Status: thirteen vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -825,6 +825,21 @@ Implemented in the twelfth Phase 3 slice:
   their values are discarded locally and never cross a function boundary; and
 - adversarial malformed-HIR regressions plus a valid local-aggregate control case
   lock the new construction boundary without changing accepted source behavior.
+
+Implemented in the thirteenth Phase 3 slice:
+
+- runtime frame entries now retain each resolved binding's type, mutability, and
+  initialization state instead of storing only an optional untyped runtime value;
+- parameters, ordinary locals, delayed `var` declarations, and match payload
+  bindings share one fail-closed slot-construction path that rejects duplicate
+  binding identities and non-conforming initial values;
+- assignment verifies that its resolved target exists, remains mutable, and accepts
+  the replacement runtime value under the slot's declared type before mutation;
+- binding reads verify both HIR expression-type agreement and recursive runtime-value
+  conformance with the slot contract; and
+- malformed-HIR regressions cover initializer drift, delayed assignment drift,
+  immutable retargeting, duplicate binding identity, and match-payload binding drift,
+  while a valid mutation control case locks accepted execution unchanged.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
