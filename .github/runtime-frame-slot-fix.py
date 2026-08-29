@@ -100,9 +100,8 @@ if old not in text:
 text = text.replace(old, new, 1)
 anchor = '''#[test]
 fn valid_runtime_frame_storage_remains_executable() {
-    let analyzed = analyze_text(
-        "fn main() -> Int { var value: Int; value = 41; value = value + 1; value }",
-    );
+    let analyzed =
+        analyze_text("fn main() -> Int { var value: Int; value = 41; value = value + 1; value }");
     let value = execute(&analyzed.program).expect("valid frame storage should execute");
     assert_eq!(value, Value::Int(42));
 }
@@ -118,9 +117,8 @@ fn repeated_lexical_binding_execution_refreshes_the_same_runtime_slot() {
 
 #[test]
 fn valid_runtime_frame_storage_remains_executable() {
-    let analyzed = analyze_text(
-        "fn main() -> Int { var value: Int; value = 41; value = value + 1; value }",
-    );
+    let analyzed =
+        analyze_text("fn main() -> Int { var value: Int; value = 41; value = value + 1; value }");
     let value = execute(&analyzed.program).expect("valid frame storage should execute");
     assert_eq!(value, Value::Int(42));
 }
