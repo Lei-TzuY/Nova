@@ -228,9 +228,9 @@ mutation, control-flow, aggregate, and shadowing policies are frozen.
 
 ## Bootstrap execution rules
 
-`nova run` requires one top-level `main` with no parameters and an `Int` or
-`Bool` return type; surface `Unit` is available to helper functions but does not
-widen the bootstrap entry-point contract. Execution evaluates expressions left to
+`nova run` requires one top-level `main` with no parameters and an `Int`, `Bool`,
+or `Unit` return type. A Unit-valued `main` prints `()` like any other returned
+bootstrap value. Execution evaluates expressions left to
 right. Record initializer
 expressions follow the same rule even when named fields are written out of
 declaration order. `&&` and `||` are short-circuiting, so a skipped right operand

@@ -41,6 +41,7 @@ fn accepts_positive_fixtures() {
         "valid/literal-match-flow.nv",
         "valid/unit.nv",
         "valid/unit-equality.nv",
+        "valid/unit-main.nv",
         "valid/payload-free-enum-equality.nv",
         "valid/records.nv",
         "valid/enums-match.nv",
@@ -72,6 +73,7 @@ fn run_command_executes_checked_program() {
         ("valid/literal-match-flow.nv", "42\n"),
         ("valid/unit.nv", "42\n"),
         ("valid/unit-equality.nv", "true\n"),
+        ("valid/unit-main.nv", "()\n"),
         ("valid/payload-free-enum-equality.nv", "true\n"),
         ("valid/records.nv", "42\n"),
         ("valid/enums-match.nv", "42\n"),
@@ -101,7 +103,6 @@ fn run_command_reports_runtime_failures() {
         ("runtime/divide-by-zero.nv", "N4003"),
         ("runtime/remainder-by-zero.nv", "N4003"),
         ("runtime/invalid-main.nv", "N4001"),
-        ("runtime/unit-main.nv", "N4001"),
         ("runtime/nonterminating-loop.nv", "N4006"),
     ] {
         let path = fixture(relative);

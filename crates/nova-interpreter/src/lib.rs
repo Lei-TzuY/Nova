@@ -102,7 +102,7 @@ impl<'program> Interpreter<'program> {
             .find(|function| function.name == "main")
         else {
             return Err(Diagnostic::error("N4001", "missing entry point").with_note(
-                "`nova run` requires a top-level `fn main() -> Int` or `fn main() -> Bool`",
+                "`nova run` requires a top-level zero-argument `main` returning `Int`, `Bool`, or `Unit`",
             ));
         };
         if !main.parameters.is_empty() {
@@ -113,7 +113,7 @@ impl<'program> Interpreter<'program> {
                 ),
             );
         }
-        if !matches!(main.return_type, Type::Int | Type::Bool) {
+        if !matches!(main.return_type, Type::Int | Type::Bool | Type::Unit) {
             return Err(
                 Diagnostic::error("N4001", "invalid entry point").with_primary(
                     main.span,
