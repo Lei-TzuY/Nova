@@ -472,6 +472,38 @@ fn verify(graph: &FunctionControlFlow, fallback_span: Span) -> Result<(), FlowEr
         }
     }
 
+    let mut execution_reached = BTreeSet::new();
+    let mut execution_queue = VecDeque::from([graph.entry]);
+    while let Some(node) = execution_queue.pop_front() {
+        if !execution_reached.insert(node) {
+            continue;
+        }
+        if let Some(next) = successors.get(node.index()) {
+            execution_queue.extend(
+                next.iter()
+                    .filter(|(_, edge)| *edge != FlowEdgeKind::Diagnostic)
+                    .map(|(successor, _)| *successor),
+            );
+        }
+    }
+    for node in &graph.nodes {
+        if !execution_reached.contains(&node.id) {
+            continue;
+        }
+        if let Some(edge) = node.predecessors.iter().find(|edge| {
+            edge.kind == FlowEdgeKind::Diagnostic || !execution_reached.contains(&edge.from)
+        }) {
+            return Err(FlowError::invalid(
+                node.span.unwrap_or(fallback_span),
+                format!(
+                    "diagnostic-only control flow from node {} reconnects to executable node {}",
+                    edge.from.index(),
+                    node.id.index()
+                ),
+            ));
+        }
+    }
+
     let known_bindings = graph
         .bindings
         .iter()
@@ -642,6 +674,36 @@ mod tests {
             .finish(None)
             .expect_err("return cannot have an execution successor");
         assert!(error.message().contains("incompatible"));
+    }
+
+    #[test]
+    fn verifier_rejects_diagnostic_only_reconnection() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        let entry = builder.cursor();
+        let header = builder.join([entry], None, FlowEdgeKind::Execution);
+        let recovery = builder.fork_from(header, Some(span(1, 2)), FlowEdgeKind::Diagnostic);
+        builder.add_backedge(recovery, header);
+
+        let error = builder
+            .finish(None)
+            .expect_err("diagnostic-only recovery must not reconnect to executable flow");
+        assert!(error.message().contains("diagnostic-only"));
+    }
+
+    #[test]
+    fn verifier_rejects_diagnostic_predecessor_on_executable_join() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        let entry = builder.cursor();
+        let left = builder.fork_from(entry, Some(span(1, 2)), FlowEdgeKind::Execution);
+        let right = builder.fork_from(entry, Some(span(3, 4)), FlowEdgeKind::Execution);
+        let join = builder.join([left, right], Some(span(5, 6)), FlowEdgeKind::Execution);
+        let graph_exit = builder.cursor();
+        let mut graph = builder.finish(Some(graph_exit)).expect("valid seed graph");
+        graph.nodes[join.index()].predecessors[0].kind = FlowEdgeKind::Diagnostic;
+
+        let error = super::verify(&graph, span(0, 20))
+            .expect_err("executable continuation cannot consume a diagnostic predecessor");
+        assert!(error.message().contains("diagnostic-only"));
     }
 
     #[test]
