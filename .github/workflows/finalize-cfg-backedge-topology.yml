@@ -1,0 +1,46 @@
+name: Finalize CFG backedge topology
+
+on:
+  push:
+    branches: [fix/cfg-backedge-topology]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Sync latest main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'LeiZ'
+          git config user.email '52287354+Lei-TzuY@users.noreply.github.com'
+          git fetch origin main
+          git merge --no-edit origin/main
+      - name: Apply documentation synchronization
+        run: python scripts/finalize-cfg-backedge-topology.py
+      - name: Validate focused verifier and formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo test -p nova-sema --lib control_flow_backedge_tests --locked
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Commit docs and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/finalize-cfg-backedge-topology.yml
+          rm scripts/finalize-cfg-backedge-topology.py
+          git add -A
+          git commit -m 'docs: record CFG backedge topology invariant'
+          git push origin HEAD:fix/cfg-backedge-topology
