@@ -1,0 +1,36 @@
+name: Validate CFG backedge topology
+
+on:
+  push:
+    branches: [fix/cfg-backedge-topology]
+
+jobs:
+  red-green:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Compile verifier regressions
+        run: cargo test -p nova-sema --lib --locked --no-run
+      - name: Confirm malformed backedges are red
+        shell: bash
+        run: |
+          set -euo pipefail
+          if cargo test -p nova-sema --lib control_flow_backedge_tests --locked; then
+            echo "expected malformed backedge topology regressions to fail before the verifier fix" >&2
+            exit 1
+          fi
+      - name: Apply verifier fix in validation workspace
+        run: python scripts/apply-cfg-backedge-topology.py
+      - name: Validate behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo test -p nova-sema --lib control_flow_backedge_tests --locked
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo build --workspace --all-targets --locked
+          RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
