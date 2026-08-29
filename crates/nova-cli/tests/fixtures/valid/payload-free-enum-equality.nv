@@ -1,0 +1,15 @@
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+fn same(left: Color, right: Color) -> Bool {
+    left == right
+}
+
+fn main() -> Bool {
+    same(Color::Red, Color::Red)
+        && Color::Red != Color::Green
+        && Color::Blue == Color::Blue
+}
