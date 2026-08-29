@@ -76,10 +76,12 @@ fn unit_value(expression: &Expression) -> Option<()> {
 
     match &expression.kind {
         ExpressionKind::Unit => Some(()),
-        ExpressionKind::Block(block) if block.statements.is_empty() => match block.tail.as_deref() {
-            Some(tail) => unit_value(tail),
-            None => Some(()),
-        },
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            match block.tail.as_deref() {
+                Some(tail) => unit_value(tail),
+                None => Some(()),
+            }
+        }
         _ => None,
     }
 }
