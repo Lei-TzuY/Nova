@@ -3,6 +3,7 @@ members = [
     "crates/nova-cli",
     "crates/nova-diagnostics",
     "crates/nova-inspect",
+    "crates/nova-int-semantics",
     "crates/nova-interpreter",
     "crates/nova-lexer",
     "crates/nova-parser",

@@ -1,9 +1,8 @@
 //! Deterministic bootstrap interpreter for semantically accepted Nova HIR.
 
-mod int_semantics;
-
-use int_semantics::IntArithmeticError;
 use nova_diagnostics::Diagnostic;
+use nova_int_semantics as int_semantics;
+use nova_int_semantics::IntArithmeticError;
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::hir::{
     BindingId, Block, EnumId, Expression, ExpressionKind, Function, FunctionId, Program, RecordId,

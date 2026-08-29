@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty-three vertical slices implemented; broader type-system work remains.**
+**Status: twenty-four vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -399,6 +399,24 @@ Implemented in the twenty-third Phase 2 slice:
   lexical visibility and assignment mutability, nominal slots, constructor arity,
   and match coverage before serialization, reported as `N5001` on internal
   inconsistency.
+
+Implemented in the twenty-fourth Phase 2 slice:
+
+- checked signed-64 arithmetic policy moves into a dependency-free
+  `nova-int-semantics` leaf crate consumed by both semantic preflight and execution;
+- the shared contract uniquely owns overflow, zero-divisor, truncating division,
+  signed remainder, and `Int::MIN / -1` / `% -1` behavior plus their truth-table
+  tests, eliminating two previously duplicated implementations;
+- `nova-sema::constant_int` retains only HIR-closure traversal and operator dispatch,
+  while analyzer diagnostics remain separate and the new `nova-inspect` tooling
+  boundary continues to consume accepted HIR without owning arithmetic policy;
+- `nova-interpreter` retains only runtime value evaluation and N4002/N4003 diagnostic
+  mapping instead of carrying a private arithmetic copy;
+- the shared crate depends on no parser, HIR, source, diagnostic, inspection, or
+  interpreter type, preserving a one-way dependency graph and keeping numeric policy
+  representation-independent; and
+- structural gates plus the full existing static/runtime and semantic-inspection suites
+  verify the refactor is behavior-preserving while removing future drift risk.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

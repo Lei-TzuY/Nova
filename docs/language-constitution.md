@@ -126,10 +126,13 @@ trees are deliberately not folded, and names, calls, blocks, or other dynamic
 operands stop this preflight rather than triggering general constant propagation.
 Dynamic arithmetic remains checked by the
 interpreter: overflow is `N4002`, and division or remainder by zero is `N4003`.
-Both layers use explicit arithmetic contracts rather than relying on host
-debug/release behavior or undocumented edge cases. This is implementation evidence
-for the numeric design, not yet a stable language-wide promise about numeric widths,
-defaulting, conversions, or overflow policy for future backends.
+Both layers consume the same dependency-free `nova-int-semantics` arithmetic
+contract: semantic analysis owns only closed-HIR discovery and diagnostic policy,
+while the interpreter owns only runtime evaluation and diagnostic mapping. The shared
+leaf therefore prevents static/runtime drift without making HIR or diagnostics part of
+the numeric core. This is implementation evidence for the numeric design, not yet a
+stable language-wide promise about numeric widths, defaulting, conversions, or
+overflow policy for future backends.
 
 **Research.** The project must decide, with implementation evidence:
 

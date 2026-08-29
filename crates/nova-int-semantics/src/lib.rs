@@ -1,48 +1,51 @@
-//! Pure bootstrap `Int` arithmetic semantics used by the interpreter.
+//! Shared bootstrap signed-64 `Int` arithmetic semantics for Nova.
 //!
-//! This module keeps arithmetic policy separate from diagnostic rendering and HIR
-//! execution. The current bootstrap contract is signed 64-bit, checked arithmetic.
+//! This leaf crate owns the executable arithmetic truth table used by both semantic
+//! constant-failure preflight and the bootstrap interpreter. It deliberately knows
+//! nothing about HIR, diagnostics, source spans, or runtime frames.
 
 /// Failure classes produced by bootstrap integer arithmetic.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum IntArithmeticError {
+pub enum IntArithmeticError {
     /// The exact mathematical result is outside signed 64-bit `Int`.
     Overflow,
     /// Division or remainder used a zero divisor.
     ZeroDivisor,
 }
 
-pub(crate) fn negate(value: i64) -> Result<i64, IntArithmeticError> {
+/// Checked signed negation.
+pub fn negate(value: i64) -> Result<i64, IntArithmeticError> {
     value.checked_neg().ok_or(IntArithmeticError::Overflow)
 }
 
-pub(crate) fn add(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
+/// Checked signed addition.
+pub fn add(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
     left.checked_add(right).ok_or(IntArithmeticError::Overflow)
 }
 
-pub(crate) fn subtract(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
+/// Checked signed subtraction.
+pub fn subtract(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
     left.checked_sub(right).ok_or(IntArithmeticError::Overflow)
 }
 
-pub(crate) fn multiply(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
+/// Checked signed multiplication.
+pub fn multiply(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
     left.checked_mul(right).ok_or(IntArithmeticError::Overflow)
 }
 
-/// Divides signed integers with quotient truncation toward zero.
+/// Signed division whose quotient truncates toward zero.
 ///
-/// `i64::MIN / -1` is classified as overflow because its exact quotient is
-/// `2^63`, outside the bootstrap `Int` range.
-pub(crate) fn divide(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
+/// `i64::MIN / -1` is overflow because its exact quotient is `2^63`.
+pub fn divide(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
     classify_divisor(left, right)?;
     Ok(left / right)
 }
 
-/// Computes the signed remainder associated with truncation-toward-zero division.
+/// Signed remainder associated with truncation-toward-zero division.
 ///
-/// A non-zero remainder has the same sign as the dividend. `i64::MIN % -1` is
-/// deliberately classified with the same overflow edge as division rather than
-/// inheriting an incidental host-language remainder choice.
-pub(crate) fn remainder(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
+/// A non-zero remainder has the dividend's sign. `i64::MIN % -1` deliberately
+/// shares division's overflow edge so semantic preflight and execution agree.
+pub fn remainder(left: i64, right: i64) -> Result<i64, IntArithmeticError> {
     classify_divisor(left, right)?;
     Ok(left % right)
 }
