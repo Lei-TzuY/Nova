@@ -141,6 +141,12 @@ impl<'program> Interpreter<'program> {
                 ),
             ));
         };
+        if function.id != function_id {
+            return Err(self.invariant(
+                function.span,
+                "function declaration index does not match its resolved identity",
+            ));
+        }
         if function.parameters.len() != arguments.len() {
             return Err(self.invariant(
                 function.span,
@@ -150,6 +156,18 @@ impl<'program> Interpreter<'program> {
                     function.parameters.len()
                 ),
             ));
+        }
+        for (index, (parameter, argument)) in function.parameters.iter().zip(&arguments).enumerate()
+        {
+            if !self.value_conforms_to_type(argument, &parameter.ty) {
+                return Err(self.invariant(
+                    function.span,
+                    format!(
+                        "argument {index} for parameter `{}` of function `{}` does not conform to declared runtime type {}",
+                        parameter.name, function.name, parameter.ty
+                    ),
+                ));
+            }
         }
         if self.call_depth >= MAX_CALL_DEPTH {
             return Err(
@@ -172,7 +190,17 @@ impl<'program> Interpreter<'program> {
         self.call_depth += 1;
         let result = self.eval_function(&function, &mut frame);
         self.call_depth -= 1;
-        result
+        let value = result?;
+        if !self.value_conforms_to_type(&value, &function.return_type) {
+            return Err(self.invariant(
+                function.span,
+                format!(
+                    "function `{}` returned a runtime value that does not conform to declared type {}",
+                    function.name, function.return_type
+                ),
+            ));
+        }
+        Ok(value)
     }
 
     fn eval_function(
@@ -748,6 +776,66 @@ impl<'program> Interpreter<'program> {
                 expression.span,
                 "semantically accepted binary operator received incompatible runtime values",
             )),
+        }
+    }
+
+    fn value_conforms_to_type(&self, value: &Value, ty: &Type) -> bool {
+        match (value, ty) {
+            (Value::Int(_), Type::Int)
+            | (Value::Bool(_), Type::Bool)
+            | (Value::Unit, Type::Unit) => true,
+            (Value::Record { record, fields }, Type::Record(expected))
+                if *record == expected.id =>
+            {
+                let Some(definition) = self.program.records.get(record.index()) else {
+                    return false;
+                };
+                definition.id == *record
+                    && fields.len() == definition.fields.len()
+                    && fields
+                        .iter()
+                        .zip(&definition.fields)
+                        .all(|(value, field)| self.value_conforms_to_type(value, &field.ty))
+            }
+            (
+                Value::Enum {
+                    enumeration,
+                    variant_index,
+                    payload,
+                },
+                Type::Enum(expected),
+            ) if *enumeration == expected.id => {
+                let Some(definition) = self.program.enums.get(enumeration.index()) else {
+                    return false;
+                };
+                if definition.id != *enumeration {
+                    return false;
+                }
+                let Some(variant) = definition.variants.get(*variant_index) else {
+                    return false;
+                };
+                match (&variant.payload, payload.as_deref()) {
+                    (None, None) => true,
+                    (Some(payload_type), Some(payload_value)) => {
+                        self.value_conforms_to_type(payload_value, payload_type)
+                    }
+                    _ => false,
+                }
+            }
+            (Value::Function(id), Type::Function(expected)) => {
+                let Some(function) = self.program.functions.get(id.index()) else {
+                    return false;
+                };
+                function.id == *id
+                    && function.parameters.len() == expected.parameters.len()
+                    && function
+                        .parameters
+                        .iter()
+                        .zip(&expected.parameters)
+                        .all(|(parameter, expected_type)| &parameter.ty == expected_type)
+                    && &function.return_type == expected.return_type.as_ref()
+            }
+            _ => false,
         }
     }
 
