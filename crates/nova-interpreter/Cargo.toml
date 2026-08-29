@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 nova-diagnostics = { path = "../nova-diagnostics" }
+nova-int-semantics = { path = "../nova-int-semantics" }
 nova-parser = { path = "../nova-parser" }
 nova-sema = { path = "../nova-sema" }
 nova-source = { path = "../nova-source" }

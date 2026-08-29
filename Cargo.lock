@@ -47,10 +47,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nova-int-semantics"
+version = "0.1.0"
+
+[[package]]
 name = "nova-interpreter"
 version = "0.1.0"
 dependencies = [
  "nova-diagnostics",
+ "nova-int-semantics",
  "nova-lexer",
  "nova-parser",
  "nova-sema",
@@ -79,6 +84,7 @@ name = "nova-sema"
 version = "0.1.0"
 dependencies = [
  "nova-diagnostics",
+ "nova-int-semantics",
  "nova-lexer",
  "nova-parser",
  "nova-source",

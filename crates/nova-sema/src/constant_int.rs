@@ -1,11 +1,7 @@
 use crate::hir::{Expression, ExpressionKind};
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ConstantIntError {
-    Overflow,
-    ZeroDivisor,
-}
+pub(crate) use nova_int_semantics::IntArithmeticError as ConstantIntError;
 
 pub(crate) fn evaluate_unary(
     operator: UnaryOperator,
@@ -13,9 +9,7 @@ pub(crate) fn evaluate_unary(
 ) -> Option<Result<i64, ConstantIntError>> {
     let operand = evaluate(operand)?;
     match operator {
-        UnaryOperator::Negate => {
-            Some(operand.and_then(|value| value.checked_neg().ok_or(ConstantIntError::Overflow)))
-        }
+        UnaryOperator::Negate => Some(operand.and_then(nova_int_semantics::negate)),
         UnaryOperator::Not => None,
     }
 }
@@ -59,27 +53,11 @@ fn evaluate(expression: &Expression) -> Option<Result<i64, ConstantIntError>> {
 
 fn apply_binary(operator: BinaryOperator, left: i64, right: i64) -> Result<i64, ConstantIntError> {
     match operator {
-        BinaryOperator::Add => left.checked_add(right).ok_or(ConstantIntError::Overflow),
-        BinaryOperator::Subtract => left.checked_sub(right).ok_or(ConstantIntError::Overflow),
-        BinaryOperator::Multiply => left.checked_mul(right).ok_or(ConstantIntError::Overflow),
-        BinaryOperator::Divide => {
-            classify_divisor(left, right)?;
-            Ok(left / right)
-        }
-        BinaryOperator::Remainder => {
-            classify_divisor(left, right)?;
-            Ok(left % right)
-        }
-        _ => unreachable!("constant Int evaluator only applies arithmetic operators"),
+        BinaryOperator::Add => nova_int_semantics::add(left, right),
+        BinaryOperator::Subtract => nova_int_semantics::subtract(left, right),
+        BinaryOperator::Multiply => nova_int_semantics::multiply(left, right),
+        BinaryOperator::Divide => nova_int_semantics::divide(left, right),
+        BinaryOperator::Remainder => nova_int_semantics::remainder(left, right),
+        _ => unreachable!("constant Int evaluator only dispatches arithmetic operators"),
     }
-}
-
-fn classify_divisor(left: i64, right: i64) -> Result<(), ConstantIntError> {
-    if right == 0 {
-        return Err(ConstantIntError::ZeroDivisor);
-    }
-    if left == i64::MIN && right == -1 {
-        return Err(ConstantIntError::Overflow);
-    }
-    Ok(())
 }

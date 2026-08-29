@@ -250,9 +250,11 @@ diagnostics because control flow proves it unreachable does not manufacture thes
 execution-failure diagnostics. Successful constant arithmetic is not folded, and any
 expression with a dynamic operand remains runtime checked. Such
 dynamic overflow produces `N4002`; dynamic division or remainder by zero produces
-`N4003`. Arithmetic policy lives in explicit semantic/runtime contracts rather than
-being inferred from host operator edge cases. Recursive execution is guarded by a
-finite active-call budget
+`N4003`. The arithmetic truth table itself lives once in the dependency-free
+`nova-int-semantics` leaf crate; semantic preflight supplies only closed-HIR traversal
+and the interpreter supplies only runtime diagnostic mapping. This keeps both layers
+on one checked signed-64 contract rather than duplicating host-edge-case policy.
+Recursive execution is guarded by a finite active-call budget
 and reports `N4004`. All statement/expression evaluation also shares a finite
 execution-step budget; a nonterminating loop therefore reports `N4006` instead
 of hanging indefinitely. Missing or invalid `main` is `N4001`. Record values
@@ -311,6 +313,7 @@ source bytes
       -> nova-inspect       versioned facts and fail-closed JSON projection
       -> nova-interpreter   deterministic checked, bounded HIR execution
 
+nova-int-semantics      dependency-free checked signed-64 arithmetic truth table
 nova-cli                check/run/ast/inspect orchestration and presentation
 
 nova-diagnostics        shared structured diagnostic model and renderers
