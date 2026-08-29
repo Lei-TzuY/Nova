@@ -59,7 +59,9 @@ Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
 - every read/initialization event names graph binding metadata;
 - declared normal exits name `Exit` nodes; and
 - `return`, `break`, `continue`, and `Exit` successor edge classes respect their
-  transfer behavior.
+  transfer behavior; and
+- a syntactic parent transfer does not append an execution node when evaluating its
+  child expression has already transferred control.
 
 An internal verification failure is fail-closed diagnostic `N3999`; no invalid
 graph is published for that function.

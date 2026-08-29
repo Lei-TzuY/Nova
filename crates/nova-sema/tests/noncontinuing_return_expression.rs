@@ -7,7 +7,11 @@ use nova_source::{SourceFile, SourceId};
 fn analyze_text(text: &str) -> AnalysisOutput {
     let source = SourceFile::new(SourceId::new(0), "test.nv", text);
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
     assert!(
         parsed.is_success(),
@@ -43,9 +47,7 @@ fn nested_return_expression_does_not_append_a_second_return_transfer() {
 
 #[test]
 fn break_from_return_expression_consumes_the_parent_return() {
-    let output = analyze_text(
-        "fn main() -> Int { while true { return { break; 0 }; } 42 }",
-    );
+    let output = analyze_text("fn main() -> Int { while true { return { break; 0 }; } 42 }");
 
     assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
     assert_eq!(transfer_count(&output, FlowTransfer::Break), 1);

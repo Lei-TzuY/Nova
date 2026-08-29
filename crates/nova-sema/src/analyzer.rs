@@ -886,10 +886,12 @@ impl Analyzer {
                     expression.span,
                     "return expression",
                 );
-                self.flow_advance(
-                    FlowNodeKind::Transfer(FlowTransfer::Return),
-                    Some(statement.span),
-                );
+                if !expression.ty.is_never() {
+                    self.flow_advance(
+                        FlowNodeKind::Transfer(FlowTransfer::Return),
+                        Some(statement.span),
+                    );
+                }
                 (StatementKind::Return(expression), true)
             }
             ast::StatementKind::Expression(expression) => {
