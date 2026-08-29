@@ -1,0 +1,8 @@
+enum MaybeInt {
+    None,
+    Some(Int),
+}
+
+fn equal(left: MaybeInt, right: MaybeInt) -> Bool {
+    left == right
+}
