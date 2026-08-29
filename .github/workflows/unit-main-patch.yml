@@ -1,0 +1,121 @@
+name: Unit main entry-point patch
+
+on:
+  push:
+    branches:
+      - feat/unit-main-entry-point
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/unit-main-entry-point
+          fetch-depth: 0
+
+      - name: Apply focused entry-point patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p crates/nova-cli/tests/fixtures/valid
+          git mv crates/nova-cli/tests/fixtures/runtime/unit-main.nv crates/nova-cli/tests/fixtures/valid/unit-main.nv
+
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement target, found {count}: {old!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "crates/nova-interpreter/src/lib.rs",
+              "`nova run` requires a top-level `fn main() -> Int` or `fn main() -> Bool`",
+              "`nova run` requires a top-level zero-argument `main` returning `Int`, `Bool`, or `Unit`",
+          )
+          replace_once(
+              "crates/nova-interpreter/src/lib.rs",
+              "if !matches!(main.return_type, Type::Int | Type::Bool) {",
+              "if !matches!(main.return_type, Type::Int | Type::Bool | Type::Unit) {",
+          )
+
+          replace_once(
+              "crates/nova-cli/tests/cli.rs",
+              '        "valid/unit-equality.nv",\n        "valid/payload-free-enum-equality.nv",',
+              '        "valid/unit-equality.nv",\n        "valid/unit-main.nv",\n        "valid/payload-free-enum-equality.nv",',
+          )
+          replace_once(
+              "crates/nova-cli/tests/cli.rs",
+              '        ("valid/unit-equality.nv", "true\\n"),\n        ("valid/payload-free-enum-equality.nv", "true\\n"),',
+              '        ("valid/unit-equality.nv", "true\\n"),\n        ("valid/unit-main.nv", "()\\n"),\n        ("valid/payload-free-enum-equality.nv", "true\\n"),',
+          )
+          replace_once(
+              "crates/nova-cli/tests/cli.rs",
+              '        ("runtime/unit-main.nv", "N4001"),\n',
+              "",
+          )
+
+          replace_once(
+              "README.md",
+              "`nova run` requires one top-level `main` with no parameters and an `Int` or\n`Bool` return type; surface `Unit` is available to helper functions but does not\nwiden the bootstrap entry-point contract.",
+              "`nova run` requires one top-level `main` with no parameters and an `Int`, `Bool`,\nor `Unit` return type. A Unit-valued `main` prints `()` like any other returned\nbootstrap value.",
+          )
+          PY
+
+          mkdir -p crates/nova-interpreter/tests
+          cat > crates/nova-interpreter/tests/entry_point.rs <<'RS'
+          use nova_interpreter::{Value, execute};
+          use nova_lexer::lex;
+          use nova_parser::parse;
+          use nova_sema::analyze;
+          use nova_source::{SourceFile, SourceId};
+
+          fn analyze_text(text: &str) -> nova_sema::AnalysisOutput {
+              let source = SourceFile::new(SourceId::new(0), "entry-point.nv", text);
+              let lexed = lex(&source);
+              assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+              let parsed = parse(&source, &lexed.tokens);
+              assert!(
+                  parsed.is_success(),
+                  "parse diagnostics: {:?}",
+                  parsed.diagnostics
+              );
+              let analyzed = analyze(&parsed.program);
+              assert!(
+                  analyzed.is_success(),
+                  "semantic diagnostics: {:?}",
+                  analyzed.diagnostics
+              );
+              analyzed
+          }
+
+          #[test]
+          fn unit_main_is_an_executable_entry_point() {
+              let analyzed = analyze_text("fn main() -> Unit {}");
+              let value = execute(&analyzed.program).expect("Unit main should execute");
+              assert_eq!(value, Value::Unit);
+          }
+
+          #[test]
+          fn aggregate_main_remains_outside_the_bootstrap_entry_point_contract() {
+              let analyzed = analyze_text(
+                  "record Box { value: Int } fn main() -> Box { new Box { value: 42 } }",
+              );
+              let error = execute(&analyzed.program).expect_err("record-valued main must remain rejected");
+              assert_eq!(error.code, "N4001");
+          }
+          RS
+
+          rm .github/workflows/unit-main-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: execute Unit-valued main"
+          git push origin HEAD:feat/unit-main-entry-point
