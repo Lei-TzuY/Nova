@@ -3,6 +3,7 @@
 mod analyzer;
 mod constant_condition;
 mod constant_int;
+pub mod control_flow;
 mod flow_rules;
 mod type_rules;
 

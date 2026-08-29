@@ -1,4 +1,8 @@
 use crate::constant_int::{self, ConstantIntError};
+use crate::control_flow::{
+    ControlFlowProgram, FlowEdgeKind, FlowNodeId, FlowNodeKind, FlowTransfer, FunctionControlFlow,
+    FunctionFlowBuilder, definite_initialization_diagnostics,
+};
 use crate::flow_rules::InitializationJoin;
 use crate::hir::{
     self, BindingId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType, MatchArm,
@@ -17,6 +21,8 @@ use std::collections::BTreeMap;
 pub struct AnalysisOutput {
     /// Resolved and typed HIR, including error-recovery nodes when diagnostics exist.
     pub program: hir::Program,
+    /// Verified function-level control-flow graphs used by semantic dataflow.
+    pub control_flow: ControlFlowProgram,
     /// Semantic diagnostics in source order.
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -61,6 +67,7 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
             functions,
             span: program.span,
         },
+        control_flow: ControlFlowProgram::new(analyzer.control_flow),
         diagnostics: analyzer.diagnostics,
     }
 }
@@ -177,15 +184,24 @@ type Scope = BTreeMap<String, LocalSymbol>;
 type ScopeState = Vec<Scope>;
 
 #[derive(Clone, Debug)]
+struct ScopeFlowState {
+    scopes: ScopeState,
+    flow_cursor: FlowNodeId,
+}
+
+#[derive(Clone, Debug)]
 struct LoopContext {
     visible_scope_count: usize,
-    break_states: Vec<ScopeState>,
+    header: FlowNodeId,
+    break_states: Vec<ScopeFlowState>,
+    continue_cursors: Vec<FlowNodeId>,
 }
 
 #[derive(Clone, Debug)]
 struct ReachableState {
     scopes: ScopeState,
     loop_stack: Vec<LoopContext>,
+    flow_cursor: FlowNodeId,
 }
 
 const SIGNED_INT_MIN_MAGNITUDE: u64 = 1_u64 << 63;
@@ -201,6 +217,8 @@ struct Analyzer {
     next_binding: usize,
     loop_stack: Vec<LoopContext>,
     diagnostic_only_depth: usize,
+    control_flow: Vec<FunctionControlFlow>,
+    flow: Option<FunctionFlowBuilder>,
 }
 
 impl Analyzer {
@@ -216,6 +234,8 @@ impl Analyzer {
             next_binding: 0,
             loop_stack: Vec::new(),
             diagnostic_only_depth: 0,
+            control_flow: Vec::new(),
+            flow: None,
         }
     }
 
@@ -223,12 +243,85 @@ impl Analyzer {
         ReachableState {
             scopes: self.scopes.clone(),
             loop_stack: self.loop_stack.clone(),
+            flow_cursor: self.flow_cursor(),
         }
     }
 
     fn restore_reachable_state(&mut self, state: ReachableState) {
         self.scopes = state.scopes;
         self.loop_stack = state.loop_stack;
+        self.set_flow_cursor(state.flow_cursor);
+    }
+
+    fn capture_scope_flow_state(&self) -> ScopeFlowState {
+        ScopeFlowState {
+            scopes: self.scopes.clone(),
+            flow_cursor: self.flow_cursor(),
+        }
+    }
+
+    fn restore_scope_flow_state(&mut self, state: &ScopeFlowState) {
+        self.scopes = state.scopes.clone();
+        self.set_flow_cursor(state.flow_cursor);
+    }
+
+    fn flow_cursor(&self) -> FlowNodeId {
+        self.flow
+            .as_ref()
+            .expect("semantic lowering must own a function flow graph")
+            .cursor()
+    }
+
+    fn set_flow_cursor(&mut self, cursor: FlowNodeId) {
+        self.flow
+            .as_mut()
+            .expect("semantic lowering must own a function flow graph")
+            .set_cursor(cursor);
+    }
+
+    fn flow_edge_kind(&self) -> FlowEdgeKind {
+        if self.diagnostic_only_depth == 0 {
+            FlowEdgeKind::Execution
+        } else {
+            FlowEdgeKind::Diagnostic
+        }
+    }
+
+    fn flow_advance(&mut self, kind: FlowNodeKind, span: Option<Span>) -> FlowNodeId {
+        let edge_kind = self.flow_edge_kind();
+        self.flow
+            .as_mut()
+            .expect("semantic lowering must own a function flow graph")
+            .advance(kind, span, edge_kind)
+    }
+
+    fn flow_fork_from(
+        &mut self,
+        predecessor: FlowNodeId,
+        span: Option<Span>,
+        edge_kind: FlowEdgeKind,
+    ) -> FlowNodeId {
+        let edge_kind = if self.diagnostic_only_depth == 0 {
+            edge_kind
+        } else {
+            FlowEdgeKind::Diagnostic
+        };
+        self.flow
+            .as_mut()
+            .expect("semantic lowering must own a function flow graph")
+            .fork_from(predecessor, span, edge_kind)
+    }
+
+    fn flow_join(
+        &mut self,
+        predecessors: impl IntoIterator<Item = FlowNodeId>,
+        span: Option<Span>,
+    ) -> FlowNodeId {
+        let edge_kind = self.flow_edge_kind();
+        self.flow
+            .as_mut()
+            .expect("semantic lowering must own a function flow graph")
+            .join(predecessors, span, edge_kind)
     }
 
     fn collect_type_definitions(&mut self, program: &ast::Program) {
@@ -441,6 +534,8 @@ impl Analyzer {
 
     fn lower_function(&mut self, id: FunctionId, function: &ast::Function) -> hir::Function {
         let signature = self.signatures[id.index()].clone();
+        debug_assert!(self.flow.is_none());
+        self.flow = Some(FunctionFlowBuilder::new(id, function.span));
         self.scopes.clear();
         self.scopes.push(BTreeMap::new());
         self.loop_stack.clear();
@@ -481,6 +576,30 @@ impl Analyzer {
             );
         }
 
+        let normal_exit = (!body.ty.is_never()).then(|| self.flow_cursor());
+        let flow = self
+            .flow
+            .take()
+            .expect("function lowering must finish its flow graph");
+        match flow.finish(normal_exit) {
+            Ok(graph) => {
+                match definite_initialization_diagnostics(&graph, function.span) {
+                    Ok(diagnostics) => self.diagnostics.extend(diagnostics),
+                    Err(error) => self.diagnostics.push(
+                        Diagnostic::error("N3999", "invalid semantic control-flow graph")
+                            .with_primary(error.span(), error.message())
+                            .with_note("the compiler rejected an invalid internal graph"),
+                    ),
+                }
+                self.control_flow.push(graph);
+            }
+            Err(error) => self.diagnostics.push(
+                Diagnostic::error("N3999", "invalid semantic control-flow graph")
+                    .with_primary(error.span(), error.message())
+                    .with_note("the compiler rejected an invalid internal graph"),
+            ),
+        }
+
         self.scopes.clear();
         hir::Function {
             id,
@@ -505,23 +624,23 @@ impl Analyzer {
         let mut terminated = false;
         let mut statements = Vec::with_capacity(block.statements.len());
         for statement in &block.statements {
-            let reachable_state = self.capture_reachable_state();
-            let (statement, diverges) = self.lower_statement(statement, return_type);
+            let (statement, diverges) = if terminated {
+                self.lower_statement_for_diagnostics(statement, return_type)
+            } else {
+                self.lower_statement(statement, return_type)
+            };
             statements.push(statement);
-            if terminated {
-                self.restore_reachable_state(reachable_state);
-            } else if diverges {
+            if !terminated && diverges {
                 terminated = true;
             }
         }
 
         let tail = block.tail.as_deref().map(|expression| {
-            let reachable_state = self.capture_reachable_state();
-            let expression = Box::new(self.lower_expression(expression, return_type));
             if terminated {
-                self.restore_reachable_state(reachable_state);
+                Box::new(self.lower_expression_for_diagnostics(expression, return_type))
+            } else {
+                Box::new(self.lower_expression(expression, return_type))
             }
-            expression
         });
         let ty = if terminated {
             Type::Never
@@ -606,7 +725,7 @@ impl Analyzer {
                         && !value.ty.is_never()
                         && expected_type_compatible(&value.ty, &symbol.ty)
                     {
-                        self.mark_initialized(&target.text);
+                        self.mark_initialized(&target.text, target.span);
                     }
                     Some(symbol.id)
                 } else if let Some(span) = function_span {
@@ -634,6 +753,8 @@ impl Analyzer {
             }
             ast::StatementKind::While { condition, body } => {
                 let condition_entry_state = self.capture_reachable_state();
+                let preheader = self.flow_cursor();
+                let header = self.flow_join([preheader], Some(condition.span));
                 let condition = self.lower_expression(condition, return_type);
                 self.require_type(
                     &condition.ty,
@@ -642,14 +763,29 @@ impl Analyzer {
                     "while condition",
                 );
 
-                let post_condition_scopes = self.scopes.clone();
+                let post_condition_state = self.capture_scope_flow_state();
                 let condition_literal = crate::constant_condition::evaluate(&condition);
                 let guaranteed_entry = condition_literal == Some(true);
+                let guaranteed_skip = condition_literal == Some(false);
+                let impossible_entry =
+                    condition.ty.is_never() || condition.ty != Type::Bool || guaranteed_skip;
+                self.flow_fork_from(
+                    post_condition_state.flow_cursor,
+                    Some(body.span),
+                    if impossible_entry {
+                        FlowEdgeKind::Diagnostic
+                    } else {
+                        FlowEdgeKind::Execution
+                    },
+                );
                 self.loop_stack.push(LoopContext {
                     visible_scope_count: self.scopes.len(),
+                    header,
                     break_states: Vec::new(),
+                    continue_cursors: Vec::new(),
                 });
-                let body = if condition.ty.is_never() || condition_literal == Some(false) {
+                let diagnostic_body = condition.ty.is_never() || guaranteed_skip;
+                let body = if diagnostic_body {
                     self.lower_block_for_diagnostics(body, return_type, true)
                 } else {
                     self.lower_block(body, return_type, true)
@@ -658,26 +794,50 @@ impl Analyzer {
                     .loop_stack
                     .pop()
                     .expect("while lowering must own one loop context");
+                if !diagnostic_body && !body.ty.is_never() {
+                    let body_exit = self.flow_cursor();
+                    self.flow
+                        .as_mut()
+                        .expect("semantic lowering must own a function flow graph")
+                        .add_backedge(body_exit, loop_context.header);
+                }
+                for continue_cursor in &loop_context.continue_cursors {
+                    self.flow
+                        .as_mut()
+                        .expect("semantic lowering must own a function flow graph")
+                        .add_backedge(*continue_cursor, loop_context.header);
+                }
 
                 let diverges = if condition.ty.is_never() {
-                    self.scopes = post_condition_scopes;
+                    self.restore_scope_flow_state(&post_condition_state);
                     true
                 } else if condition.ty != Type::Bool {
                     self.restore_reachable_state(condition_entry_state);
                     false
                 } else if guaranteed_entry {
                     if loop_context.break_states.is_empty() {
-                        self.scopes = post_condition_scopes;
+                        self.restore_scope_flow_state(&post_condition_state);
                         true
                     } else {
                         self.merge_loop_break_initialization(
-                            &post_condition_scopes,
+                            &post_condition_state,
                             &loop_context.break_states,
                         );
                         false
                     }
                 } else {
-                    self.scopes = post_condition_scopes;
+                    self.restore_scope_flow_state(&post_condition_state);
+                    if !guaranteed_skip && !loop_context.break_states.is_empty() {
+                        self.flow_join(
+                            std::iter::once(post_condition_state.flow_cursor).chain(
+                                loop_context
+                                    .break_states
+                                    .iter()
+                                    .map(|state| state.flow_cursor),
+                            ),
+                            None,
+                        );
+                    }
                     false
                 };
                 (StatementKind::While { condition, body }, diverges)
@@ -685,6 +845,10 @@ impl Analyzer {
             ast::StatementKind::Break => {
                 let legal = !self.loop_stack.is_empty();
                 if legal {
+                    self.flow_advance(
+                        FlowNodeKind::Transfer(FlowTransfer::Break),
+                        Some(statement.span),
+                    );
                     self.record_loop_break_exit();
                 } else {
                     self.diagnostics.push(
@@ -698,7 +862,13 @@ impl Analyzer {
             }
             ast::StatementKind::Continue => {
                 let legal = !self.loop_stack.is_empty();
-                if !legal {
+                if legal {
+                    self.flow_advance(
+                        FlowNodeKind::Transfer(FlowTransfer::Continue),
+                        Some(statement.span),
+                    );
+                    self.record_loop_continue();
+                } else {
                     self.diagnostics.push(
                         Diagnostic::error("N3013", "loop control outside loop").with_primary(
                             statement.span,
@@ -715,6 +885,10 @@ impl Analyzer {
                     return_type,
                     expression.span,
                     "return expression",
+                );
+                self.flow_advance(
+                    FlowNodeKind::Transfer(FlowTransfer::Return),
+                    Some(statement.span),
                 );
                 (StatementKind::Return(expression), true)
             }
@@ -789,7 +963,7 @@ impl Analyzer {
             } => {
                 let operator_entry_state = self.capture_reachable_state();
                 let left = self.lower_expression(left, return_type);
-                let left_scopes = self.scopes.clone();
+                let left_state = self.capture_scope_flow_state();
                 let left_literal = crate::constant_condition::evaluate(&left);
                 let skips_right = matches!(
                     (*operator, left_literal),
@@ -805,14 +979,21 @@ impl Analyzer {
                 let right = if left.ty.is_never() || (short_circuit_operator && skips_right) {
                     self.lower_expression_for_diagnostics(right, return_type)
                 } else {
+                    if short_circuit_operator && !forces_right {
+                        self.flow_fork_from(
+                            left_state.flow_cursor,
+                            Some(right.span),
+                            FlowEdgeKind::Execution,
+                        );
+                    }
                     self.lower_expression(right, return_type)
                 };
 
                 if short_circuit_operator && !left.ty.is_never() && !skips_right && !forces_right {
-                    let right_scopes = self.scopes.clone();
+                    let right_state = self.capture_scope_flow_state();
                     self.merge_optional_execution_initialization(
-                        &left_scopes,
-                        &right_scopes,
+                        &left_state,
+                        &right_state,
                         right.ty.is_never(),
                     );
                 }
@@ -873,59 +1054,102 @@ impl Analyzer {
                 self.require_type(&condition.ty, &Type::Bool, condition.span, "if condition");
 
                 let condition_literal = crate::constant_condition::evaluate(&condition);
-                let entry_scopes = self.scopes.clone();
+                let entry_state = self.capture_scope_flow_state();
                 let post_condition_loop_stack = self.loop_stack.clone();
+                let branch_edge = if condition.ty == Type::Bool {
+                    FlowEdgeKind::Execution
+                } else {
+                    FlowEdgeKind::Diagnostic
+                };
 
-                let (then_branch, then_scopes, else_branch, else_scopes) = if condition
-                    .ty
-                    .is_never()
+                let (then_branch, then_state, else_branch, else_state) = if condition.ty.is_never()
                 {
+                    self.flow_fork_from(
+                        entry_state.flow_cursor,
+                        Some(then_branch.span),
+                        FlowEdgeKind::Diagnostic,
+                    );
                     let then_branch =
                         self.lower_block_for_diagnostics(then_branch, return_type, true);
-                    let then_scopes = self.scopes.clone();
+                    let then_state = self.capture_scope_flow_state();
 
-                    self.scopes = entry_scopes.clone();
+                    self.restore_scope_flow_state(&entry_state);
                     self.loop_stack = post_condition_loop_stack.clone();
+                    self.flow_fork_from(
+                        entry_state.flow_cursor,
+                        Some(else_branch.span),
+                        FlowEdgeKind::Diagnostic,
+                    );
                     let else_branch =
                         self.lower_expression_for_diagnostics(else_branch, return_type);
-                    let else_scopes = self.scopes.clone();
-                    (then_branch, then_scopes, else_branch, else_scopes)
+                    let else_state = self.capture_scope_flow_state();
+                    (then_branch, then_state, else_branch, else_state)
                 } else {
                     match condition_literal {
                         Some(true) => {
+                            self.flow_fork_from(
+                                entry_state.flow_cursor,
+                                Some(then_branch.span),
+                                branch_edge,
+                            );
                             let then_branch = self.lower_block(then_branch, return_type, true);
-                            let then_scopes = self.scopes.clone();
+                            let then_state = self.capture_scope_flow_state();
                             let then_loop_stack = self.loop_stack.clone();
 
-                            self.scopes = entry_scopes.clone();
+                            self.restore_scope_flow_state(&entry_state);
                             self.loop_stack = post_condition_loop_stack.clone();
+                            self.flow_fork_from(
+                                entry_state.flow_cursor,
+                                Some(else_branch.span),
+                                FlowEdgeKind::Diagnostic,
+                            );
                             let else_branch =
                                 self.lower_expression_for_diagnostics(else_branch, return_type);
-                            let else_scopes = self.scopes.clone();
+                            let else_state = self.capture_scope_flow_state();
 
-                            self.scopes = then_scopes.clone();
+                            self.restore_scope_flow_state(&then_state);
                             self.loop_stack = then_loop_stack;
-                            (then_branch, then_scopes, else_branch, else_scopes)
+                            (then_branch, then_state, else_branch, else_state)
                         }
                         Some(false) => {
+                            self.flow_fork_from(
+                                entry_state.flow_cursor,
+                                Some(then_branch.span),
+                                FlowEdgeKind::Diagnostic,
+                            );
                             let then_branch =
                                 self.lower_block_for_diagnostics(then_branch, return_type, true);
-                            let then_scopes = self.scopes.clone();
+                            let then_state = self.capture_scope_flow_state();
 
-                            self.scopes = entry_scopes.clone();
+                            self.restore_scope_flow_state(&entry_state);
                             self.loop_stack = post_condition_loop_stack.clone();
+                            self.flow_fork_from(
+                                entry_state.flow_cursor,
+                                Some(else_branch.span),
+                                branch_edge,
+                            );
                             let else_branch = self.lower_expression(else_branch, return_type);
-                            let else_scopes = self.scopes.clone();
-                            (then_branch, then_scopes, else_branch, else_scopes)
+                            let else_state = self.capture_scope_flow_state();
+                            (then_branch, then_state, else_branch, else_state)
                         }
                         None => {
+                            self.flow_fork_from(
+                                entry_state.flow_cursor,
+                                Some(then_branch.span),
+                                branch_edge,
+                            );
                             let then_branch = self.lower_block(then_branch, return_type, true);
-                            let then_scopes = self.scopes.clone();
+                            let then_state = self.capture_scope_flow_state();
 
-                            self.scopes = entry_scopes.clone();
+                            self.restore_scope_flow_state(&entry_state);
+                            self.flow_fork_from(
+                                entry_state.flow_cursor,
+                                Some(else_branch.span),
+                                branch_edge,
+                            );
                             let else_branch = self.lower_expression(else_branch, return_type);
-                            let else_scopes = self.scopes.clone();
-                            (then_branch, then_scopes, else_branch, else_scopes)
+                            let else_state = self.capture_scope_flow_state();
+                            (then_branch, then_state, else_branch, else_state)
                         }
                     }
                 };
@@ -937,7 +1161,7 @@ impl Analyzer {
                     else_branch.span,
                 );
                 let ty = if condition.ty.is_never() {
-                    self.scopes = entry_scopes;
+                    self.restore_scope_flow_state(&entry_state);
                     self.loop_stack = post_condition_loop_stack;
                     Type::Never
                 } else if condition.ty != Type::Bool {
@@ -946,7 +1170,7 @@ impl Analyzer {
                 } else {
                     match condition_literal {
                         Some(true) => {
-                            self.scopes = then_scopes;
+                            self.restore_scope_flow_state(&then_state);
                             if joined_type.is_error() {
                                 Type::Error
                             } else {
@@ -954,7 +1178,7 @@ impl Analyzer {
                             }
                         }
                         Some(false) => {
-                            self.scopes = else_scopes;
+                            self.restore_scope_flow_state(&else_state);
                             if joined_type.is_error() {
                                 Type::Error
                             } else {
@@ -963,10 +1187,10 @@ impl Analyzer {
                         }
                         None => {
                             self.merge_branch_initialization(
-                                &entry_scopes,
-                                &then_scopes,
+                                &entry_state,
+                                &then_state,
                                 then_branch.ty.is_never(),
-                                &else_scopes,
+                                &else_state,
                                 else_branch.ty.is_never(),
                             );
                             joined_type
@@ -1020,6 +1244,19 @@ impl Analyzer {
         let reachable_state = self.capture_reachable_state();
         self.diagnostic_only_depth += 1;
         let lowered = self.lower_expression(expression, return_type);
+        self.diagnostic_only_depth -= 1;
+        self.restore_reachable_state(reachable_state);
+        lowered
+    }
+
+    fn lower_statement_for_diagnostics(
+        &mut self,
+        statement: &ast::Statement,
+        return_type: &Type,
+    ) -> (hir::Statement, bool) {
+        let reachable_state = self.capture_reachable_state();
+        self.diagnostic_only_depth += 1;
+        let lowered = self.lower_statement(statement, return_type);
         self.diagnostic_only_depth -= 1;
         self.restore_reachable_state(reachable_state);
         lowered
@@ -1374,16 +1611,36 @@ impl Analyzer {
                 None
             }
         };
-        let entry_scopes = self.scopes.clone();
+        let entry_state = self.capture_scope_flow_state();
         let mut seen = BTreeMap::<usize, Span>::new();
         let mut lowered_arms = Vec::with_capacity(arms.len());
         let mut branch_states = Vec::with_capacity(arms.len());
         let mut branch_types = Vec::with_capacity(arms.len());
-        let mut selected_branch = None::<(ScopeState, Type)>;
+        let mut selected_branch = None::<(ScopeFlowState, Type)>;
         let mut structural_error = scrutinee_enum.is_none() && !scrutinee.ty.is_never();
 
         for arm in arms {
-            self.scopes = entry_scopes.clone();
+            self.restore_scope_flow_state(&entry_state);
+            let arm_edge = if let Some(selected) = selected_variant_index {
+                let resolves_to_selected = scrutinee_enum.as_ref().is_some_and(|enumeration| {
+                    arm.pattern.enumeration.text == enumeration.name
+                        && self.enum_definitions[enumeration.id.index()]
+                            .variants
+                            .iter()
+                            .position(|variant| variant.name == arm.pattern.variant.text)
+                            == Some(selected)
+                });
+                if resolves_to_selected {
+                    FlowEdgeKind::Execution
+                } else {
+                    FlowEdgeKind::Diagnostic
+                }
+            } else if matches!(scrutinee.ty, Type::Enum(_)) {
+                FlowEdgeKind::Execution
+            } else {
+                FlowEdgeKind::Diagnostic
+            };
+            self.flow_fork_from(entry_state.flow_cursor, Some(arm.span), arm_edge);
             self.scopes.push(BTreeMap::new());
             let mut valid_pattern = true;
             let mut resolved_index = None;
@@ -1544,7 +1801,7 @@ impl Analyzer {
                 };
             let popped = self.scopes.pop();
             debug_assert!(popped.is_some());
-            let branch_state = (self.scopes.clone(), value.ty.is_never());
+            let branch_state = (self.capture_scope_flow_state(), value.ty.is_never());
             if selected_arm {
                 selected_branch = Some((branch_state.0.clone(), value.ty.clone()));
             }
@@ -1593,22 +1850,22 @@ impl Analyzer {
 
         let joined_type = self.join_match_arm_types(&branch_types);
         let ty = if scrutinee.ty.is_never() {
-            self.scopes = entry_scopes;
+            self.restore_scope_flow_state(&entry_state);
             self.loop_stack = post_scrutinee_loop_stack;
             Type::Never
         } else if structural_error {
-            self.scopes = entry_scopes;
+            self.restore_scope_flow_state(&entry_state);
             self.loop_stack = post_scrutinee_loop_stack;
             Type::Error
-        } else if let Some((selected_scopes, selected_type)) = selected_branch {
-            self.scopes = selected_scopes;
+        } else if let Some((selected_state, selected_type)) = selected_branch {
+            self.restore_scope_flow_state(&selected_state);
             if joined_type.is_error() {
                 Type::Error
             } else {
                 selected_type
             }
         } else {
-            self.merge_match_initialization(&entry_scopes, &branch_states);
+            self.merge_match_initialization(&entry_state, &branch_states);
             joined_type
         };
 
@@ -1682,15 +1939,8 @@ impl Analyzer {
 
     fn lower_name(&mut self, name: &ast::Name) -> (ExpressionKind, Type) {
         if let Some(symbol) = self.find_local(&name.text) {
+            self.flow_advance(FlowNodeKind::Read(symbol.id), Some(name.span));
             if !symbol.initialized {
-                self.diagnostics.push(
-                    Diagnostic::error("N3009", "binding may be uninitialized")
-                        .with_primary(
-                            name.span,
-                            format!("`{}` is not definitely initialized on this path", name.text),
-                        )
-                        .with_secondary(symbol.span, "binding declared here"),
-                );
                 return (ExpressionKind::Binding(symbol.id), Type::Error);
             }
             return (ExpressionKind::Binding(symbol.id), symbol.ty);
@@ -1716,12 +1966,17 @@ impl Analyzer {
             .find_map(|scope| scope.get(name).cloned())
     }
 
-    fn mark_initialized(&mut self, name: &str) {
+    fn mark_initialized(&mut self, name: &str, assignment_span: Span) {
+        let mut initialized = None;
         for scope in self.scopes.iter_mut().rev() {
             if let Some(symbol) = scope.get_mut(name) {
                 symbol.initialized = true;
-                return;
+                initialized = Some(symbol.id);
+                break;
             }
+        }
+        if let Some(binding) = initialized {
+            self.flow_advance(FlowNodeKind::Initialize(binding), Some(assignment_span));
         }
     }
 
@@ -1731,12 +1986,16 @@ impl Analyzer {
             .last()
             .expect("a legal break must have an active loop context")
             .visible_scope_count;
-        let state = self
+        let scopes = self
             .scopes
             .iter()
             .take(visible_scope_count)
             .cloned()
             .collect();
+        let state = ScopeFlowState {
+            scopes,
+            flow_cursor: self.flow_cursor(),
+        };
         self.loop_stack
             .last_mut()
             .expect("a legal break must have an active loop context")
@@ -1744,18 +2003,28 @@ impl Analyzer {
             .push(state);
     }
 
+    fn record_loop_continue(&mut self) {
+        let cursor = self.flow_cursor();
+        self.loop_stack
+            .last_mut()
+            .expect("a legal continue must have an active loop context")
+            .continue_cursors
+            .push(cursor);
+    }
+
     fn merge_loop_break_initialization(
         &mut self,
-        entry_scopes: &[Scope],
-        break_states: &[ScopeState],
+        entry: &ScopeFlowState,
+        break_states: &[ScopeFlowState],
     ) {
         debug_assert!(!break_states.is_empty());
-        self.scopes = entry_scopes.to_vec();
-        for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
+        self.scopes = entry.scopes.clone();
+        for (scope_index, entry_scope) in entry.scopes.iter().enumerate() {
             for (name, entry_symbol) in entry_scope {
                 let mut join = InitializationJoin::default();
-                for break_scopes in break_states {
-                    let initialized = break_scopes
+                for break_state in break_states {
+                    let initialized = break_state
+                        .scopes
                         .get(scope_index)
                         .and_then(|scope| scope.get(name))
                         .is_some_and(|symbol| symbol.initialized);
@@ -1766,18 +2035,20 @@ impl Analyzer {
                 }
             }
         }
+        self.flow_join(break_states.iter().map(|state| state.flow_cursor), None);
     }
 
     fn merge_optional_execution_initialization(
         &mut self,
-        entry_scopes: &[Scope],
-        executed_scopes: &[Scope],
+        entry: &ScopeFlowState,
+        executed: &ScopeFlowState,
         executed_never: bool,
     ) {
-        self.scopes = entry_scopes.to_vec();
-        for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
+        self.scopes = entry.scopes.clone();
+        for (scope_index, entry_scope) in entry.scopes.iter().enumerate() {
             for (name, entry_symbol) in entry_scope {
-                let executed_initialized = executed_scopes
+                let executed_initialized = executed
+                    .scopes
                     .get(scope_index)
                     .and_then(|scope| scope.get(name))
                     .is_some_and(|symbol| symbol.initialized);
@@ -1789,24 +2060,31 @@ impl Analyzer {
                 }
             }
         }
+        let mut predecessors = vec![entry.flow_cursor];
+        if !executed_never {
+            predecessors.push(executed.flow_cursor);
+        }
+        self.flow_join(predecessors, None);
     }
 
     fn merge_branch_initialization(
         &mut self,
-        entry_scopes: &[Scope],
-        then_scopes: &[Scope],
+        entry: &ScopeFlowState,
+        then_state: &ScopeFlowState,
         then_never: bool,
-        else_scopes: &[Scope],
+        else_state: &ScopeFlowState,
         else_never: bool,
     ) {
-        self.scopes = entry_scopes.to_vec();
-        for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
+        self.scopes = entry.scopes.clone();
+        for (scope_index, entry_scope) in entry.scopes.iter().enumerate() {
             for (name, entry_symbol) in entry_scope {
-                let then_initialized = then_scopes
+                let then_initialized = then_state
+                    .scopes
                     .get(scope_index)
                     .and_then(|scope| scope.get(name))
                     .is_some_and(|symbol| symbol.initialized);
-                let else_initialized = else_scopes
+                let else_initialized = else_state
+                    .scopes
                     .get(scope_index)
                     .and_then(|scope| scope.get(name))
                     .is_some_and(|symbol| symbol.initialized);
@@ -1818,19 +2096,32 @@ impl Analyzer {
                 }
             }
         }
+        let mut predecessors = Vec::with_capacity(2);
+        if !then_never {
+            predecessors.push(then_state.flow_cursor);
+        }
+        if !else_never {
+            predecessors.push(else_state.flow_cursor);
+        }
+        if predecessors.is_empty() {
+            self.set_flow_cursor(entry.flow_cursor);
+        } else {
+            self.flow_join(predecessors, None);
+        }
     }
 
     fn merge_match_initialization(
         &mut self,
-        entry_scopes: &[Scope],
-        branches: &[(ScopeState, bool)],
+        entry: &ScopeFlowState,
+        branches: &[(ScopeFlowState, bool)],
     ) {
-        self.scopes = entry_scopes.to_vec();
-        for (scope_index, entry_scope) in entry_scopes.iter().enumerate() {
+        self.scopes = entry.scopes.clone();
+        for (scope_index, entry_scope) in entry.scopes.iter().enumerate() {
             for (name, entry_symbol) in entry_scope {
                 let mut join = InitializationJoin::default();
-                for (branch_scopes, never) in branches {
-                    let initialized = branch_scopes
+                for (branch_state, never) in branches {
+                    let initialized = branch_state
+                        .scopes
                         .get(scope_index)
                         .and_then(|scope| scope.get(name))
                         .is_some_and(|symbol| symbol.initialized);
@@ -1840,6 +2131,16 @@ impl Analyzer {
                     symbol.initialized = join.finish(entry_symbol.initialized);
                 }
             }
+        }
+        let predecessors = branches
+            .iter()
+            .filter(|(_, never)| !never)
+            .map(|(state, _)| state.flow_cursor)
+            .collect::<Vec<_>>();
+        if predecessors.is_empty() {
+            self.set_flow_cursor(entry.flow_cursor);
+        } else {
+            self.flow_join(predecessors, None);
         }
     }
 
@@ -2187,13 +2488,18 @@ impl Analyzer {
     fn new_binding(&mut self, name: &ast::Name, ty: Type, mutable: bool) -> hir::Binding {
         let id = BindingId::new(self.next_binding);
         self.next_binding += 1;
-        hir::Binding {
+        let binding = hir::Binding {
             id,
             name: name.text.clone(),
             ty,
             mutable,
             span: name.span,
-        }
+        };
+        self.flow
+            .as_mut()
+            .expect("semantic lowering must own a function flow graph")
+            .register_binding(&binding);
+        binding
     }
 
     fn insert_local(&mut self, binding: &hir::Binding, initialized: bool) {
@@ -2222,6 +2528,9 @@ impl Analyzer {
                 span: binding.span,
             },
         );
+        if initialized {
+            self.flow_advance(FlowNodeKind::Initialize(binding.id), Some(binding.span));
+        }
     }
 }
 

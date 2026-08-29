@@ -275,6 +275,16 @@ its assignments, returns, and loop transfers cannot affect reachable continuatio
 state. Computed and block-valued Boolean conditions keep the ordinary two-branch
 merge; this rule is not general constant folding.
 
+The bootstrap compiler now records these implemented rules in a verified
+function-level CFG and derives `N3009` from a fixed-point predecessor-intersection
+analysis. Initialization, read, branch, join, structured transfer, normal-exit,
+diagnostic-only, and loop-backedge events are explicit compiler data. Rejected or
+statically skipped source remains present on discarded diagnostic paths so it can
+still receive deterministic static diagnostics without contributing facts to
+reachable continuation. The lowerer temporarily retains an inline initialized bit
+only to select Error-typed recovery HIR at an invalid read; it is not a second
+diagnostic authority or accepted-program proof.
+
 Chained assignment, arbitrary lvalues, field mutation, indexing, and general
 uninitialized storage remain unsupported.
 
@@ -376,6 +386,8 @@ semantics.
 
 **Provisional bootstrap decisions.** `nova run` executes only after lexical,
 syntactic, name-resolution, type, and definite-assignment validation succeeds.
+Semantic analysis constructs and verifies one function-level CFG, and the
+definite-assignment gate consumes that graph before HIR can reach execution.
 The interpreter consumes typed HIR directly and supports the implemented
 function, call, record construction/projection, enum construction/matching,
 block, `if`, `while`, `break`, `continue`, return, binding, assignment, Unit,
@@ -480,18 +492,20 @@ Every compiler and execution stage must uphold these constraints:
     facts observed by reachable continuation paths. Dynamic short-circuit operands
     and non-literal `if` branches contribute only facts valid on their possible
     continuing paths.
-13. Nominal type identity must not silently collapse to structural field shape.
-14. Resolved field slots must preserve source semantics and must not be mistaken
+13. Every published function CFG must pass identity, range, reachability, binding,
+    exit, and structured-transfer verification; invalid internal graphs fail closed.
+14. Nominal type identity must not silently collapse to structural field shape.
+15. Resolved field slots must preserve source semantics and must not be mistaken
     for a stabilized memory-layout or ABI guarantee.
-15. An accepted enum match names every variant of exactly one nominal enum once;
+16. An accepted enum match names every variant of exactly one nominal enum once;
     its scrutinee runs once and unselected arms do not run.
-16. Resolved enum variant slots and boxed interpreter payloads are not stabilized
+17. Resolved enum variant slots and boxed interpreter payloads are not stabilized
     layout, allocation, ownership, serialization, or ABI guarantees.
-17. Optimization must preserve specified behavior and later operate on verified
+18. Optimization must preserve specified behavior and later operate on verified
     IR rather than repair invalid earlier output.
-18. A semantic-inspection document is emitted only for accepted, internally
+19. A semantic-inspection document is emitted only for accepted, internally
     consistent HIR and must conform to an explicitly versioned tooling schema.
-19. Roadmap documents distinguish implemented, provisional, and researched
+20. Roadmap documents distinguish implemented, provisional, and researched
     properties; benchmarks and safety claims require reproducible evidence.
 
 ## 15. Current unresolved research register
