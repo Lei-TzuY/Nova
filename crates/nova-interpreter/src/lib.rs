@@ -367,7 +367,7 @@ impl<'program> Interpreter<'program> {
                         ),
                     ));
                 };
-                if &expression.ty != &slot.ty {
+                if expression.ty != slot.ty {
                     return Err(self.invariant(
                         expression.span,
                         format!(
