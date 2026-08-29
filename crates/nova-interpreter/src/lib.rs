@@ -353,6 +353,26 @@ impl<'program> Interpreter<'program> {
         frame: &mut Frame,
     ) -> Result<Flow, Diagnostic> {
         self.step(expression.span)?;
+        let flow = self.eval_expression_unchecked(expression, frame)?;
+        if let Flow::Value(value) = &flow {
+            if !self.value_conforms_to_type(value, &expression.ty) {
+                return Err(self.invariant(
+                    expression.span,
+                    format!(
+                        "expression produced a runtime value that does not conform to HIR type {}",
+                        expression.ty
+                    ),
+                ));
+            }
+        }
+        Ok(flow)
+    }
+
+    fn eval_expression_unchecked(
+        &mut self,
+        expression: &Expression,
+        frame: &mut Frame,
+    ) -> Result<Flow, Diagnostic> {
         match &expression.kind {
             ExpressionKind::Integer(value) => Ok(Flow::Value(Value::Int(*value))),
             ExpressionKind::Boolean(value) => Ok(Flow::Value(Value::Bool(*value))),

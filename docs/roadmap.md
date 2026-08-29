@@ -671,7 +671,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: thirteen vertical slices implemented; execution surface remains small.**
+**Status: fourteen vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -859,6 +859,22 @@ Implemented in the thirteenth Phase 3 slice:
   immutable retargeting, incompatible binding-identity aliasing, and match-payload
   binding drift, while valid mutation and loop-local re-entry controls lock accepted
   execution unchanged.
+
+Implemented in the fourteenth Phase 3 slice:
+
+- expression evaluation now has one typed-HIR runtime postcondition around the existing
+  per-kind evaluator: every ordinary `Flow::Value` must recursively conform to the
+  expression's resolved result type before that value can leave the expression boundary;
+- the check applies uniformly to primitive literals, function references, aggregates,
+  projections, unary/binary operations, calls, blocks, conditionals, and selected matches,
+  including values that are immediately discarded and never reach another runtime boundary;
+- structured `Return`, `Break`, and `Continue` flows deliberately bypass the value
+  postcondition, preserving the existing propagation semantics for `!` expressions;
+- the implementation keeps execution order, step accounting, per-kind invariant checks,
+  and valid source behavior unchanged by wrapping rather than rewriting expression logic;
+  and
+- malformed-HIR regressions cover discarded primitive and composed projection result-type
+  drift, while return and loop-transfer controls prove non-value flow remains executable.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
