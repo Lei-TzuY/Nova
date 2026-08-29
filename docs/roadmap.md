@@ -654,7 +654,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: nine vertical slices implemented; execution surface remains small.**
+**Status: eleven vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -786,6 +786,32 @@ Implemented in the ninth Phase 3 slice:
   behavior end to end; and
 - the interpreter's boxed payload representation, enum layout, ownership, and ABI remain
   explicitly provisional and unaffected by this equality slice.
+
+Implemented in the tenth Phase 3 slice:
+
+- zero-argument `main` may return `Unit` alongside the existing `Int` and `Bool`
+  bootstrap entry-point types;
+- `nova run` prints the existing `Value::Unit` representation as `()` rather than
+  rejecting an otherwise semantically valid Unit-valued entry point;
+- record-, enum-, and function-valued entry points remain outside the bootstrap
+  execution contract and continue to fail with `N4001`; and
+- interpreter integration tests plus CLI fixture migration lock both the newly
+  accepted Unit entry point and the still-narrow aggregate boundary.
+
+Implemented in the eleventh Phase 3 slice:
+
+- every function call validates runtime arguments against resolved parameter
+  types before binding them into a frame;
+- every function return validates its runtime value against the declared return
+  type before the value crosses the call boundary;
+- nominal record and enum validation recursively checks declaration identity,
+  record slots, selected variant, and payload shape/type instead of trusting an
+  outer runtime tag alone;
+- function-value validation checks resolved function identity and signature,
+  while `Never` and recovery `Error` can never masquerade as runtime values; and
+- malformed-HIR regressions lock argument, return, nested-record, and nominal
+  identity drift to deterministic invariant diagnostic `N4005` without changing
+  valid source behavior.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

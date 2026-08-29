@@ -246,6 +246,13 @@ the next condition test. If malformed HIR lets loop control escape its lexical
 loop or cross a function boundary, execution fails closed with invariant
 diagnostic `N4005` rather than guessing a target.
 
+Function calls also validate the runtime/HIR type boundary. Every argument must
+recursively conform to its resolved parameter type, and every returned runtime
+value must recursively conform to the function's declared type. Nominal record
+and enum identities, record slots, and enum payloads are checked rather than
+trusted from their outer value tag alone. Valid semantically produced HIR is
+unaffected; malformed or contract-drifted HIR fails closed with `N4005`.
+
 For deterministic execution while the numeric design remains provisional, the
 bootstrap frontend now covers the complete signed 64-bit literal endpoints: positive
 literals end at `9223372036854775807`, while `-9223372036854775808` is normalized
