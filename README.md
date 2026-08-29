@@ -269,6 +269,14 @@ Assignment additionally requires a mutable slot and a conforming replacement val
 Binding reads verify that the HIR expression type and stored runtime value still agree
 with the slot contract. Any such interpreter/HIR drift fails closed with `N4005`.
 
+Every expression that completes with an ordinary runtime value also has a final
+interpreter postcondition: the value must recursively conform to that expression's
+typed-HIR result type. This closes gaps for local or discarded literals, projections,
+operators, blocks, conditionals, matches, and other values that may never cross a
+function, aggregate, or frame-storage boundary. Structured `return`, `break`, and
+`continue` propagation is not a runtime value and therefore remains outside this
+postcondition. A mismatched value fails closed with `N4005` at the expression span.
+
 For deterministic execution while the numeric design remains provisional, the
 bootstrap frontend now covers the complete signed 64-bit literal endpoints: positive
 literals end at `9223372036854775807`, while `-9223372036854775808` is normalized
