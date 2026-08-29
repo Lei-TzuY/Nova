@@ -31,8 +31,9 @@ jobs:
             exit 1
           fi
       - name: Apply narrow recovery-backedge fix
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path("crates/nova-sema/src/analyzer.rs")
@@ -56,6 +57,7 @@ jobs:
           if text.count(old) != 1:
               raise SystemExit("expected exactly one continue-backedge loop")
           path.write_text(text.replace(old, new))
+          PY
       - name: Format
         run: cargo fmt --all
       - name: Validate behavior
