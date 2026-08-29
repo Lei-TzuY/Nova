@@ -41,7 +41,10 @@ edges return loop fallthrough or `continue` to the pre-test condition header.
 Closed side-effect-free condition refinements for `if`, `while`, and
 short-circuit operators, direct enum-constructor match selection, and
 non-continuing discriminators use diagnostic edges for successors that cannot
-execute.
+execute. Unit equality may prove its operands only from the literal `()` or from
+a statement-free nested block whose optional tail recursively has that same pure
+Unit form; a block containing any statement, call, binding read, or other dynamic
+source remains outside closed-condition reasoning.
 
 An invalid construct may leave a reachable-from-entry diagnostic subgraph with
 no continuation edge. This is intentional: rollback moves the lowering cursor
@@ -123,6 +126,12 @@ exceptions, async suspension, pattern usefulness, optimization legality, or
 backend blocks. Loop reasoning remains the documented bootstrap rule: ordinary
 pre-test loops preserve the zero-iteration path, while a side-effect-free closed
 condition proven true may continue only through reachable `break` exits.
+
+The pure-Unit block proof is intentionally structural and narrow. It recognizes
+only statement-free blocks that are empty or whose tail recursively reduces to
+that same form or to `()`. It does not inspect statements for purity, execute
+calls, follow names, or infer that an arbitrary Unit-typed expression is
+constant; those cases remain runtime-evaluated.
 
 Additional flow-sensitive checks should migrate onto explicit analyses only when
 each has a specified lattice, verifier invariants, and adversarial tests; lexical
