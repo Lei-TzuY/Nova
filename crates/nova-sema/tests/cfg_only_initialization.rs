@@ -8,7 +8,11 @@ use nova_source::{SourceFile, SourceId};
 fn analyze_text(text: &str) -> AnalysisOutput {
     let source = SourceFile::new(SourceId::new(0), "test.nv", text);
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
     assert!(
         parsed.is_success(),
@@ -55,15 +59,15 @@ fn type_mismatch_and_definite_initialization_are_orthogonal() {
 
 #[test]
 fn noncontinuing_initializer_does_not_create_an_initialization_event() {
-    let output = analyze_text(
-        "fn main() -> Int { let value: Int = { return 7; }; value }",
-    );
+    let output = analyze_text("fn main() -> Int { let value: Int = { return 7; }; value }");
 
     assert_eq!(codes(&output), vec!["N3009"]);
     assert_eq!(output.control_flow.functions().len(), 1);
 
-    let StatementKind::Binding { binding, initializer } =
-        &output.program.functions[0].body.statements[0].kind
+    let StatementKind::Binding {
+        binding,
+        initializer,
+    } = &output.program.functions[0].body.statements[0].kind
     else {
         panic!("expected binding statement");
     };
@@ -72,9 +76,10 @@ fn noncontinuing_initializer_does_not_create_an_initialization_event() {
 
     let graph = &output.control_flow.functions()[0];
     assert!(
-        graph.nodes().iter().all(|node| {
-            !matches!(node.kind, FlowNodeKind::Initialize(id) if id == binding.id)
-        }),
+        graph
+            .nodes()
+            .iter()
+            .all(|node| { !matches!(node.kind, FlowNodeKind::Initialize(id) if id == binding.id) }),
         "a binding whose initializer cannot complete must not become initialized"
     );
 }

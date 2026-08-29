@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: twenty-seven vertical slices implemented; broader type-system work remains.**
+**Status: twenty-eight vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -475,11 +475,27 @@ Implemented in the twenty-seventh Phase 2 slice:
 - unit, integration, structural, branch-intersection, loop-backedge, transfer,
   diagnostic-path, and full regression coverage.
 
+Implemented in the twenty-eighth Phase 2 slice:
+
+- lexical `LocalSymbol` state no longer carries a parallel `initialized` Boolean;
+  definite initialization exists only as verified CFG events and fixed-point facts;
+- resolved binding reads always retain their declared HIR type, while `N3009` remains
+  independently produced by CFG dataflow, allowing orthogonal type diagnostics when
+  source violates both typing and initialization rules;
+- the obsolete structured `InitializationJoin` lattice and `flow_rules` module are
+  removed, and branch/loop/match helpers now merge only CFG continuation cursors;
+- initialized parameters, completed declarations, payload bindings, and successful
+  assignments emit explicit `Initialize` nodes without mutating lexical symbols;
+- a declaration whose initializer is already non-continuing still enters lexical scope
+  for deterministic dead-source diagnostics but emits no impossible execution
+  initialization after the transfer, eliminating the corresponding N3999 graph error;
+- semantic regression tests lock HIR type preservation, independent N3004/N3009
+  reporting, and noncontinuing-initializer graph validity; and
+- the CFG is now the single source of truth for definite initialization in both accepted
+  and recovery analysis, completing the transition introduced by slice twenty-seven.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
-
-- separate recovery HIR typing from the remaining inline initialization flag now that
-  `N3009` proof and diagnostics are owned by the explicit CFG;
 - define language-level numeric types, defaulting, conversions, and overflow
   behavior beyond the provisional interpreter contract;
 - deepen the pattern model only with a specified usefulness and diagnostic

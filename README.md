@@ -349,6 +349,8 @@ language semantics.
   exit facts to code they cannot reach.
 - Function CFGs are verified before publication; `N3009` is produced by their
   fixed-point must analysis rather than ad-hoc diagnostic emission during name lookup.
+- Definite initialization has no parallel lexical Boolean: binding HIR preserves the
+  declared type while CFG read/initialize events exclusively own flow validity.
 - Machine-readable semantics cross a separately versioned schema boundary;
   debug AST/HIR output is never silently promoted into a tooling contract.
 - Potentially nonterminating bootstrap execution is bounded and fails with a
