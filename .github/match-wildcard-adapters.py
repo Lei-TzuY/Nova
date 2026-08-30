@@ -17,6 +17,20 @@ text = text.replace(
 )
 p.write_text(text)
 
+# Preserve the payload-discard corruption proof: remove only the real concrete binding
+# while leaving explicit discard intent false.
+p = Path('crates/nova-interpreter/tests/pattern_payload_discard.rs')
+text = p.read_text()
+text = text.replace(
+    'use nova_sema::{analyze, hir::ExpressionKind};\n',
+    'use nova_sema::{analyze, hir::{ExpressionKind, MatchPattern}};\n',
+)
+text = text.replace(
+    '''    arms[1].binding = None;\n    assert!(!arms[1].payload_discarded);\n''',
+    '''    let MatchPattern::Variant {\n        binding,\n        payload_discarded,\n        ..\n    } = &mut arms[1].pattern\n    else {\n        panic!("concrete arm pattern");\n    };\n    *binding = None;\n    assert!(!*payload_discarded);\n''',
+)
+p.write_text(text)
+
 # Keep semantic-inspection v1/v2/v3 semantically frozen: adapt concrete HIR patterns,
 # but fail closed if an accepted program contains the new catch-all until schema v4 exists.
 p = Path('crates/nova-inspect/src/lib.rs')
