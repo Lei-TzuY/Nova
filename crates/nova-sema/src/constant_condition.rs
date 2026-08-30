@@ -1,5 +1,5 @@
 use crate::constant_int;
-use crate::hir::{EnumId, Expression, ExpressionKind, FunctionId, MatchArm, Type};
+use crate::hir::{EnumId, Expression, ExpressionKind, FunctionId, MatchArm, RecordId, Type};
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
@@ -35,6 +35,12 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
             enumeration,
             arms,
         } => evaluate(selected_match_value(scrutinee, *enumeration, arms)?),
+        ExpressionKind::FieldAccess {
+            base,
+            record,
+            field_index,
+            ..
+        } => evaluate(selected_record_field_value(base, *record, *field_index)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             evaluate(block.tail.as_deref()?)
         }
@@ -121,6 +127,12 @@ fn unit_value(expression: &Expression) -> Option<()> {
             enumeration,
             arms,
         } => unit_value(selected_match_value(scrutinee, *enumeration, arms)?),
+        ExpressionKind::FieldAccess {
+            base,
+            record,
+            field_index,
+            ..
+        } => unit_value(selected_record_field_value(base, *record, *field_index)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             match block.tail.as_deref() {
                 Some(tail) => unit_value(tail),
@@ -155,6 +167,12 @@ fn enum_identity_tag(expression: &Expression) -> Option<(EnumId, usize)> {
             enumeration,
             arms,
         } => enum_identity_tag(selected_match_value(scrutinee, *enumeration, arms)?),
+        ExpressionKind::FieldAccess {
+            base,
+            record,
+            field_index,
+            ..
+        } => enum_identity_tag(selected_record_field_value(base, *record, *field_index)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             enum_identity_tag(block.tail.as_deref()?)
         }
@@ -179,6 +197,12 @@ fn function_id(expression: &Expression) -> Option<FunctionId> {
             enumeration,
             arms,
         } => function_id(selected_match_value(scrutinee, *enumeration, arms)?),
+        ExpressionKind::FieldAccess {
+            base,
+            record,
+            field_index,
+            ..
+        } => function_id(selected_record_field_value(base, *record, *field_index)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             function_id(block.tail.as_deref()?)
         }
@@ -212,6 +236,12 @@ fn match_variant_tag(expression: &Expression) -> Option<(EnumId, usize)> {
             enumeration,
             arms,
         } => match_variant_tag(selected_match_value(scrutinee, *enumeration, arms)?),
+        ExpressionKind::FieldAccess {
+            base,
+            record,
+            field_index,
+            ..
+        } => match_variant_tag(selected_record_field_value(base, *record, *field_index)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             match_variant_tag(block.tail.as_deref()?)
         }
@@ -236,7 +266,13 @@ fn record_value_is_closed(expression: &Expression) -> bool {
         ExpressionKind::RecordLiteral { fields, .. } => fields
             .iter()
             .all(|field| is_closed_total_value(&field.value)),
-        ExpressionKind::FieldAccess { base, .. } => is_closed_total_value(base),
+        ExpressionKind::FieldAccess {
+            base,
+            record,
+            field_index,
+            ..
+        } => selected_record_field_value(base, *record, *field_index)
+            .is_some_and(is_closed_total_value),
         ExpressionKind::If {
             condition,
             then_branch,
@@ -278,4 +314,64 @@ pub(crate) fn selected_match_value<'a>(
         return None;
     }
     Some(&arm.value)
+}
+
+pub(crate) fn selected_record_field_value(
+    base: &Expression,
+    record: RecordId,
+    field_index: usize,
+) -> Option<&Expression> {
+    match &base.kind {
+        ExpressionKind::RecordLiteral {
+            record: actual_record,
+            fields,
+        } if *actual_record == record
+            && fields
+                .iter()
+                .all(|field| is_closed_total_value(&field.value)) =>
+        {
+            let mut selected = fields
+                .iter()
+                .filter(|field| field.field_index == field_index);
+            let field = selected.next()?;
+            if selected.next().is_some() {
+                return None;
+            }
+            Some(&field.value)
+        }
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate(condition)? {
+            true if then_branch.statements.is_empty() => {
+                selected_record_field_value(then_branch.tail.as_deref()?, record, field_index)
+            }
+            true => None,
+            false => selected_record_field_value(else_branch, record, field_index),
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => selected_record_field_value(
+            selected_match_value(scrutinee, *enumeration, arms)?,
+            record,
+            field_index,
+        ),
+        ExpressionKind::FieldAccess {
+            base: outer_base,
+            record: outer_record,
+            field_index: outer_field_index,
+            ..
+        } => selected_record_field_value(
+            selected_record_field_value(outer_base, *outer_record, *outer_field_index)?,
+            record,
+            field_index,
+        ),
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            selected_record_field_value(block.tail.as_deref()?, record, field_index)
+        }
+        _ => None,
+    }
 }
