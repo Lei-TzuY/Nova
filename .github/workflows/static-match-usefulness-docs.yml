@@ -1,0 +1,36 @@
+name: Static match usefulness docs
+
+on:
+  push:
+    branches:
+      - feat/static-match-arm-usefulness
+    paths:
+      - .github/static-match-usefulness-docs.py
+      - .github/workflows/static-match-usefulness-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/static-match-arm-usefulness
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply docs and validate final tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/static-match-usefulness-docs.py
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git rm -f .github/static-match-usefulness-docs.py .github/workflows/static-match-usefulness-docs.yml
+          git add README.md docs/diagnostics.md docs/enums-and-patterns.md docs/roadmap.md
+          git commit -m "docs: specify static match usefulness warning"
+          git push origin HEAD:feat/static-match-arm-usefulness
