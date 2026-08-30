@@ -1,0 +1,30 @@
+name: Function reference identity docs
+
+on:
+  push:
+    branches:
+      - fix/function-reference-identity
+    paths:
+      - .github/function-reference-identity-docs.py
+      - .github/workflows/function-reference-identity-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/function-reference-identity
+      - name: Apply function reference identity docs
+        run: |
+          python .github/function-reference-identity-docs.py
+          rm .github/function-reference-identity-docs.py
+          rm .github/workflows/function-reference-identity-docs.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "docs: close function reference identity slice"
+          git push origin HEAD:fix/function-reference-identity
