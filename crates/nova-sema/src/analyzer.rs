@@ -1445,7 +1445,11 @@ impl Analyzer {
             let type_matches = expected_type_compatible(&value.ty, expected);
             self.require_type(&value.ty, expected, value.span, "record field initializer");
             type_error |= !type_matches;
-            resolved.push(RecordFieldValue { field_index, value });
+            resolved.push(RecordFieldValue {
+                field_name: field.name.text.clone(),
+                field_index,
+                value,
+            });
         }
 
         for declared in &definition.fields {
@@ -1982,6 +1986,7 @@ impl Analyzer {
             ExpressionKind::FieldAccess {
                 base: Box::new(base),
                 record: record_type.id,
+                field_name: field.text.clone(),
                 field_index,
             },
             ty,

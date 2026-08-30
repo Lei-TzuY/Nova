@@ -481,6 +481,15 @@ impl<'a> Builder<'a> {
                             field.field_index
                         )));
                     }
+                    let declared_name = self.require_record(*record)?.fields[field.field_index]
+                        .name
+                        .clone();
+                    if declared_name != field.field_name {
+                        return Err(InspectionError::invalid(format!(
+                            "record construction resolved field `{}` to slot {}, declared as `{declared_name}`",
+                            field.field_name, field.field_index
+                        )));
+                    }
                     if !seen.insert(field.field_index) {
                         return Err(InspectionError::invalid(format!(
                             "record construction repeats field slot {}",
@@ -529,12 +538,25 @@ impl<'a> Builder<'a> {
             hir::ExpressionKind::FieldAccess {
                 base,
                 record,
+                field_name,
                 field_index,
             } => {
                 let declaration = self.require_record(*record)?;
                 if *field_index >= declaration.fields.len() {
                     return Err(InspectionError::invalid(format!(
                         "field access references out-of-range field slot {field_index}"
+                    )));
+                }
+                let declared_name = declaration.fields[*field_index].name.clone();
+                if declared_name != *field_name {
+                    return Err(InspectionError::invalid(format!(
+                        "field access resolved field `{field_name}` to slot {field_index}, declared as `{declared_name}`"
+                    )));
+                }
+                if expression.ty != declaration.fields[*field_index].ty {
+                    return Err(InspectionError::invalid(format!(
+                        "field access type {} does not match resolved field `{field_name}` type {}",
+                        expression.ty, declaration.fields[*field_index].ty
                     )));
                 }
                 children.push(self.collect_expression(base, owner)?);
@@ -1545,6 +1567,49 @@ mod tests {
                 "missing operator {operator}"
             );
         }
+    }
+
+    #[test]
+    fn rejects_same_typed_record_member_identity_drift() {
+        let text = "record Pair { left: Int, right: Int }\n\
+                    fn main() -> Int { let pair = new Pair { left: 1, right: 2 }; pair.left }";
+
+        let (source, mut constructor) = checked(text);
+        let hir::StatementKind::Binding { initializer, .. } =
+            &mut constructor.functions[0].body.statements[0].kind
+        else {
+            panic!("expected record binding");
+        };
+        let hir::ExpressionKind::RecordLiteral { fields, .. } = &mut initializer.kind else {
+            panic!("expected record literal");
+        };
+        fields[0].field_index = 1;
+        fields[1].field_index = 0;
+        let error = build_document(&constructor, &source)
+            .expect_err("same-typed constructor retargeting must fail closed");
+        assert!(
+            error
+                .message()
+                .contains("record construction resolved field `left`")
+        );
+
+        let (source, mut projection) = checked(text);
+        let field = projection.functions[0]
+            .body
+            .tail
+            .as_deref_mut()
+            .expect("main tail");
+        let hir::ExpressionKind::FieldAccess { field_index, .. } = &mut field.kind else {
+            panic!("expected field access");
+        };
+        *field_index = 1;
+        let error = build_document(&projection, &source)
+            .expect_err("same-typed projection retargeting must fail closed");
+        assert!(
+            error
+                .message()
+                .contains("field access resolved field `left`")
+        );
     }
 
     #[test]

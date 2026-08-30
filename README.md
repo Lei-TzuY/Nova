@@ -135,8 +135,11 @@ declared records are distinct even if their fields have the same shape. Field
 names must be unique. `new Name { field: expression, ... }` must initialize every
 declared field exactly once with a value of the declared type. Named
 initializers may be written in any order, but their expressions evaluate left
-to right in written source order. HIR resolves each initializer to a stable
-record identity and declaration-order field slot without reordering evaluation.
+to right in written source order. HIR retains each resolved field spelling alongside
+the nominal record identity and declaration-order slot without reordering evaluation.
+The interpreter and semantic-inspection boundary independently recheck that name/slot
+pair, so malformed HIR cannot silently retarget one field to a same-typed sibling while
+the stable inspection schema continues to expose its existing declaration field ID.
 `value.field` is read-only field projection in this slice. Record equality,
 field assignment, layout, and ABI guarantees are not implemented.
 
@@ -266,8 +269,11 @@ unaffected; malformed or contract-drifted HIR fails closed with `N4005`.
 
 Aggregate construction enforces the same invariant locally: each evaluated record
 field must conform to its declaration slot type, and each enum payload must conform
-to its selected variant payload type before the aggregate value is created. This
-catches malformed HIR even when the aggregate never crosses a function boundary.
+to its selected variant payload type before the aggregate value is created. Record
+construction and projection also revalidate the HIR-resolved field spelling against
+its declaration-order slot, closing same-typed member-retargeting drift that a type
+postcondition alone cannot observe. These checks catch malformed HIR even when the
+aggregate never crosses a function boundary.
 
 Runtime frames preserve the resolved binding contract too. Each slot records its
 resolved type, mutability, and initialization state. Parameters, local bindings,
