@@ -6,6 +6,7 @@ on:
       - feat/pattern-payload-discard
     paths:
       - .github/pattern-inspection-v3.py
+      - .github/fix-pattern-inspection-v3.py
       - .github/workflows/pattern-inspection-v3.yml
 
 permissions:
@@ -24,6 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python .github/fix-pattern-inspection-v3.py
           python .github/pattern-inspection-v3.py
           cargo fmt --all
           cargo test -p nova-inspect --test pattern_payload_discard
@@ -33,7 +35,8 @@ jobs:
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           git config user.name "LeiZ"
           git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
-          git rm -f .github/pattern-inspection-v3.py .github/workflows/pattern-inspection-v3.yml
+          git rm -f .github/pattern-inspection-v3.py .github/fix-pattern-inspection-v3.py \
+            .github/workflows/pattern-inspection-v3.yml
           git add crates/nova-inspect/src/lib.rs crates/nova-inspect/src/v3.rs \
             crates/nova-inspect/tests/pattern_payload_discard.rs docs/schemas/semantic-inspection-v3.schema.json \
             crates/nova-cli/src/main.rs crates/nova-cli/tests/cli.rs \
