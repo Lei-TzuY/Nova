@@ -325,12 +325,15 @@ A `Never` operand still evaluates normally for structured `return`, `break`, or 
 propagation and never reaches the comparison itself. Any interpreter/HIR contract drift
 on a value-producing equality path fails closed with `N4005`.
 
-For deterministic execution while the numeric design remains provisional, the
-bootstrap frontend now covers the complete signed 64-bit literal endpoints: positive
-literals end at `9223372036854775807`, while `-9223372036854775808` is normalized
-during semantic lowering to the exact minimum `Int`. Positive `9223372036854775808`
-is `N3030`; any larger decimal magnitude is lexical `N1004`. The interpreter
-represents `Int` as signed 64-bit at runtime and uses checked arithmetic.
+For deterministic execution while the numeric design remains provisional, integer
+literals may be decimal or use binary (`0b`/`0B`), octal (`0o`/`0O`), or hexadecimal
+(`0x`/`0X`) prefixes, with single `_` separators between digits. Lexing validates the
+selected radix and erases the source spelling after decoding every accepted form to the
+same checked magnitude. Positive `Int` literals end at `2^63 - 1`; magnitude `2^63`
+in any supported radix is reserved for prefix negation, so both
+`-9223372036854775808` and `-0x8000_0000_0000_0000` normalize to exact `Int::MIN`.
+Positive magnitude `2^63` is `N3030`; larger magnitudes are lexical `N1004`. The
+interpreter represents `Int` as signed 64-bit at runtime and uses checked arithmetic.
 Signed division truncates the quotient toward zero; a non-zero remainder has the
 same sign as the dividend and satisfies `a = (a / b) * b + (a % b)`. Both
 `i64::MIN / -1` and `i64::MIN % -1` are classified as integer overflow. Before

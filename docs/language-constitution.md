@@ -54,7 +54,8 @@ than an automatic statement terminator. Semicolons distinguish statements from
 the optional value-producing tail expression of a block.
 
 **Provisional bootstrap decisions.** The implemented subset uses UTF-8 source,
-ASCII identifiers, decimal integer literals, `//` line comments, and nested
+ASCII identifiers, decimal plus base-prefixed binary/octal/hexadecimal integer
+literals, `//` line comments, and nested
 `/* ... */` block comments. Keywords are reserved. Files with malformed UTF-8
 are rejected before lexing. The compact normative details are in
 [`grammar.md`](grammar.md).
@@ -116,10 +117,13 @@ condition reasoning may prove equality for literal Unit values and direct payloa
 constructors; it does not erase evaluation of calls, names, parameters, or other dynamic
 values.
 
-The bootstrap frontend preserves decimal integer magnitudes through parsing and
-assigns signed meaning during semantic lowering. Positive `Int` literals are
-`0..=2^63-1`; the magnitude `2^63` is reserved for prefix negation, so
-`-9223372036854775808` denotes the exact signed 64-bit minimum. A positive `2^63`
+The bootstrap frontend accepts decimal integer literals plus binary (`0b`/`0B`),
+octal (`0o`/`0O`), and hexadecimal (`0x`/`0X`) forms. Single `_` separators may
+appear only between digits. Lexing validates digits in the selected radix, decodes the
+source spelling to one checked magnitude, and deliberately erases radix before parsing
+and HIR lowering. Positive `Int` literals are `0..=2^63-1`; magnitude `2^63` in any
+supported radix is reserved for prefix negation, so both `-9223372036854775808` and
+`-0x8000_0000_0000_0000` denote the exact signed 64-bit minimum. A positive `2^63`
 expression is rejected as semantic diagnostic `N3030`, and larger magnitudes are
 rejected lexically as `N1004`. No literal is wrapped or truncated.
 

@@ -14,20 +14,29 @@ ASCII-only:
 ```ebnf
 letter          = "A" … "Z" | "a" … "z" ;
 digit           = "0" … "9" ;
+binary_digit    = "0" | "1" ;
+octal_digit     = "0" … "7" ;
+hex_digit       = digit | "A" … "F" | "a" … "f" ;
 identifier      = (letter | "_") , { letter | digit | "_" } ;
-integer         = digit , { [ "_" ] , digit } ;
+decimal_integer = digit , { [ "_" ] , digit } ;
+binary_integer  = ("0b" | "0B") , binary_digit , { [ "_" ] , binary_digit } ;
+octal_integer   = ("0o" | "0O") , octal_digit , { [ "_" ] , octal_digit } ;
+hex_integer     = ("0x" | "0X") , hex_digit , { [ "_" ] , hex_digit } ;
+integer         = decimal_integer | binary_integer | octal_integer | hex_integer ;
 ```
 
 Keywords are `fn`, `record`, `enum`, `new`, `let`, `var`, `if`, `else`,
 `match`, `while`, `break`, `continue`, `return`, `true`, and `false`. A keyword
 cannot be used as an identifier.
 
-Integer separators cannot lead, trail, or repeat. Lexing preserves a checked decimal
-magnitude and rejects magnitudes above `9223372036854775808`; it never wraps or
-truncates. Semantic lowering interprets `Int` as signed for this bootstrap slice:
-positive literals end at `9223372036854775807`, while the otherwise-reserved
-`9223372036854775808` magnitude is accepted only under prefix `-`, giving the exact
-minimum value `-9223372036854775808`.
+Integer separators cannot lead, trail, repeat, or immediately follow a radix prefix.
+Decimal literals have no prefix; binary, octal, and hexadecimal literals use
+`0b`/`0B`, `0o`/`0O`, and `0x`/`0X`. A prefixed literal must use digits valid for
+that radix. Lexing erases source radix after decoding and preserves one checked
+magnitude, rejecting values above `2^63` without wrapping or truncation. Semantic
+lowering interprets that magnitude as signed `Int`: positive literals end at
+`2^63 - 1`, while magnitude `2^63` in any supported radix is accepted only under
+prefix `-`, giving the exact minimum value `-9223372036854775808`.
 
 Spaces, tabs, carriage returns, and newlines separate tokens. Newline has no
 statement-ending meaning. `//` begins a line comment. `/*` and `*/` delimit a
