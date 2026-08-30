@@ -19,7 +19,7 @@ Completion of the initial document does not freeze unfinished semantics.
 
 ## Phase 1 — Executable frontend foundation
 
-**Status: first vertical slice implemented; broader grammar work remains.**
+**Status: two vertical slices implemented; broader grammar work remains.**
 
 - Rust workspace and official `nova` CLI bootstrap;
 - source identity, exact spans, and locations;
@@ -30,6 +30,22 @@ Completion of the initial document does not freeze unfinished semantics.
   tests; and
 - Rust 1.85 MSRV checking plus current-stable formatting, Clippy, test, build,
   and rustdoc CI.
+
+Implemented in the second Phase 1 slice:
+
+- integer literals now accept decimal plus `0b`/`0B`, `0o`/`0O`, and `0x`/`0X`
+  binary, octal, and hexadecimal spellings without introducing new numeric types;
+- single `_` separators remain legal only between digits, including after a radix
+  prefix only once at least one valid digit has been written;
+- invalid radix digits and malformed separator placement remain one fail-closed
+  lexical literal (`N1002`) rather than being split into misleading partial tokens;
+- every radix decodes to the same checked magnitude contract capped at `2^63`, so
+  prefix negation can represent `Int::MIN` equally as decimal or hexadecimal while
+  positive `2^63` and larger magnitudes retain the established semantic/lexical errors;
+- parser, HIR, arithmetic, runtime value, and inspection representations remain
+  unchanged because source radix is intentionally erased at the lexer boundary; and
+- focused lexer regressions plus a CLI check/run fixture cover all prefixes, separator
+  policy, invalid digits, range failure, and exact hexadecimal `Int::MIN` execution.
 
 Next Phase 1 refinements should be driven by the needs of later semantic work,
 not by adding unrelated syntax.
