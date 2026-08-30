@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty-six vertical slices implemented; broader type-system work remains.**
+**Status: forty-seven vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -771,6 +771,20 @@ Implemented in the forty-sixth Phase 2 slice:
   suite and workspace all-targets Clippy lock valid loop/recovery graphs unchanged; and
 - schema v2 shape is unchanged: semantic inspection publishes the same edge kinds, now
   with a stronger analyzer-side canonicality guarantee.
+
+Implemented in the forty-seventh Phase 2 slice:
+
+- verified CFG predecessor cardinality now matches the structured builder contract:
+  only `Join` may merge multiple incoming paths, while every other non-entry node has
+  exactly one predecessor;
+- each node's predecessor list rejects duplicate source/edge-class pairs instead of
+  allowing redundant graph facts to reach fixed-point dataflow or semantic inspection;
+- the stronger check prevents malformed extra predecessors from silently changing the
+  must-analysis intersection for reads, initialization events, transfers, or exits;
+- edge-specific topology diagnostics such as an invalid backedge target retain precedence
+  over the generic cardinality error, keeping earlier invariant failures precise; and
+- adversarial verifier regressions lock both non-`Join` multi-predecessor corruption and
+  duplicate `Join` edges while schema v2 shape and all valid lowering behavior remain unchanged.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
