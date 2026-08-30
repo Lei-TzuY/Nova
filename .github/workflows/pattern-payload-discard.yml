@@ -1,0 +1,43 @@
+name: Pattern payload discard
+
+on:
+  push:
+    branches:
+      - feat/pattern-payload-discard
+    paths:
+      - .github/pattern-payload-discard.py
+      - .github/workflows/pattern-payload-discard.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/pattern-payload-discard
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply and validate payload discard patterns
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/pattern-payload-discard.py
+          cargo fmt --all
+          cargo test -p nova-parser --test pattern_payload_discard
+          cargo test -p nova-sema --test pattern_payload_discard
+          cargo test -p nova-interpreter --test pattern_payload_discard
+          cargo test -p nova-inspect --test pattern_payload_discard
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git rm -f .github/pattern-payload-discard.py .github/workflows/pattern-payload-discard.yml
+          git add crates/nova-parser/src/ast.rs crates/nova-parser/src/parser.rs crates/nova-parser/tests/pattern_payload_discard.rs \
+            crates/nova-sema/src/hir.rs crates/nova-sema/src/analyzer.rs crates/nova-sema/tests/pattern_payload_discard.rs \
+            crates/nova-interpreter/src/lib.rs crates/nova-interpreter/tests/pattern_payload_discard.rs \
+            crates/nova-inspect/src/lib.rs crates/nova-inspect/tests/pattern_payload_discard.rs
+          git commit -m "feat: add enum payload discard patterns"
+          git push origin HEAD:feat/pattern-payload-discard
