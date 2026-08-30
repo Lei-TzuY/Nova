@@ -70,6 +70,20 @@ jobs:
               1,
           )
           p.write_text(text)
+
+          p = Path('crates/nova-interpreter/tests/frame_slot_integrity.rs')
+          text = p.read_text()
+          text = text.replace(
+              'hir::{BindingReference, ExpressionKind, StatementKind, Type},',
+              'hir::{BindingReference, ExpressionKind, MatchArmPattern, StatementKind, Type},',
+              1,
+          )
+          text = text.replace(
+              '    let binding = arms[0].binding.as_mut().expect("payload binding");\n    binding.ty = Type::Bool;\n',
+              '''    let MatchArmPattern::Variant { binding: Some(binding), .. } = &mut arms[0].pattern else { panic!("payload variant arm"); };\n    binding.ty = Type::Bool;\n''',
+              1,
+          )
+          p.write_text(text)
           PY
           cargo fmt --all
           cargo test -p nova-parser --test match_wildcard --locked
