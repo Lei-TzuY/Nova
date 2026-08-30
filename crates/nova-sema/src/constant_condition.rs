@@ -1,5 +1,5 @@
 use crate::constant_int;
-use crate::hir::{Expression, ExpressionKind, FunctionId, Type};
+use crate::hir::{EnumId, Expression, ExpressionKind, FunctionId, MatchArm, Type};
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
@@ -34,19 +34,7 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
             scrutinee,
             enumeration,
             arms,
-        } => {
-            let (scrutinee_enum, variant_index) = enum_tag(scrutinee)?;
-            if scrutinee_enum != *enumeration {
-                return None;
-            }
-
-            let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
-            let arm = selected.next()?;
-            if selected.next().is_some() {
-                return None;
-            }
-            evaluate(&arm.value)
-        }
+        } => evaluate(selected_match_value(scrutinee, *enumeration, arms)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             evaluate(block.tail.as_deref()?)
         }
@@ -116,6 +104,23 @@ fn unit_value(expression: &Expression) -> Option<()> {
 
     match &expression.kind {
         ExpressionKind::Unit => Some(()),
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate(condition)? {
+            true if then_branch.statements.is_empty() => match then_branch.tail.as_deref() {
+                Some(tail) => unit_value(tail),
+                None => Some(()),
+            },
+            true => None,
+            false => unit_value(else_branch),
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => unit_value(selected_match_value(scrutinee, *enumeration, arms)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             match block.tail.as_deref() {
                 Some(tail) => unit_value(tail),
@@ -126,7 +131,7 @@ fn unit_value(expression: &Expression) -> Option<()> {
     }
 }
 
-fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
+fn enum_tag(expression: &Expression) -> Option<(EnumId, usize)> {
     match &expression.kind {
         ExpressionKind::EnumConstructor {
             enumeration,
@@ -134,6 +139,20 @@ fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
             payload,
             ..
         } if payload.is_none() => Some((*enumeration, *variant_index)),
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate(condition)? {
+            true if then_branch.statements.is_empty() => enum_tag(then_branch.tail.as_deref()?),
+            true => None,
+            false => enum_tag(else_branch),
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => enum_tag(selected_match_value(scrutinee, *enumeration, arms)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             enum_tag(block.tail.as_deref()?)
         }
@@ -144,9 +163,41 @@ fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
 fn function_id(expression: &Expression) -> Option<FunctionId> {
     match &expression.kind {
         ExpressionKind::Function { function, .. } => Some(*function),
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate(condition)? {
+            true if then_branch.statements.is_empty() => function_id(then_branch.tail.as_deref()?),
+            true => None,
+            false => function_id(else_branch),
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => function_id(selected_match_value(scrutinee, *enumeration, arms)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             function_id(block.tail.as_deref()?)
         }
         _ => None,
     }
+}
+
+fn selected_match_value<'a>(
+    scrutinee: &Expression,
+    enumeration: EnumId,
+    arms: &'a [MatchArm],
+) -> Option<&'a Expression> {
+    let (scrutinee_enum, variant_index) = enum_tag(scrutinee)?;
+    if scrutinee_enum != enumeration {
+        return None;
+    }
+
+    let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
+    let arm = selected.next()?;
+    if selected.next().is_some() {
+        return None;
+    }
+    Some(&arm.value)
 }
