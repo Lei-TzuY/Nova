@@ -20,6 +20,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/match-wildcard-core.py')
+          text = path.read_text()
+          old = 'runtime_match + "            ExpressionKind::Error =>",'
+          if text.count(old) != 1:
+              raise SystemExit('unexpected interpreter replacement boundary')
+          path.write_text(text.replace(old, 'runtime_match,', 1))
+          PY
           python .github/match-wildcard-core.py
           cargo fmt --all
           cargo test -p nova-parser --test match_wildcard --locked
