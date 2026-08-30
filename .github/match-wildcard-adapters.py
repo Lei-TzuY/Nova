@@ -31,6 +31,20 @@ text = text.replace(
 )
 p.write_text(text)
 
+# Preserve the frame-slot corruption proof by reaching the payload binding through the
+# concrete pattern instead of the old flat MatchArm field.
+p = Path('crates/nova-interpreter/tests/frame_slot_integrity.rs')
+text = p.read_text()
+text = text.replace(
+    '    hir::{BindingReference, ExpressionKind, StatementKind, Type},\n',
+    '    hir::{BindingReference, ExpressionKind, MatchPattern, StatementKind, Type},\n',
+)
+text = text.replace(
+    '''    let binding = arms[0].binding.as_mut().expect("payload binding");\n    binding.ty = Type::Bool;\n''',
+    '''    let MatchPattern::Variant { binding, .. } = &mut arms[0].pattern else {\n        panic!("concrete arm pattern");\n    };\n    let binding = binding.as_mut().expect("payload binding");\n    binding.ty = Type::Bool;\n''',
+)
+p.write_text(text)
+
 # Keep semantic-inspection v1/v2/v3 semantically frozen: adapt concrete HIR patterns,
 # but fail closed if an accepted program contains the new catch-all until schema v4 exists.
 p = Path('crates/nova-inspect/src/lib.rs')
