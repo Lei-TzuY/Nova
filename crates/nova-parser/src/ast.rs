@@ -202,6 +202,8 @@ pub struct EnumPattern {
     pub variant: Name,
     /// Optional immutable binding for the variant payload.
     pub binding: Option<Name>,
+    /// Whether the payload position was explicitly discarded with `_`.
+    pub payload_discarded: bool,
     /// Complete pattern range.
     pub span: Span,
 }

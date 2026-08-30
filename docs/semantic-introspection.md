@@ -121,7 +121,9 @@ layouts:
   evaluation order, pairing every value expression with its resolved declared
   field identity; and
 - `matches` records the nominal enum, scrutinee, written arms, resolved variant
-  and payload binding, result types, and `exhaustive: true` proof outcome.
+  and payload binding, result types, and `exhaustive: true` proof outcome. Schema v1's
+  payload-bearing arms always have a binding; it does not reinterpret `binding: null` as
+  the later payload-discard feature.
 
 Expression `children` are in deterministic semantic traversal order. They do
 not imply that every child executes: `if`, `match`, `&&`, and `||` retain their
@@ -146,9 +148,12 @@ The compiler's verified bootstrap CFG and definite-initialization events are als
 deliberately absent: they were introduced after schema v1 and are available only
 through explicitly selected schema v2 rather than a silent v1 change.
 Assignment targets currently carry their enclosing statement span because HIR
-does not yet retain a separate target-name span. Match facts report exhaustive
-coverage for the implemented qualified single-variant patterns; they do not
-predict future wildcard, guard, or pattern-usefulness models.
+does not yet retain a separate target-name span. Match facts report exhaustive coverage for the original qualified single-variant
+bind-or-no-payload model. Source that explicitly discards a payload with `Variant(_)` is
+valid Nova source but cannot be represented by schema v1 without reinterpreting an existing
+field, so v1 inspection fails closed with `N5001`; callers must explicitly select schema v3.
+Schema v1 still does not predict catch-all/default arms, guards, nested patterns, or future
+pattern-usefulness models.
 
 These omissions are explicit schema limits, not empty promises or inferred
 guarantees. Later schemas should add facts only after the corresponding language

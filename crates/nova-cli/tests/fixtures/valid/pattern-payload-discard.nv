@@ -1,0 +1,15 @@
+enum Packet {
+    Empty,
+    Data(Int),
+}
+
+fn score(packet: Packet) -> Int {
+    match packet {
+        Packet::Empty => 0,
+        Packet::Data(_) => 42,
+    }
+}
+
+fn main() -> Int {
+    score(Packet::Data(99))
+}

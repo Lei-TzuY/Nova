@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nova:semantic-inspection:v3",
+  "title": "Nova semantic inspection v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "producer",
+    "source",
+    "program",
+    "control_flow",
+    "match_patterns"
+  ],
+  "properties": {
+    "schema": {
+      "const": "nova.semantic-inspection"
+    },
+    "schema_version": {
+      "const": 3
+    },
+    "producer": {
+      "$ref": "urn:nova:semantic-inspection:v1#/$defs/producer"
+    },
+    "source": {
+      "$ref": "urn:nova:semantic-inspection:v1#/$defs/source"
+    },
+    "program": {
+      "$ref": "urn:nova:semantic-inspection:v1#/$defs/program"
+    },
+    "control_flow": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:nova:semantic-inspection:v2#/$defs/controlFlowGraph"
+      }
+    },
+    "match_patterns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/matchPattern"
+      }
+    }
+  },
+  "$defs": {
+    "matchArmId": {
+      "type": "string",
+      "pattern": "^match:[0-9]+\\.arm:[0-9]+$"
+    },
+    "matchPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm",
+        "payload_mode"
+      ],
+      "properties": {
+        "arm": {
+          "$ref": "#/$defs/matchArmId"
+        },
+        "payload_mode": {
+          "enum": [
+            "none",
+            "bind",
+            "discard"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@
 
 pub mod v1;
 pub mod v2;
+pub mod v3;
 
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::AnalysisOutput;
@@ -104,6 +105,47 @@ pub fn render_json_v2(
         .map_err(|error| InspectionError::invalid(format!("could not encode schema v2: {error}")))
 }
 
+/// Builds a schema-v3 document from one successful semantic analysis.
+///
+/// Version 3 preserves the established program and CFG structural projections and adds
+/// explicit match-arm payload modes. This is the first inspection schema that can
+/// represent `Enum::Variant(_)` payload discard without reinterpreting v1/v2 fields.
+pub fn build_document_v3(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<v3::Document, InspectionError> {
+    if !analysis.is_success() {
+        return Err(InspectionError::invalid(
+            "schema v3 requires a successful semantic analysis",
+        ));
+    }
+
+    let (program_document, match_patterns) = Builder::new(&analysis.program, source)
+        .with_payload_discard()
+        .build_parts()?;
+    let control_flow =
+        project_control_flow(&analysis.control_flow, &program_document.program, source)?;
+    Ok(v3::Document {
+        schema: v3::SCHEMA_NAME.to_owned(),
+        schema_version: v3::SCHEMA_VERSION,
+        producer: program_document.producer,
+        source: program_document.source,
+        program: program_document.program,
+        control_flow,
+        match_patterns,
+    })
+}
+
+/// Renders one successful analysis as deterministic, pretty-printed schema-v3 JSON.
+pub fn render_json_v3(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<String, InspectionError> {
+    let document = build_document_v3(analysis, source)?;
+    serde_json::to_string_pretty(&document)
+        .map_err(|error| InspectionError::invalid(format!("could not encode schema v3: {error}")))
+}
+
 struct Builder<'a> {
     program: &'a hir::Program,
     source: &'a SourceFile,
@@ -113,6 +155,8 @@ struct Builder<'a> {
     statements: Vec<Option<v1::Statement>>,
     expressions: Vec<Option<v1::Expression>>,
     matches: Vec<Option<v1::Match>>,
+    match_patterns: Vec<v3::MatchPattern>,
+    allow_payload_discard: bool,
     active_scopes: Vec<String>,
     loop_depth: usize,
 }
@@ -128,12 +172,23 @@ impl<'a> Builder<'a> {
             statements: Vec::new(),
             expressions: Vec::new(),
             matches: Vec::new(),
+            match_patterns: Vec::new(),
+            allow_payload_discard: false,
             active_scopes: Vec::new(),
             loop_depth: 0,
         }
     }
 
-    fn build(mut self) -> Result<v1::Document, InspectionError> {
+    fn with_payload_discard(mut self) -> Self {
+        self.allow_payload_discard = true;
+        self
+    }
+
+    fn build(self) -> Result<v1::Document, InspectionError> {
+        self.build_parts().map(|(document, _)| document)
+    }
+
+    fn build_parts(mut self) -> Result<(v1::Document, Vec<v3::MatchPattern>), InspectionError> {
         let program_span = self.span(self.program.span)?;
         if self.program.span.start() != 0 || self.program.span.end() != self.source.len() {
             return Err(InspectionError::invalid(format!(
@@ -155,7 +210,8 @@ impl<'a> Builder<'a> {
         let expressions = take_complete("expression", self.expressions)?;
         let matches = take_complete("match", self.matches)?;
 
-        Ok(v1::Document {
+        let match_patterns = self.match_patterns;
+        let document = v1::Document {
             schema: v1::SCHEMA_NAME.to_owned(),
             schema_version: v1::SCHEMA_VERSION,
             producer: v1::Producer {
@@ -179,7 +235,8 @@ impl<'a> Builder<'a> {
                 expressions,
                 matches,
             },
-        })
+        };
+        Ok((document, match_patterns))
     }
 
     fn prepare_type_order(&mut self) -> Result<(), InspectionError> {
@@ -663,34 +720,53 @@ impl<'a> Builder<'a> {
                     let arm_identity = match_arm_id(match_index, arm_index);
                     self.active_scopes.push(arm_identity.clone());
                     let arm_contents = (|| {
-                        let binding = match (&variant.payload, &arm.binding) {
-                            (Some(expected), Some(binding)) => {
+                        let (binding, payload_mode) = match (
+                            &variant.payload,
+                            &arm.binding,
+                            arm.payload_discarded,
+                        ) {
+                            (Some(expected), Some(binding), false) => {
                                 if &binding.ty != expected {
                                     return Err(InspectionError::invalid(format!(
                                         "match payload binding type does not match {}",
                                         variant_id(enumeration.index(), arm.variant_index)
                                     )));
                                 }
-                                Some(self.add_binding(
-                                    binding,
-                                    v1::BindingRole::MatchPayload,
-                                    owner,
-                                    &arm_identity,
-                                )?)
+                                (
+                                    Some(self.add_binding(
+                                        binding,
+                                        v1::BindingRole::MatchPayload,
+                                        owner,
+                                        &arm_identity,
+                                    )?),
+                                    v3::MatchPayloadMode::Bind,
+                                )
                             }
-                            (None, None) => None,
+                            (Some(_), None, true) if self.allow_payload_discard => {
+                                (None, v3::MatchPayloadMode::Discard)
+                            }
+                            (Some(_), None, true) => {
+                                return Err(InspectionError::invalid(
+                                    "semantic-inspection schema v1/v2 cannot represent an explicitly discarded enum payload; select schema v3",
+                                ));
+                            }
+                            (None, None, false) => (None, v3::MatchPayloadMode::None),
                             _ => {
                                 return Err(InspectionError::invalid(format!(
-                                    "match payload binding arity does not match {}",
+                                    "match payload mode does not match {}",
                                     variant_id(enumeration.index(), arm.variant_index)
                                 )));
                             }
                         };
                         let value = self.collect_expression(&arm.value, owner)?;
-                        Ok::<_, InspectionError>((binding, value))
+                        Ok::<_, InspectionError>((binding, value, payload_mode))
                     })();
                     self.active_scopes.pop();
-                    let (binding, value) = arm_contents?;
+                    let (binding, value, payload_mode) = arm_contents?;
+                    self.match_patterns.push(v3::MatchPattern {
+                        arm: arm_identity.clone(),
+                        payload_mode,
+                    });
                     children.push(value.clone());
                     arm_facts.push(v1::MatchArm {
                         id: arm_identity,
@@ -1386,7 +1462,10 @@ fn match_arm_id(matched: usize, arm: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_document, build_document_v2, render_json, render_json_v2};
+    use super::{
+        build_document, build_document_v2, build_document_v3, render_json, render_json_v2,
+        render_json_v3,
+    };
     use nova_lexer::lex;
     use nova_parser::parse;
     use nova_sema::{AnalysisOutput, analyze, hir};
@@ -1924,6 +2003,43 @@ mod tests {
             &schema["$defs"]["flowEdge"],
             &document["control_flow"][0]["nodes"][1]["predecessors"][0],
         );
+    }
+
+    #[test]
+    fn published_json_schema_is_well_formed_and_names_v3() {
+        let schema: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../docs/schemas/semantic-inspection-v3.schema.json"
+        ))
+        .expect("published schema must be valid JSON");
+
+        assert_eq!(schema["$id"], "urn:nova:semantic-inspection:v3");
+        assert_eq!(schema["properties"]["schema_version"]["const"], 3);
+        assert_eq!(
+            schema["properties"]["program"]["$ref"],
+            "urn:nova:semantic-inspection:v1#/$defs/program"
+        );
+        assert_eq!(
+            schema["properties"]["control_flow"]["items"]["$ref"],
+            "urn:nova:semantic-inspection:v2#/$defs/controlFlowGraph"
+        );
+
+        let (source, analyzed) = checked_analysis(
+            "enum Maybe { None, Some(Int) } fn main() -> Int { match Maybe::Some(1) { Maybe::None => 0, Maybe::Some(_) => 1 } }",
+        );
+        let document = serde_json::to_value(
+            build_document_v3(&analyzed, &source).expect("valid v3 analysis should inspect"),
+        )
+        .expect("document should serialize");
+        assert_required_keys(&schema, &document);
+        assert_required_keys(
+            &schema["$defs"]["matchPattern"],
+            &document["match_patterns"][0],
+        );
+        assert_eq!(document["match_patterns"][1]["payload_mode"], "discard");
+
+        let first = render_json_v3(&analyzed, &source).expect("v3 JSON should render");
+        let second = render_json_v3(&analyzed, &source).expect("v3 JSON should repeat");
+        assert_eq!(first, second);
     }
 
     fn assert_required_keys(schema: &serde_json::Value, value: &serde_json::Value) {

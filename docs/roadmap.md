@@ -19,7 +19,7 @@ Completion of the initial document does not freeze unfinished semantics.
 
 ## Phase 1 — Executable frontend foundation
 
-**Status: three vertical slices implemented; broader grammar work remains.**
+**Status: four vertical slices implemented; broader grammar work remains.**
 
 - Rust workspace and official `nova` CLI bootstrap;
 - source identity, exact spans, and locations;
@@ -61,12 +61,23 @@ Implemented in the third Phase 1 slice:
 - parser regressions cover recursive signatures and depth failure, while the CLI fixture
   exercises the syntax through the complete executable pipeline.
 
+Implemented in the fourth Phase 1 slice:
+
+- qualified enum payload patterns accept `_` in the existing single payload slot, so
+  `Enum::Variant(_)` explicitly discards a payload without introducing a new catch-all arm;
+- AST patterns retain discard intent separately from an absent payload position, preserving
+  exact pattern spans and making later trust-boundary validation possible;
+- the syntax remains deliberately concrete-variant-only: bare `_`, guards, nested patterns,
+  alternatives, and default arms are not admitted by the grammar; and
+- parser plus CLI regressions exercise discard syntax through semantic analysis and runtime
+  execution while the existing enum-pattern grammar remains fail closed elsewhere.
+
 Next Phase 1 refinements should be driven by the needs of later semantic work,
 not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: fifty vertical slices implemented; broader type-system work remains.**
+**Status: fifty-one vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -862,6 +873,23 @@ Implemented in the fiftieth Phase 2 slice:
 - focused semantic tests plus an end-to-end `nova run` program lock parameter, return,
   local-storage, and invocation behavior with the final result `42`.
 
+Implemented in the fifty-first Phase 2 slice:
+
+- payload-bearing concrete enum patterns may either introduce the existing immutable arm-local
+  binding or explicitly discard that payload with `_`; omission remains `N3022`, and a
+  payload-free variant rejects discard rather than treating `_` as a general wildcard;
+- HIR match arms retain explicit discard intent alongside resolved enum/variant identity, so
+  downstream consumers can distinguish valid discard from a corrupted missing binding;
+- exhaustiveness, duplicate-variant rejection, direct-constructor reachability, CFG shape,
+  result-type joining, and definite-initialization continue to operate on the same concrete
+  variant slots because `_` does not cover additional variants;
+- semantic-inspection v1/v2 remain semantically frozen and fail with `N5001` rather than
+  reinterpreting their existing nullable binding field; explicit schema v3 preserves the
+  program/CFG projections and adds deterministic `none`/`bind`/`discard` match-pattern facts; and
+- semantic, inspection, CLI, schema, and malformed-HIR regressions lock both the new language
+  fact and backward-compatible tooling version boundary without introducing catch-all
+  usefulness semantics.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -880,7 +908,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: twenty-one vertical slices implemented; execution surface remains small.**
+**Status: twenty-two vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -1183,6 +1211,19 @@ Implemented in the twenty-first Phase 3 slice:
 - focused adversarial regressions plus a nested record/enum/match positive control and
   all-targets Clippy coverage lock the contract without changing HIR shape, semantic-inspection
   schemas, runtime value representation, syntax, layout, ABI, or valid-source behavior.
+
+Implemented in the twenty-second Phase 3 slice:
+
+- a selected payload-bearing match arm may explicitly discard its runtime payload without
+  allocating or initializing an arm-local frame slot;
+- the interpreter validates the resolved payload mode against the concrete variant declaration
+  before dispatch, distinguishing bind, discard, and payload-free arms under the existing
+  `N4005` fail-closed invariant policy;
+- deleting a real payload binding in malformed HIR is not silently treated as discard because
+  explicit discard intent is retained independently; and
+- focused execution regressions plus an end-to-end CLI fixture return `42` through a discarded
+  payload while preserving scrutinee-once evaluation, concrete variant selection, structured
+  control flow, runtime enum representation, layout, and ABI non-claims.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

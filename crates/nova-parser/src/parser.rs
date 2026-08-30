@@ -835,18 +835,25 @@ impl<'source> Parser<'source> {
             "after the enum type name in a pattern",
         )?;
         let variant = self.parse_name("after `::` in a pattern")?;
-        let (binding, end) = if self.consume(TokenKind::LeftParen).is_some() {
-            let binding = self.parse_name("as the variant payload binding")?;
-            let closing = self.expect(TokenKind::RightParen, "after the payload binding")?;
-            (Some(binding), closing.span)
+        let (binding, payload_discarded, end) = if self.consume(TokenKind::LeftParen).is_some() {
+            let payload = self.parse_name("as the variant payload binding or `_`")?;
+            let payload_discarded = payload.text == "_";
+            let binding = if payload_discarded {
+                None
+            } else {
+                Some(payload)
+            };
+            let closing = self.expect(TokenKind::RightParen, "after the payload pattern")?;
+            (binding, payload_discarded, closing.span)
         } else {
-            (None, variant.span)
+            (None, false, variant.span)
         };
         Some(EnumPattern {
             span: self.cover(enumeration.span, end),
             enumeration,
             variant,
             binding,
+            payload_discarded,
         })
     }
 

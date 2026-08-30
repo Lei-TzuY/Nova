@@ -344,6 +344,8 @@ pub struct MatchArm {
     pub variant_index: usize,
     /// Optional immutable payload binding.
     pub binding: Option<Binding>,
+    /// Whether a payload-bearing variant explicitly discards its payload with `_`.
+    pub payload_discarded: bool,
     /// Typed arm value.
     pub value: Expression,
     /// Complete arm range.
