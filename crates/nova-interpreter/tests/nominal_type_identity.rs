@@ -1,50 +1,4 @@
-from pathlib import Path
-
-path = Path('crates/nova-interpreter/src/lib.rs')
-text = path.read_text()
-old = '''    fn value_conforms_to_type(&self, value: &Value, ty: &Type) -> bool {
-        match (value, ty) {
-'''
-new = '''    fn type_is_runtime_valid(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Int | Type::Bool | Type::Unit => true,
-            Type::Record(record) => self
-                .program
-                .records
-                .get(record.id.index())
-                .is_some_and(|definition| {
-                    definition.id == record.id && definition.name == record.name
-                }),
-            Type::Enum(enumeration) => self
-                .program
-                .enums
-                .get(enumeration.id.index())
-                .is_some_and(|definition| {
-                    definition.id == enumeration.id && definition.name == enumeration.name
-                }),
-            Type::Function(signature) => {
-                signature
-                    .parameters
-                    .iter()
-                    .all(|parameter| self.type_is_runtime_valid(parameter))
-                    && self.type_is_runtime_valid(&signature.return_type)
-            }
-            Type::Never | Type::Error => false,
-        }
-    }
-
-    fn value_conforms_to_type(&self, value: &Value, ty: &Type) -> bool {
-        if !self.type_is_runtime_valid(ty) {
-            return false;
-        }
-        match (value, ty) {
-'''
-if old not in text:
-    raise SystemExit('value_conforms_to_type anchor not found')
-text = text.replace(old, new, 1)
-path.write_text(text)
-
-Path('crates/nova-interpreter/tests/nominal_type_identity.rs').write_text(r'''use nova_interpreter::{Value, execute};
+use nova_interpreter::{Value, execute};
 use nova_lexer::lex;
 use nova_parser::parse;
 use nova_sema::{
@@ -56,9 +10,17 @@ use nova_source::{SourceFile, SourceId};
 fn analyze_text(text: &str) -> nova_sema::AnalysisOutput {
     let source = SourceFile::new(SourceId::new(0), "nominal-type-identity.nv", text);
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
-    assert!(parsed.is_success(), "parse diagnostics: {:?}", parsed.diagnostics);
+    assert!(
+        parsed.is_success(),
+        "parse diagnostics: {:?}",
+        parsed.diagnostics
+    );
     let analyzed = analyze(&parsed.program);
     assert!(
         analyzed.is_success(),
@@ -169,4 +131,3 @@ fn valid_nested_nominal_types_remain_executable() {
     let value = execute(&analyzed.program).expect("valid nominal types should execute");
     assert_eq!(value, Value::Int(7));
 }
-''')
