@@ -1,0 +1,38 @@
+name: CFG loop-header entry patch
+
+on:
+  push:
+    branches:
+      - fix/cfg-loop-header-entry
+    paths:
+      - .github/cfg_loop_header_patch.py
+      - .github/workflows/cfg-loop-header-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/cfg-loop-header-entry
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Apply and validate loop-header entry invariant
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/cfg_loop_header_patch.py
+          cargo fmt --all
+          cargo test -p nova-sema --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          rm .github/cfg_loop_header_patch.py .github/workflows/cfg-loop-header-patch.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: preserve CFG loop-header first-entry path'
+          git push origin HEAD:fix/cfg-loop-header-entry
