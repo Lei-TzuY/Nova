@@ -75,7 +75,7 @@ fn evaluate_binary(
                 (Type::Enum(left_enum), Type::Enum(right_enum))
                     if left_enum.id == right_enum.id =>
                 {
-                    enum_tag(left)? == enum_tag(right)?
+                    enum_identity_tag(left)? == enum_identity_tag(right)?
                 }
                 _ => return None,
             };
@@ -131,7 +131,7 @@ fn unit_value(expression: &Expression) -> Option<()> {
     }
 }
 
-fn enum_tag(expression: &Expression) -> Option<(EnumId, usize)> {
+fn enum_identity_tag(expression: &Expression) -> Option<(EnumId, usize)> {
     match &expression.kind {
         ExpressionKind::EnumConstructor {
             enumeration,
@@ -144,17 +144,19 @@ fn enum_tag(expression: &Expression) -> Option<(EnumId, usize)> {
             then_branch,
             else_branch,
         } => match evaluate(condition)? {
-            true if then_branch.statements.is_empty() => enum_tag(then_branch.tail.as_deref()?),
+            true if then_branch.statements.is_empty() => {
+                enum_identity_tag(then_branch.tail.as_deref()?)
+            }
             true => None,
-            false => enum_tag(else_branch),
+            false => enum_identity_tag(else_branch),
         },
         ExpressionKind::Match {
             scrutinee,
             enumeration,
             arms,
-        } => enum_tag(selected_match_value(scrutinee, *enumeration, arms)?),
+        } => enum_identity_tag(selected_match_value(scrutinee, *enumeration, arms)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
-            enum_tag(block.tail.as_deref()?)
+            enum_identity_tag(block.tail.as_deref()?)
         }
         _ => None,
     }
@@ -184,12 +186,90 @@ fn function_id(expression: &Expression) -> Option<FunctionId> {
     }
 }
 
+fn match_variant_tag(expression: &Expression) -> Option<(EnumId, usize)> {
+    match &expression.kind {
+        ExpressionKind::EnumConstructor {
+            enumeration,
+            variant_index,
+            payload,
+            ..
+        } if payload
+            .as_deref()
+            .is_none_or(is_closed_total_value) => Some((*enumeration, *variant_index)),
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate(condition)? {
+            true if then_branch.statements.is_empty() => {
+                match_variant_tag(then_branch.tail.as_deref()?)
+            }
+            true => None,
+            false => match_variant_tag(else_branch),
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => match_variant_tag(selected_match_value(scrutinee, *enumeration, arms)?),
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            match_variant_tag(block.tail.as_deref()?)
+        }
+        _ => None,
+    }
+}
+
+fn is_closed_total_value(expression: &Expression) -> bool {
+    match &expression.ty {
+        Type::Int => constant_int::evaluate(expression).is_some_and(|value| value.is_ok()),
+        Type::Bool => evaluate(expression).is_some(),
+        Type::Unit => unit_value(expression).is_some(),
+        Type::Function(_) => function_id(expression).is_some(),
+        Type::Enum(_) => match_variant_tag(expression).is_some(),
+        Type::Record(_) => record_value_is_closed(expression),
+        Type::Never | Type::Error => false,
+    }
+}
+
+fn record_value_is_closed(expression: &Expression) -> bool {
+    match &expression.kind {
+        ExpressionKind::RecordLiteral { fields, .. } => {
+            fields.iter().all(|field| is_closed_total_value(&field.value))
+        }
+        ExpressionKind::FieldAccess { base, .. } => is_closed_total_value(base),
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate(condition) {
+            Some(true) if then_branch.statements.is_empty() => then_branch
+                .tail
+                .as_deref()
+                .is_some_and(is_closed_total_value),
+            Some(true) => false,
+            Some(false) => is_closed_total_value(else_branch),
+            None => false,
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => selected_match_value(scrutinee, *enumeration, arms)
+            .is_some_and(is_closed_total_value),
+        ExpressionKind::Block(block) if block.statements.is_empty() => block
+            .tail
+            .as_deref()
+            .is_some_and(is_closed_total_value),
+        _ => false,
+    }
+}
+
 pub(crate) fn selected_match_value<'a>(
     scrutinee: &Expression,
     enumeration: EnumId,
     arms: &'a [MatchArm],
 ) -> Option<&'a Expression> {
-    let (scrutinee_enum, variant_index) = enum_tag(scrutinee)?;
+    let (scrutinee_enum, variant_index) = match_variant_tag(scrutinee)?;
     if scrutinee_enum != enumeration {
         return None;
     }
