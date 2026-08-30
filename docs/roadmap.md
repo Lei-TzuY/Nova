@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty-one vertical slices implemented; broader type-system work remains.**
+**Status: forty-two vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -696,6 +696,22 @@ Implemented in the forty-first Phase 2 slice:
   enum, and cross-signature behavior without changing syntax, HIR, CFG, or inspection
   schema shape.
 
+Implemented in the forty-second Phase 2 slice:
+
+- resolved record construction and projection HIR now retain the source-resolved field
+  spelling alongside nominal `RecordId` and declaration-order slot identity;
+- constructor initializers still preserve written source evaluation order while the
+  retained name/slot pair makes same-typed member retargeting observable to later trusted
+  consumers instead of relying on type equality alone;
+- `nova-inspect` independently validates each retained field name against the referenced
+  declaration slot before publishing the existing stable `record:R.field:F` target;
+- semantic-inspection v1/v2 schema shape and document IDs remain unchanged because the
+  additional spelling is compiler-owned integrity metadata, not a new tooling protocol field;
+- direct semantic and inspection corruption regressions lock reversed written initializer
+  order, same-typed constructor slot swaps, and same-typed projection retargeting; and
+- the slice changes no surface syntax, record layout, field mutability, ownership, ABI, CFG,
+  or valid-source behavior.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -714,7 +730,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: sixteen vertical slices implemented; execution surface remains small.**
+**Status: seventeen vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -949,6 +965,20 @@ Implemented in the sixteenth Phase 3 slice:
   defense-in-depth after the shared type gate; and
 - malformed payload-bearing-enum regression coverage plus a valid payload-free enum
   control prove the boundary fails closed with `N4005` without changing valid execution.
+
+Implemented in the seventeenth Phase 3 slice:
+
+- record construction verifies that every value-producing initializer's retained field
+  spelling still names its resolved declaration-order destination slot before storage;
+- field projection preserves structured noncontinuation from its base, then rechecks the
+  retained field spelling, nominal record identity, slot, and declared result type before
+  returning an ordinary runtime value;
+- malformed HIR that swaps two same-typed constructor slots or retargets a projection to a
+  same-typed sibling now fails closed as `N4005` instead of silently changing program meaning;
+- the checks complement recursive runtime type conformance rather than duplicating it,
+  covering semantic identity drift that remains type-correct at runtime; and
+- focused malformed-HIR regressions plus normal record execution keep valid evaluation order,
+  runtime representation, and source semantics unchanged.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

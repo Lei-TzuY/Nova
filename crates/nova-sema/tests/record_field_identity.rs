@@ -18,7 +18,11 @@ fn hir_preserves_resolved_record_field_name_and_slot() {
          }",
     );
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
     assert!(
         parsed.is_success(),
