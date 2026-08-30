@@ -81,7 +81,9 @@ Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
 - the normal-exit table contains each `Exit` node exactly once and no other node;
 - every declared normal exit is executable-reachable and every `Exit` is terminal;
 - `return`, `break`, and `continue` successor edge classes respect their transfer
-  behavior;
+  behavior; in particular, an executable successor of `break` must be a compiler-created
+  `Join`, so a loop exit cannot bypass the continuation merge while diagnostic-only
+  unreachable source may still follow the transfer through `Diagnostic` edges;
 - every `Backedge` targets an executable-reachable `Join` node and originates on the
   same executable flow, so loop cycles cannot be attached to arbitrary nodes or live
   only inside diagnostic recovery;

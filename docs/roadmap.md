@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty-eight vertical slices implemented; broader type-system work remains.**
+**Status: forty-nine vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -799,6 +799,21 @@ Implemented in the forty-eighth Phase 2 slice:
 - existing direction, executable-reachability, backedge-target, predecessor-cardinality,
   and diagnostic-isolation invariants remain independently enforced; and
 - CFG/v2 schema shape and all valid structured lowering remain unchanged.
+
+Implemented in the forty-ninth Phase 2 slice:
+
+- verified `break` transfer topology now matches structured while lowering rather than
+  accepting any forward executable successor;
+- a `break` may retain `Diagnostic` successors for statically checked unreachable source,
+  but any `Execution` successor must target a compiler-created `Join`, and `Backedge`
+  remains forbidden;
+- malformed CFGs can therefore no longer bypass the loop-exit merge and feed an arbitrary
+  executable read, initialization, branch, or exit directly from a `break` transfer;
+- an adversarial verifier regression retargets a valid break-to-join continuation to a
+  non-Join node and now fails closed while the complete `nova-sema` suite and workspace
+  all-targets Clippy keep valid loop-control behavior unchanged; and
+- semantic-inspection v2 keeps the same schema while gaining the stronger analyzer-side
+  transfer-topology guarantee.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
