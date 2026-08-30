@@ -52,6 +52,7 @@ fn accepts_positive_fixtures() {
         "valid/int-division.nv",
         "valid/radix-integers.nv",
         "valid/higher-order-functions.nv",
+        "valid/pattern-payload-discard.nv",
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
@@ -91,6 +92,7 @@ fn run_command_executes_checked_program() {
         ("valid/int-division.nv", "-21\n", None),
         ("valid/radix-integers.nv", "42\n", None),
         ("valid/higher-order-functions.nv", "42\n", None),
+        ("valid/pattern-payload-discard.nv", "42\n", None),
     ] {
         let path = fixture(relative);
         let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);
@@ -261,7 +263,7 @@ fn warnings_are_nonfatal_for_check_run_and_inspect() {
     assert!(run_stderr.contains("\"severity\":\"warning\""));
     assert!(run_stderr.contains("\"code\":\"N3033\""));
 
-    for version in ["1", "2"] {
+    for version in ["1", "2", "3"] {
         let inspected = nova(&[
             "inspect",
             path,
@@ -272,7 +274,8 @@ fn warnings_are_nonfatal_for_check_run_and_inspect() {
         assert!(inspected.status.success());
         let document = String::from_utf8(inspected.stdout).expect("inspection remains UTF-8 JSON");
         assert!(document.contains(&format!("\"schema_version\": {version}")));
-        assert_eq!(document.contains("\"control_flow\":"), version == "2");
+        assert_eq!(document.contains("\"control_flow\":"), version != "1");
+        assert_eq!(document.contains("\"match_patterns\":"), version == "3");
         let stderr = String::from_utf8_lossy(&inspected.stderr);
         assert!(stderr.contains("warning[N3033]"));
         assert_eq!(stderr.matches("warning[N3033]").count(), 1);
@@ -350,9 +353,46 @@ fn inspect_command_emits_explicit_schema_v2_cfg_facts() {
 }
 
 #[test]
+fn inspect_schema_v3_represents_payload_discard_without_reinterpreting_v1_or_v2() {
+    let path = fixture("valid/pattern-payload-discard.nv");
+    let path = path.to_str().expect("fixture path is UTF-8");
+
+    for version in ["1", "2"] {
+        let output = nova(&[
+            "inspect",
+            path,
+            "--format=json",
+            "--schema-version",
+            version,
+        ]);
+        assert!(
+            !output.status.success(),
+            "legacy schema {version} must reject discard"
+        );
+        assert!(output.stdout.is_empty());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("N5001"), "{stderr}");
+        assert!(stderr.contains("select schema v3"), "{stderr}");
+    }
+
+    let output = nova(&["inspect", path, "--format=json", "--schema-version=3"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stderr.is_empty());
+    let stdout = String::from_utf8(output.stdout).expect("v3 output is UTF-8");
+    assert!(stdout.contains("\"schema_version\": 3"));
+    assert!(stdout.contains("\"control_flow\":"));
+    assert!(stdout.contains("\"match_patterns\":"));
+    assert!(stdout.contains("\"payload_mode\": \"discard\""));
+}
+
+#[test]
 fn inspect_rejects_invalid_source_without_partial_output() {
     let path = fixture("invalid/unknown-name.nv");
-    for version in ["1", "2"] {
+    for version in ["1", "2", "3"] {
         let output = nova(&[
             "inspect",
             path.to_str().expect("fixture path is UTF-8"),
