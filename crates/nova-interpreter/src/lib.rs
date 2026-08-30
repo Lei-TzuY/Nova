@@ -443,15 +443,12 @@ impl<'program> Interpreter<'program> {
                         Flow::Value(value) => value,
                         flow => return Ok(flow),
                     };
-                    let Some(field_definition) = definition.fields.get(field.field_index) else {
-                        return Err(self.invariant(
-                            expression.span,
-                            format!(
-                                "record initializer targets field slot {} outside record `{}`",
-                                field.field_index, definition.name
-                            ),
-                        ));
-                    };
+                    let field_definition = self.resolved_record_field(
+                        *record,
+                        field.field_index,
+                        &field.field_name,
+                        field.value.span,
+                    )?;
                     if !self.value_conforms_to_type(&value, &field_definition.ty) {
                         return Err(self.invariant(
                             field.value.span,
@@ -562,6 +559,7 @@ impl<'program> Interpreter<'program> {
             ExpressionKind::FieldAccess {
                 base,
                 record,
+                field_name,
                 field_index,
             } => {
                 let base = match self.eval_expression(base, frame)? {
@@ -585,6 +583,17 @@ impl<'program> Interpreter<'program> {
                             "field access expected record {}, found record {}",
                             record.index(),
                             actual.index()
+                        ),
+                    ));
+                }
+                let field_definition =
+                    self.resolved_record_field(*record, *field_index, field_name, expression.span)?;
+                if expression.ty != field_definition.ty {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!(
+                            "field access result type {} does not match resolved field `{}` type {}",
+                            expression.ty, field_name, field_definition.ty
                         ),
                     ));
                 }
@@ -953,6 +962,49 @@ impl<'program> Interpreter<'program> {
             },
         );
         Ok(())
+    }
+
+    fn resolved_record_field(
+        &self,
+        record: RecordId,
+        field_index: usize,
+        field_name: &str,
+        span: nova_source::Span,
+    ) -> Result<&nova_sema::hir::RecordField, Diagnostic> {
+        let Some(definition) = self.program.records.get(record.index()) else {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "resolved record id {} is outside the program",
+                    record.index()
+                ),
+            ));
+        };
+        if definition.id != record {
+            return Err(self.invariant(
+                span,
+                "record declaration index does not match its resolved identity",
+            ));
+        }
+        let Some(field) = definition.fields.get(field_index) else {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "resolved field `{field_name}` targets slot {field_index} outside record `{}`",
+                    definition.name
+                ),
+            ));
+        };
+        if field.name != field_name {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "resolved field `{field_name}` targets slot {field_index}, declared as `{}` in record `{}`",
+                    field.name, definition.name
+                ),
+            ));
+        }
+        Ok(field)
     }
 
     fn equality_types_match(&self, left: &Type, right: &Type) -> bool {

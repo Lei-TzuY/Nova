@@ -316,6 +316,8 @@ pub enum StatementKind {
 /// One resolved record initializer, preserving source evaluation order.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RecordFieldValue {
+    /// Resolved field spelling paired with the destination slot.
+    pub field_name: String,
     /// Zero-based destination slot in the record's declaration order.
     pub field_index: usize,
     /// Typed initializer expression, evaluated in source order.
@@ -381,6 +383,8 @@ pub enum ExpressionKind {
         base: Box<Expression>,
         /// Nominal record identity expected at runtime.
         record: RecordId,
+        /// Resolved field spelling paired with the declaration-order slot.
+        field_name: String,
         /// Zero-based field slot in declaration order.
         field_index: usize,
     },
