@@ -37,7 +37,7 @@ jobs:
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           git config user.name "LeiZ"
           git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
-          git rm .github/surface-function-types.py .github/fix-surface-function-script.py \
+          git rm -f .github/surface-function-types.py .github/fix-surface-function-script.py \
             .github/adapt-surface-function-parser-tests.py .github/workflows/surface-function-types.yml
           git add crates/nova-parser/src/ast.rs crates/nova-parser/src/parser.rs \
             crates/nova-parser/tests/function_types.rs \
