@@ -21,6 +21,15 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
             left,
             right,
         } => evaluate_binary(*operator, left, right),
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate(condition)? {
+            true if then_branch.statements.is_empty() => evaluate(then_branch.tail.as_deref()?),
+            true => None,
+            false => evaluate(else_branch),
+        },
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             evaluate(block.tail.as_deref()?)
         }
