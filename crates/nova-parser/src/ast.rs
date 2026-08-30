@@ -108,6 +108,8 @@ pub struct TypeRef {
 pub enum TypeRefKind {
     /// Built-in or nominal type name.
     Named(Name),
+    /// Uninhabited bottom type written `!`.
+    Never,
     /// Explicit callable signature such as `fn(Int) -> Bool`.
     Function {
         /// Parameter types in declaration order.

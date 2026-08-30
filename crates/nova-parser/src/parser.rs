@@ -290,6 +290,13 @@ impl<'source> Parser<'source> {
             return None;
         }
 
+        if let Some(bang) = self.consume(TokenKind::Bang) {
+            return Some(TypeRef {
+                kind: TypeRefKind::Never,
+                span: bang.span,
+            });
+        }
+
         if let Some(keyword) = self.consume(TokenKind::Fn) {
             self.expect(TokenKind::LeftParen, "after `fn` in a function type")?;
             let mut parameters = Vec::new();
