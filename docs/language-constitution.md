@@ -74,7 +74,7 @@ reference-like type. Algebraic data types and exhaustive pattern matching are
 core language directions, not library conventions.
 
 **Provisional bootstrap decisions.** The current semantic core recognizes the
-surface types `Int`, `Bool`, `Unit`, and declared nominal record and enum types.
+surface types `Int`, `Bool`, `Unit`, the uninhabited bottom type `!`, and declared nominal record and enum types.
 The sole Unit literal is `()`, and a value-less block also produces Unit. Aggregate
 identity comes from the declaration rather than shape: separately declared
 types remain different even when their fields or variants have identical names
@@ -96,6 +96,16 @@ signatures while runtime function values retain top-level declaration identity. 
 higher-order named-function support only: lambda syntax, closure creation, lexical capture,
 method values, callable objects, and closure allocation/ownership semantics remain
 unimplemented and must not be inferred from this slice.
+
+The bootstrap surface spelling `!` denotes the semantic core's existing uninhabited bottom
+type. It is a real type rather than a runtime sentinel: no ordinary value can conform to it,
+and a function declared `-> !` is accepted only when every reachable path is non-continuing.
+Because `!` is bottom for expected-type compatibility and branch/match joins, a call that
+returns `!` can occupy an otherwise value-producing position without inventing a coercion or
+value. The spelling is accepted in any type-reference position, including nested function
+types; uninhabited fields, payloads, parameters, or locals remain type-correct declarations
+that cannot receive an ordinary runtime value. This surface exposure adds no layout, ABI,
+allocation, exception, panic, or process-termination semantics.
 
 A bootstrap record declares explicitly typed, uniquely named fields.
 `new Record { field: expression, ... }` must initialize every declared field

@@ -534,6 +534,7 @@ impl Analyzer {
 
     fn resolve_type_ref(&mut self, reference: &ast::TypeRef) -> Type {
         match &reference.kind {
+            ast::TypeRefKind::Never => Type::Never,
             ast::TypeRefKind::Named(name) => match name.text.as_str() {
                 "Int" => Type::Int,
                 "Bool" => Type::Bool,
@@ -555,7 +556,7 @@ impl Analyzer {
                         Diagnostic::error("N3001", "unknown type")
                             .with_primary(reference.span, format!("unknown type `{unknown}`"))
                             .with_note(
-                                "the bootstrap semantic core recognizes Int, Bool, Unit, declared record or enum names, and explicit function types",
+                                "the bootstrap semantic core recognizes Int, Bool, Unit, !, declared record or enum names, and explicit function types",
                             ),
                     );
                     Type::Error
