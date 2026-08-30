@@ -88,6 +88,15 @@ other return types still require a compatible value on every continuing path.
 `Unit` is reserved alongside `Int` and `Bool` and cannot be redefined as a nominal
 record or enum.
 
+The bootstrap surface also admits explicit recursive function types written
+`fn(T1, T2) -> U`. These lower directly to the existing resolved `FunctionType`, so a
+named top-level function may be passed as an argument, returned from another function,
+stored in a typed binding, and called through that binding. Function types are structural
+signatures while runtime function values retain top-level declaration identity. This is
+higher-order named-function support only: lambda syntax, closure creation, lexical capture,
+method values, callable objects, and closure allocation/ownership semantics remain
+unimplemented and must not be inferred from this slice.
+
 A bootstrap record declares explicitly typed, uniquely named fields.
 `new Record { field: expression, ... }` must initialize every declared field
 exactly once with a compatible value. Named initializers may appear in any
@@ -112,10 +121,12 @@ Matching `Int`, `Bool`, and `Unit` values are equality-comparable with `==` and
 equal. A nominal enum is also equality-comparable when every one of its declared variants
 is payload-free; both operands must have that same nominal enum identity, and equality
 compares the resolved variant identity after ordinary left-to-right evaluation. Enums with
-any payload variant, nominal records, and function values remain non-comparable. Closed-
-condition reasoning may prove equality for literal Unit values and direct payload-free enum
-constructors; it does not erase evaluation of calls, names, parameters, or other dynamic
-values.
+any payload variant and nominal records remain non-comparable. Function values are
+comparable only when their fully resolved signatures match, and equality compares top-level
+declaration identity rather than code addresses or bodies. Closed-condition reasoning may
+prove equality for literal Unit values, direct payload-free enum constructors, and direct
+top-level function references; it does not erase evaluation of calls, local aliases,
+parameters, or other dynamic values.
 
 The bootstrap frontend accepts decimal integer literals plus binary (`0b`/`0B`),
 octal (`0o`/`0O`), and hexadecimal (`0x`/`0X`) forms. Single `_` separators may
