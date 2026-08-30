@@ -19,7 +19,7 @@ Completion of the initial document does not freeze unfinished semantics.
 
 ## Phase 1 — Executable frontend foundation
 
-**Status: two vertical slices implemented; broader grammar work remains.**
+**Status: three vertical slices implemented; broader grammar work remains.**
 
 - Rust workspace and official `nova` CLI bootstrap;
 - source identity, exact spans, and locations;
@@ -47,12 +47,26 @@ Implemented in the second Phase 1 slice:
 - focused lexer regressions plus a CLI check/run fixture cover all prefixes, separator
   policy, invalid digits, range failure, and exact hexadecimal `Int::MIN` execution.
 
+Implemented in the third Phase 1 slice:
+
+- type references become recursive syntax and accept explicit `fn(T1, T2) -> U` function
+  types, including zero-argument signatures, trailing parameter commas, and nested
+  function parameter/return types;
+- the same type-ref production is used by function signatures, local annotations, record
+  fields, and enum payloads instead of creating context-specific callable syntax;
+- recursive type parsing has an independent finite depth budget with parser diagnostic
+  `N2009`, preserving fail-closed behavior for pathological nesting;
+- AST type references distinguish named and function forms while retaining one exact span
+  for the complete type expression; and
+- parser regressions cover recursive signatures and depth failure, while the CLI fixture
+  exercises the syntax through the complete executable pipeline.
+
 Next Phase 1 refinements should be driven by the needs of later semantic work,
 not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty-nine vertical slices implemented; broader type-system work remains.**
+**Status: fifty vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -830,6 +844,23 @@ Implemented in the forty-ninth Phase 2 slice:
   all-targets Clippy keep valid loop-control behavior unchanged; and
 - semantic-inspection v2 keeps the same schema while gaining the stronger analyzer-side
   transfer-topology guarantee.
+
+Implemented in the fiftieth Phase 2 slice:
+
+- recursive surface function types resolve directly into the existing HIR `FunctionType`
+  rather than introducing a parallel callable representation or nominal function aliases;
+- higher-order source programs may accept named function values as parameters, return them,
+  store them under explicit function annotations, and call them through ordinary expression
+  invocation with the existing arity and argument/return type checks;
+- nested function signatures participate in the same structural type equality, runtime
+  conformance, function-reference identity checks, and semantic-inspection type graph that
+  already existed for compiler-produced function values;
+- a mismatched higher-order call remains ordinary `N3004` type failure, while semantic
+  inspection v1/v2 require no schema change because function types were already representable;
+- lambdas, closures, lexical capture, methods, callable objects, and closure ownership/layout
+  remain explicitly outside the slice; and
+- focused semantic tests plus an end-to-end `nova run` program lock parameter, return,
+  local-storage, and invocation behavior with the final result `42`.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

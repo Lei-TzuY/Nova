@@ -20,10 +20,11 @@ interpreter slices. The toolchain is written in Rust and can:
 
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
-- parse functions, nominal records and enums, explicit aggregate construction,
-  exhaustive enum matching, field projection, initialized bindings, typed
-  delayed `var` initialization, narrow assignments, expressions, blocks, calls,
-  `if` expressions, pre-test `while` loops, and statement-only `break`/`continue`;
+- parse functions, recursive explicit function types, nominal records and enums,
+  explicit aggregate construction, exhaustive enum matching, field projection,
+  initialized bindings, typed delayed `var` initialization, narrow assignments,
+  expressions, blocks, calls, `if` expressions, pre-test `while` loops, and
+  statement-only `break`/`continue`;
 - lower accepted syntax into a resolved, typed HIR with stable function,
   binding, record, and enum identities, plus a verified function-level CFG;
 - resolve top-level functions and nominal types, parameters, lexical local
@@ -96,6 +97,13 @@ initializer is checked before its new binding enters scope, preventing
 accidental self-reference. Duplicate names in the same lexical scope are
 rejected; nested lexical blocks may shadow outer bindings in this slice.
 Function parameters and a function body's outermost bindings share one scope.
+
+Explicit function types use `fn(T1, T2) -> U` and may nest recursively in any type
+position. They expose the callable signatures the HIR/runtime already use internally, so
+named top-level functions can now be passed, returned, stored in typed locals, and invoked
+through those values. For example, a parameter `transform: fn(Int) -> Int` can be called
+like any other function value. This slice deliberately does not add lambda expressions,
+closures, captured environments, methods, or implicit callable conversions.
 
 Rejected calls are fail-closed for continuing flow recovery. Callees and arguments
 are still lowered left-to-right for deterministic diagnostics, but a non-callable

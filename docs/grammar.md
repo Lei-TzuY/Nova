@@ -50,17 +50,19 @@ declaration         = record_declaration | enum_declaration | function ;
 
 record_declaration  = "record" , identifier , "{" , [ record_fields ] , "}" ;
 record_fields       = record_field , { "," , record_field } , [ "," ] ;
-record_field        = identifier , ":" , type_name ;
+record_field        = identifier , ":" , type_ref ;
 
 enum_declaration    = "enum" , identifier , "{" , enum_variants , "}" ;
 enum_variants       = enum_variant , { "," , enum_variant } , [ "," ] ;
-enum_variant        = identifier , [ "(" , type_name , ")" ] ;
+enum_variant        = identifier , [ "(" , type_ref , ")" ] ;
 
 function            = "fn" , identifier , "(" , [ parameters ] , ")" ,
-                      "->" , type_name , block ;
+                      "->" , type_ref , block ;
 parameters          = parameter , { "," , parameter } , [ "," ] ;
-parameter           = identifier , ":" , type_name ;
-type_name           = identifier ;
+parameter           = identifier , ":" , type_ref ;
+type_ref            = identifier | function_type ;
+function_type       = "fn" , "(" , [ type_ref_list ] , ")" , "->" , type_ref ;
+type_ref_list       = type_ref , { "," , type_ref } , [ "," ] ;
 
 block               = "{" , { statement } , [ expression ] , "}" ;
 statement           = binding_statement
@@ -72,8 +74,8 @@ statement           = binding_statement
                     | return_statement
                     | expression_statement ;
 binding_statement   = ("let" | "var") , identifier ,
-                      [ ":" , type_name ] , "=" , expression , ";" ;
-uninitialized_var_statement = "var" , identifier , ":" , type_name , ";" ;
+                      [ ":" , type_ref ] , "=" , expression , ";" ;
+uninitialized_var_statement = "var" , identifier , ":" , type_ref , ";" ;
 assignment_statement = identifier , "=" , expression , ";" ;
 while_statement     = "while" , expression , block ;
 break_statement     = "break" , ";" ;
@@ -131,6 +133,15 @@ fall through a value-less body; `return ();` is the explicit equivalent. Other
 return types still require a compatible tail or an explicit return on every
 continuing path. Parenthesized non-empty expressions retain ordinary grouping, so
 `(value)` is not a Unit literal.
+
+Function types use the recursive surface form `fn(T1, T2) -> U`; zero parameters and
+a trailing comma are allowed, and parameter/return positions may themselves be function
+types. The form is accepted anywhere a type reference is accepted, including function
+signatures, local annotations, record fields, and enum payloads. This enables named
+top-level function values to be passed, returned, stored, and invoked through explicit
+signatures. It does not introduce lambdas, closures, captured environments, methods, or
+implicit callable coercions. Recursive type parsing has its own finite nesting budget and
+reports `N2009` rather than recursing without bound.
 
 Records are nominal top-level types. Each field has an explicit type and field
 names must be unique within a record. `new Type { ... }` constructs a record by
@@ -222,9 +233,10 @@ From tightest to loosest:
 | 7 | `&&` | left |
 | 8 | `||` | left |
 
-The parser enforces a finite nesting budget and emits diagnostic `N2008` rather
-than continuing unbounded recursive descent. This budget is an implementation
-limit, not a promise that deeply nested source will remain portable unchanged.
+The parser enforces finite nesting budgets. Expression recursion emits `N2008`,
+and recursive type syntax emits `N2009`, rather than continuing unbounded recursive
+descent. These budgets are implementation limits, not promises that pathologically
+deep source will remain portable unchanged.
 
 ## Deliberate limitations
 
