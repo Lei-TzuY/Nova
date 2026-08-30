@@ -107,8 +107,12 @@ been evaluated, only the corresponding arm contributes reachable initialization,
 non-continuation, and enclosing-loop transfer facts. Every non-selected arm is still
 resolved and type checked, still participates in exhaustiveness and result-type
 compatibility, and can still emit diagnostics; only its runtime flow facts are
-discarded. Values flowing through locals, parameters, calls, or other expressions
-do not receive this refinement.
+discarded. When the complete semantic analysis is otherwise error-free, each such
+otherwise-valid non-selected arm also receives nonfatal warning `N3034`, making this
+existing proof visible as the first narrow match-usefulness diagnostic. Values flowing
+through locals, parameters, calls, or other expressions remain dynamic and receive no
+`N3034` guess. An error anywhere in semantic analysis suppresses the deferred warning,
+including an error found while checking a non-selected arm.
 
 An invalid or non-exhaustive match never establishes an initialization fact.
 This fail-closed rule prevents a rejected control-flow shape from making a later
@@ -163,6 +167,7 @@ serialization format, ownership rule, or ABI.
 | `N3023` | non-exhaustive match |
 | `N3024` | duplicate variant arm |
 | `N3025` | non-enum scrutinee or pattern from another nominal enum |
+| `N3034` | non-selected concrete arm under a direct-constructor match scrutinee (warning) |
 | `N4005` | invalid resolved enum/match/control-flow HIR reached the interpreter |
 
 Diagnostic codes remain bootstrap tooling contracts rather than a post-1.0
@@ -172,8 +177,10 @@ compatibility promise.
 
 This slice has no catch-all/default arm, guard, literal pattern, nested pattern,
 alternative pattern, multi-payload variant, named variant fields, record destructuring,
-pattern-usefulness analysis, or stable enum layout. `_` exists only as the payload-discard
-subpattern of an already resolved concrete variant; it does not cover other variants. Enums
+general wildcard/guard/nested-pattern usefulness analysis, or stable enum layout. The
+implemented `N3034` proof covers only non-selected concrete arms under a direct constructor.
+`_` exists only as the payload-discard subpattern of an already resolved concrete variant;
+it does not cover other variants. Enums
 with payload variants and records do not yet receive recursively derived value equality.
 Those features require separate semantic and diagnostic designs rather than syntactic
 shortcuts.

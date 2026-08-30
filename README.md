@@ -32,14 +32,14 @@ interpreter slices. The toolchain is written in Rust and can:
 - check bootstrap `Int`, `Bool`, `Unit`, and nominal aggregate types, function
   signatures, local inference and annotations, calls, operators, block tails, branches,
   returns, loop conditions, loop-control legality, record construction/projection,
-  enum construction, match exhaustiveness and arm types, assignment
-  mutability/type constraints, and CFG-based definite initialization;
+  enum construction, match exhaustiveness and arm types, direct-constructor arm
+  usefulness, assignment mutability/type constraints, and CFG-based definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
   interpreter with function calls, recursion, Unit-valued procedures, records, enums,
   pattern matching, mutation, blocks, conditionals, bounded loops, and structured
   `break`/`continue`;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
-  text or JSON Lines, including non-fatal unreachable-code warnings;
+  text or JSON Lines, including non-fatal reachability and match-usefulness warnings;
 - print a deterministic debug representation of the parsed AST; and
 - emit fail-closed semantic-inspection v1 documents with resolved declarations,
   bindings, types, spans, expression relationships, and exhaustive match facts,
@@ -52,11 +52,12 @@ executes zero-argument `main`. The interpreter is evidence for the executable
 subset, not a claim that Nova's final runtime representation, numeric model,
 aggregate layout, ABI, or backend is stable.
 
-Semantic warnings do not reject an otherwise valid program. The bootstrap
-currently reports `N3033` when the verified CFG proves that source follows an
-executable `return`, `break`, or `continue`; the warning is written to standard
-error while `check`, `run`, or `inspect` continues normally. Existing errors
-suppress this warning pass to avoid recovery cascades.
+Semantic warnings do not reject an otherwise valid program. The bootstrap reports
+`N3033` when the verified CFG proves that source follows an executable `return`,
+`break`, or `continue`, and `N3034` when a direct enum-constructor match scrutinee
+proves that an otherwise-valid concrete variant arm can never be selected. Warnings are
+written to standard error while `check`, `run`, or `inspect` continues normally. Any
+semantic error suppresses these deferred warnings to avoid recovery cascades.
 
 The implemented syntax is intentionally small:
 

@@ -56,14 +56,38 @@ Source after a transfer remains fully lowered and statically checked. If that
 source produces an error, the program is rejected and the warning pass is
 suppressed, preventing an unreachable warning from obscuring the real error.
 
-This slice does not warn for constant-selected `if` or `match` branches,
+`N3033` itself does not report constant-selected `if` or `match` branches,
 short-circuit operands, a statically skipped `while` body, or code after a proven
-nonterminating loop. Those paths may also use diagnostic CFG edges, but expanding
-the warning policy requires separate noise, usefulness, and suppression design.
+nonterminating loop. Direct-constructor match usefulness has its own `N3034` policy
+below rather than being inferred generically from diagnostic CFG edges.
+
+## `N3034` statically unreachable match arm
+
+When a successfully resolved `match` scrutinee is a direct enum constructor, semantic
+analysis already knows its exact declaration-order variant before arm execution. For each
+otherwise-valid concrete arm that names a different variant, Nova reports `N3034`:
+
+- primary label: the arm pattern that can never be selected;
+- secondary label: the direct constructor that proves the selected variant;
+- one warning for each non-selected valid arm; and
+- no warning when the scrutinee reaches the match through a local, parameter, call, or
+  other dynamic expression.
+
+A warned arm is still fully lowered and name/type checked. Its CFG path remains
+diagnostic-only and cannot contribute definite-initialization, non-continuation, or loop
+transfer facts. `N3034` therefore exposes an existing reachability proof; it does not
+change HIR, CFG shape, runtime dispatch, or semantic-inspection schemas. Warning candidates
+are deferred until semantic analysis is otherwise error-free, so an error inside a
+non-selected arm suppresses `N3034` and remains the actionable diagnostic.
+
+This is the first narrow usefulness diagnostic, not a general pattern-usefulness matrix.
+There is still no catch-all arm, guard usefulness, nested-pattern coverage, or warning for
+dynamic enum matches.
 
 ## Deliberate limits
 
 Nova has no warning configuration, lint groups, source attributes, command-line
 allow/deny switches, warnings-as-errors mode, cap-lints policy, or cross-package
-diagnostic aggregation yet. `N3033` is not a claim that CFG reachability is a
-general-purpose linter or that the current warning set is complete.
+diagnostic aggregation yet. `N3033` and `N3034` are narrow implemented proofs, not a
+claim that CFG reachability or pattern usefulness is a general-purpose linter or that the
+current warning set is complete.
