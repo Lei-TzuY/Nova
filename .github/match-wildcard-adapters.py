@@ -13,6 +13,19 @@ text = text.replace(
 )
 p.write_text(text)
 
+# Preserve the semantic payload-mode proof for payload-free vs explicit discard arms.
+p = Path('crates/nova-sema/tests/pattern_payload_discard.rs')
+text = p.read_text()
+text = text.replace(
+    'use nova_sema::{analyze, hir::ExpressionKind};\n',
+    'use nova_sema::{analyze, hir::{ExpressionKind, MatchPattern}};\n',
+)
+text = text.replace(
+    '''    assert!(!arms[0].payload_discarded);\n    assert!(arms[0].binding.is_none());\n    assert!(arms[1].payload_discarded);\n    assert!(arms[1].binding.is_none());\n''',
+    '''    let MatchPattern::Variant {\n        binding,\n        payload_discarded,\n        ..\n    } = &arms[0].pattern\n    else {\n        panic!("expected concrete payload-free arm");\n    };\n    assert!(!*payload_discarded);\n    assert!(binding.is_none());\n    let MatchPattern::Variant {\n        binding,\n        payload_discarded,\n        ..\n    } = &arms[1].pattern\n    else {\n        panic!("expected concrete discard arm");\n    };\n    assert!(*payload_discarded);\n    assert!(binding.is_none());\n''',
+)
+p.write_text(text)
+
 # Preserve the existing enum-identity adversarial tests against the new pattern shape.
 p = Path('crates/nova-interpreter/tests/enum_variant_identity.rs')
 text = p.read_text()
