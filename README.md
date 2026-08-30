@@ -119,8 +119,12 @@ single runtime value, so Unit equality is always true and Unit inequality is alw
 once both operands have evaluated normally. A nominal enum also supports equality when
 every declared variant is payload-free; operands must have the same enum identity and
 comparison uses the resolved variant slot. Function values are comparable only at the
-same fully resolved signature and compare top-level declaration identity. Enums with any
-payload variant and records remain non-comparable. Closed-condition analysis can prove
+same fully resolved signature and compare top-level declaration identity. Direct top-level
+function-reference HIR retains the source-resolved spelling alongside `FunctionId`; runtime
+and semantic-inspection consumers recheck that name/id/signature contract, so malformed HIR
+cannot silently retarget a reference to a same-signature sibling declaration. Validated local
+aliases still carry only runtime declaration identity rather than source spelling. Enums with
+any payload variant and records remain non-comparable. Closed-condition analysis can prove
 literal Unit, direct payload-free enum-constructor, and direct function-reference
 comparisons, while locals and calls remain dynamic and are still evaluated at runtime.
 
@@ -266,10 +270,14 @@ diagnostic `N4005` rather than guessing a target.
 
 Function calls also validate the runtime/HIR type boundary. Every argument must
 recursively conform to its resolved parameter type, and every returned runtime
-value must recursively conform to the function's declared type. Nominal record
-and enum identities, record slots, and enum payloads are checked rather than
-trusted from their outer value tag alone. Valid semantically produced HIR is
-unaffected; malformed or contract-drifted HIR fails closed with `N4005`.
+value must recursively conform to the function's declared type. A direct top-level
+function reference additionally revalidates its retained source spelling against the
+referenced declaration's `FunctionId` before producing `Value::Function`; the ordinary
+expression postcondition then independently checks the declaration signature against
+the reference HIR type. Local aliases receive only that already-validated runtime
+identity. Nominal record and enum identities, record slots, and enum payloads are
+checked rather than trusted from their outer value tag alone. Valid semantically
+produced HIR is unaffected; malformed or contract-drifted HIR fails closed with `N4005`.
 
 Aggregate construction enforces the same invariant locally: each evaluated record
 field must conform to its declaration slot type, and each enum payload must conform

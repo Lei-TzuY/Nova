@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty-three vertical slices implemented; broader type-system work remains.**
+**Status: forty-four vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -726,6 +726,21 @@ Implemented in the forty-third Phase 2 slice:
 - producer plus inspection corruption regressions lock same-shaped sibling variants against
   silent retargeting while keeping nominal enum and pattern semantics unchanged.
 
+Implemented in the forty-fourth Phase 2 slice:
+
+- direct top-level function-reference HIR retains the source-resolved function spelling
+  alongside stable source-order `FunctionId` identity instead of relying on signature shape
+  alone to identify a declaration;
+- semantic lowering preserves that name/id pair while first-class local aliases continue to
+  use the existing function type and runtime declaration identity without carrying source text;
+- semantic inspection independently requires function spelling, `FunctionId`, and resolved
+  signature to agree before publishing the existing stable function target ID, leaving schema
+  v1/v2 shape unchanged;
+- closed-condition identity proof remains `FunctionId`-based inside the analyzer-owned HIR
+  consumer, avoiding a second source of truth in the same trusted lowering phase; and
+- producer and inspection corruption regressions reject same-signature sibling retargeting and
+  reference-signature drift without changing syntax, CFG, ABI, or valid-source behavior.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -744,7 +759,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: eighteen vertical slices implemented; execution surface remains small.**
+**Status: nineteen vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -1006,6 +1021,17 @@ Implemented in the eighteenth Phase 3 slice:
   payload type, duplicate-arm, and nominal-enum invariants; and
 - adversarial runtime regressions prove both corruption rejection and structured-flow
   precedence without changing valid execution, enum runtime representation, layout, or ABI.
+
+Implemented in the nineteenth Phase 3 slice:
+
+- direct function-reference evaluation validates retained source spelling against the referenced
+  `FunctionId` declaration before producing the compact `Value::Function(FunctionId)` runtime value;
+- the existing expression-result postcondition remains responsible for signature conformance, so
+  declaration identity drift and function-type drift are checked as distinct runtime invariants;
+- same-signature sibling retargeting now fails closed as `N4005` instead of silently changing call
+  or equality behavior, while validated local aliases continue to execute by declaration identity; and
+- focused runtime regressions plus all-targets Clippy coverage lock direct corruption rejection,
+  valid alias execution, and adaptation of older malformed-HIR function-equality fixtures.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
