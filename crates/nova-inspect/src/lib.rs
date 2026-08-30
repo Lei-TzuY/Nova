@@ -385,20 +385,20 @@ impl<'a> Builder<'a> {
                 value,
             } => {
                 expressions.push(self.collect_expression(value, owner)?);
-                let resolved = resolved.ok_or_else(|| {
+                let resolved = resolved.as_ref().ok_or_else(|| {
                     InspectionError::invalid(format!(
                         "accepted assignment {} has no resolved target",
                         statement_id(index)
                     ))
                 })?;
-                let binding = self.require_known_binding(resolved, owner)?;
+                let binding = self.require_binding_reference(resolved, owner)?;
                 if !binding.mutable {
                     return Err(InspectionError::invalid(format!(
                         "assignment targets immutable {}",
-                        binding_id(resolved.index())
+                        binding_id(resolved.binding.index())
                     )));
                 }
-                target = Some(binding_id(resolved.index()));
+                target = Some(binding_id(resolved.binding.index()));
                 v1::StatementKind::Assignment
             }
             hir::StatementKind::While { condition, body } => {
@@ -462,8 +462,8 @@ impl<'a> Builder<'a> {
             hir::ExpressionKind::Boolean(_) => v1::ExpressionKind::Boolean,
             hir::ExpressionKind::Unit => v1::ExpressionKind::Unit,
             hir::ExpressionKind::Binding(resolved) => {
-                self.require_known_binding(*resolved, owner)?;
-                target = Some(binding_id(resolved.index()));
+                self.require_binding_reference(resolved, owner)?;
+                target = Some(binding_id(resolved.binding.index()));
                 v1::ExpressionKind::BindingReference
             }
             hir::ExpressionKind::Function {
@@ -784,6 +784,31 @@ impl<'a> Builder<'a> {
             span,
         });
         Ok(id)
+    }
+
+    fn require_binding_reference(
+        &self,
+        reference: &hir::BindingReference,
+        owner: &str,
+    ) -> Result<&v1::Binding, InspectionError> {
+        let binding = self.require_known_binding(reference.binding, owner)?;
+        if binding.name != reference.binding_name {
+            return Err(InspectionError::invalid(format!(
+                "binding reference `{}` does not match {} declaration name `{}`",
+                reference.binding_name,
+                binding_id(reference.binding.index()),
+                binding.name
+            )));
+        }
+        let declaration_span = self.span(reference.declaration_span)?;
+        if binding.span != declaration_span {
+            return Err(InspectionError::invalid(format!(
+                "binding reference `{}` does not match {} declaration span",
+                reference.binding_name,
+                binding_id(reference.binding.index())
+            )));
+        }
+        Ok(binding)
     }
 
     fn require_known_binding(
@@ -1657,12 +1682,20 @@ mod tests {
             "fn first() -> Int { let value = 1; value }\n\
              fn second() -> Int { 2 }",
         );
+        let foreign = match &cross_owner.functions[0].body.statements[0].kind {
+            hir::StatementKind::Binding { binding, .. } => binding.clone(),
+            _ => panic!("expected foreign binding"),
+        };
         let second_tail = cross_owner.functions[1]
             .body
             .tail
             .as_deref_mut()
             .expect("second has a tail expression");
-        second_tail.kind = hir::ExpressionKind::Binding(hir::BindingId::new(0));
+        second_tail.kind = hir::ExpressionKind::Binding(hir::BindingReference {
+            binding: foreign.id,
+            binding_name: foreign.name,
+            declaration_span: foreign.span,
+        });
         let error =
             build_document(&cross_owner, &source).expect_err("cross-owner use must fail closed");
         assert!(error.message().contains("crosses function ownership"));
@@ -1673,12 +1706,28 @@ mod tests {
                  2\n\
              }",
         );
+        let hidden = match &escaped_scope.functions[0].body.statements[0].kind {
+            hir::StatementKind::Expression(expression) => {
+                let hir::ExpressionKind::Block(block) = &expression.kind else {
+                    panic!("expected nested block");
+                };
+                match &block.statements[0].kind {
+                    hir::StatementKind::Binding { binding, .. } => binding.clone(),
+                    _ => panic!("expected hidden binding"),
+                }
+            }
+            _ => panic!("expected block expression statement"),
+        };
         let tail = escaped_scope.functions[0]
             .body
             .tail
             .as_deref_mut()
             .expect("main has a tail expression");
-        tail.kind = hir::ExpressionKind::Binding(hir::BindingId::new(0));
+        tail.kind = hir::ExpressionKind::Binding(hir::BindingReference {
+            binding: hidden.id,
+            binding_name: hidden.name,
+            declaration_span: hidden.span,
+        });
         let error =
             build_document(&escaped_scope, &source).expect_err("escaped use must fail closed");
         assert!(error.message().contains("outside its lexical scope"));
@@ -1694,12 +1743,20 @@ mod tests {
                  changing\n\
              }",
         );
+        let fixed = match &program.functions[0].body.statements[0].kind {
+            hir::StatementKind::Binding { binding, .. } => binding.clone(),
+            _ => panic!("expected immutable binding"),
+        };
         let hir::StatementKind::Assignment { target, .. } =
             &mut program.functions[0].body.statements[2].kind
         else {
             panic!("expected assignment HIR");
         };
-        *target = Some(hir::BindingId::new(0));
+        *target = Some(hir::BindingReference {
+            binding: fixed.id,
+            binding_name: fixed.name,
+            declaration_span: fixed.span,
+        });
 
         let error = build_document(&program, &source)
             .expect_err("assignment to immutable binding must fail closed");

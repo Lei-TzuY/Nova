@@ -6,8 +6,8 @@ use nova_int_semantics::IntArithmeticError;
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::equality_rules::matching_equality_types;
 use nova_sema::hir::{
-    BindingId, Block, EnumId, Expression, ExpressionKind, Function, FunctionId, Program, RecordId,
-    Statement, StatementKind, Type,
+    BindingId, BindingReference, Block, EnumId, Expression, ExpressionKind, Function, FunctionId,
+    Program, RecordId, Statement, StatementKind, Type,
 };
 use std::collections::BTreeMap;
 use std::fmt;
@@ -74,6 +74,8 @@ pub fn execute(program: &Program) -> Result<Value, Diagnostic> {
 struct RuntimeSlot {
     ty: Type,
     mutable: bool,
+    binding_name: String,
+    declaration_span: nova_source::Span,
     value: Option<Value>,
 }
 
@@ -273,21 +275,16 @@ impl<'program> Interpreter<'program> {
                 };
                 match self.eval_expression(value, frame)? {
                     Flow::Value(value) => {
-                        let Some(slot) = frame.get_mut(target) else {
-                            return Err(self.invariant(
-                                statement.span,
-                                format!(
-                                    "assignment target {} is absent from the frame",
-                                    target.index()
-                                ),
-                            ));
-                        };
+                        self.validate_binding_reference(frame, target, statement.span)?;
+                        let slot = frame
+                            .get_mut(&target.binding)
+                            .expect("validated assignment target must have a runtime slot");
                         if !slot.mutable {
                             return Err(self.invariant(
                                 statement.span,
                                 format!(
                                     "assignment target {} resolved to an immutable runtime slot",
-                                    target.index()
+                                    target.binding.index()
                                 ),
                             ));
                         }
@@ -296,7 +293,7 @@ impl<'program> Interpreter<'program> {
                                 statement.span,
                                 format!(
                                     "assignment target {} received a runtime value that does not conform to slot type {}",
-                                    target.index(), slot.ty
+                                    target.binding.index(), slot.ty
                                 ),
                             ));
                         }
@@ -378,22 +375,17 @@ impl<'program> Interpreter<'program> {
             ExpressionKind::Integer(value) => Ok(Flow::Value(Value::Int(*value))),
             ExpressionKind::Boolean(value) => Ok(Flow::Value(Value::Bool(*value))),
             ExpressionKind::Unit => Ok(Flow::Value(Value::Unit)),
-            ExpressionKind::Binding(binding) => {
-                let Some(slot) = frame.get(binding) else {
-                    return Err(self.invariant(
-                        expression.span,
-                        format!(
-                            "resolved binding {} is absent from the frame",
-                            binding.index()
-                        ),
-                    ));
-                };
+            ExpressionKind::Binding(reference) => {
+                self.validate_binding_reference(frame, reference, expression.span)?;
+                let slot = frame
+                    .get(&reference.binding)
+                    .expect("validated binding reference must have a runtime slot");
                 if expression.ty != slot.ty {
                     return Err(self.invariant(
                         expression.span,
                         format!(
                             "binding {} expression type {} does not match runtime slot type {}",
-                            binding.index(),
+                            reference.binding.index(),
                             expression.ty,
                             slot.ty
                         ),
@@ -404,7 +396,7 @@ impl<'program> Interpreter<'program> {
                         expression.span,
                         format!(
                             "binding {} reached runtime before initialization",
-                            binding.index()
+                            reference.binding.index()
                         ),
                     ));
                 };
@@ -413,7 +405,7 @@ impl<'program> Interpreter<'program> {
                         expression.span,
                         format!(
                             "binding {} stored a runtime value that does not conform to slot type {}",
-                            binding.index(), slot.ty
+                            reference.binding.index(), slot.ty
                         ),
                     ));
                 }
@@ -917,6 +909,36 @@ impl<'program> Interpreter<'program> {
         }
     }
 
+    fn validate_binding_reference(
+        &self,
+        frame: &Frame,
+        reference: &BindingReference,
+        span: nova_source::Span,
+    ) -> Result<(), Diagnostic> {
+        let Some(slot) = frame.get(&reference.binding) else {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "resolved binding {} is absent from the frame",
+                    reference.binding.index()
+                ),
+            ));
+        };
+        if slot.binding_name != reference.binding_name
+            || slot.declaration_span != reference.declaration_span
+        {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "resolved binding reference `{}` does not match declaration identity for binding {}",
+                    reference.binding_name,
+                    reference.binding.index()
+                ),
+            ));
+        }
+        Ok(())
+    }
+
     fn bind_runtime_slot(
         &self,
         frame: &mut Frame,
@@ -936,7 +958,11 @@ impl<'program> Interpreter<'program> {
             }
         }
         if let Some(slot) = frame.get_mut(&binding.id) {
-            if slot.ty != binding.ty || slot.mutable != binding.mutable {
+            if slot.ty != binding.ty
+                || slot.mutable != binding.mutable
+                || slot.binding_name != binding.name
+                || slot.declaration_span != binding.span
+            {
                 return Err(self.invariant(
                     span,
                     format!(
@@ -953,6 +979,8 @@ impl<'program> Interpreter<'program> {
             RuntimeSlot {
                 ty: binding.ty.clone(),
                 mutable: binding.mutable,
+                binding_name: binding.name.clone(),
+                declaration_span: binding.span,
                 value,
             },
         );

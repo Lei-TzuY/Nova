@@ -758,7 +758,11 @@ impl Analyzer {
                     {
                         self.record_initialization(symbol.id, target.span);
                     }
-                    Some(symbol.id)
+                    Some(hir::BindingReference {
+                        binding: symbol.id,
+                        binding_name: target.text.clone(),
+                        declaration_span: symbol.span,
+                    })
                 } else if let Some(span) = function_span {
                     self.diagnostics.push(
                         Diagnostic::error("N3008", "invalid assignment target")
@@ -1998,7 +2002,14 @@ impl Analyzer {
     fn lower_name(&mut self, name: &ast::Name) -> (ExpressionKind, Type) {
         if let Some(symbol) = self.find_local(&name.text) {
             self.flow_advance(FlowNodeKind::Read(symbol.id), Some(name.span));
-            return (ExpressionKind::Binding(symbol.id), symbol.ty);
+            return (
+                ExpressionKind::Binding(hir::BindingReference {
+                    binding: symbol.id,
+                    binding_name: name.text.clone(),
+                    declaration_span: symbol.span,
+                }),
+                symbol.ty,
+            );
         }
         if let Some(symbol) = self.functions.get(&name.text) {
             return (
@@ -2734,7 +2745,10 @@ mod tests {
         let StatementKind::Assignment { target, .. } = &function.body.statements[1].kind else {
             panic!("expected assignment statement");
         };
-        assert_eq!(*target, Some(binding.id));
+        let target = target.as_ref().expect("resolved assignment target");
+        assert_eq!(target.binding, binding.id);
+        assert_eq!(target.binding_name, binding.name);
+        assert_eq!(target.declaration_span, binding.span);
     }
 
     #[test]

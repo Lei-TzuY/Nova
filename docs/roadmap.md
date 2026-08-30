@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty-four vertical slices implemented; broader type-system work remains.**
+**Status: forty-five vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -741,6 +741,23 @@ Implemented in the forty-fourth Phase 2 slice:
 - producer and inspection corruption regressions reject same-signature sibling retargeting and
   reference-signature drift without changing syntax, CFG, ABI, or valid-source behavior.
 
+Implemented in the forty-fifth Phase 2 slice:
+
+- local/parameter reads and assignment targets retain a `BindingReference` containing the
+  resolved `BindingId`, declaration spelling, and declaration-name span rather than relying
+  on the numeric id and result type alone at downstream trust boundaries;
+- declaration span is intentionally retained because lexical shadowing can produce two
+  simultaneously valid bindings with the same name and type, making spelling/type
+  insufficient to detect same-shaped retargeting;
+- semantic lowering preserves this identity triple while CFG read/initialize events continue
+  to use the existing `BindingId`, so definite-initialization remains a single verified graph
+  contract rather than acquiring parallel name/span flow state;
+- semantic inspection independently cross-checks the retained name/id/span against the
+  already-projected binding declaration before publishing the existing stable binding target,
+  leaving schema v1/v2 unchanged; and
+- producer and adversarial inspection regressions lock assignment targets and same-name
+  shadow references without changing source scoping, assignment syntax, or valid behavior.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -759,7 +776,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: nineteen vertical slices implemented; execution surface remains small.**
+**Status: twenty vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -1032,6 +1049,19 @@ Implemented in the nineteenth Phase 3 slice:
   or equality behavior, while validated local aliases continue to execute by declaration identity; and
 - focused runtime regressions plus all-targets Clippy coverage lock direct corruption rejection,
   valid alias execution, and adaptation of older malformed-HIR function-equality fixtures.
+
+Implemented in the twentieth Phase 3 slice:
+
+- runtime frame slots retain declaration spelling and declaration span alongside their existing
+  type, mutability, initialization state, and `BindingId` key;
+- binding reads require the HIR reference id/name/span triple to match the live slot before
+  returning a value, closing same-name, same-type shadow retargeting that type checks cannot see;
+- assignments evaluate the RHS first and validate target identity only after an ordinary value
+  is produced, so malformed target metadata cannot preempt structured return/break/continue flow;
+- target identity validation remains distinct from the existing mutability and replacement-type
+  checks, preserving defense in depth and repeated lexical-binding execution; and
+- adversarial runtime regressions lock same-type assignment retargeting, same-name shadow reads,
+  RHS structured-flow precedence, and unchanged valid frame behavior under `N4005` fail-closed policy.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

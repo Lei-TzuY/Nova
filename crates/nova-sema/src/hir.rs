@@ -255,6 +255,17 @@ pub struct Binding {
     pub span: Span,
 }
 
+/// A resolved local/parameter reference paired with declaration metadata.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BindingReference {
+    /// Stable analysis-order binding identity.
+    pub binding: BindingId,
+    /// Source-resolved declaration spelling.
+    pub binding_name: String,
+    /// Span of the declaration name that resolution selected.
+    pub declaration_span: Span,
+}
+
 /// A typed lexical block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Block {
@@ -292,7 +303,7 @@ pub enum StatementKind {
     /// Assignment to a named binding.
     Assignment {
         /// Resolved assignment target, or `None` for an already-diagnosed target.
-        target: Option<BindingId>,
+        target: Option<BindingReference>,
         /// Typed replacement value.
         value: Expression,
     },
@@ -360,7 +371,7 @@ pub enum ExpressionKind {
     /// Unit literal.
     Unit,
     /// Reference to a local binding or parameter.
-    Binding(BindingId),
+    Binding(BindingReference),
     /// Reference to a top-level function.
     Function {
         /// Stable source-order function identity.

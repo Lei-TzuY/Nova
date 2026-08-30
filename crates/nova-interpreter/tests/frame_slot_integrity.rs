@@ -3,7 +3,7 @@ use nova_lexer::lex;
 use nova_parser::parse;
 use nova_sema::{
     analyze,
-    hir::{ExpressionKind, StatementKind, Type},
+    hir::{BindingReference, ExpressionKind, StatementKind, Type},
 };
 use nova_source::{SourceFile, SourceId};
 
@@ -80,13 +80,17 @@ fn rejects_assignment_retargeted_to_immutable_runtime_slot() {
         .find(|function| function.name == "main")
         .expect("main function");
     let fixed = match &main.body.statements[0].kind {
-        StatementKind::Binding { binding, .. } => binding.id,
+        StatementKind::Binding { binding, .. } => binding.clone(),
         _ => panic!("expected immutable binding"),
     };
     let StatementKind::Assignment { target, .. } = &mut main.body.statements[2].kind else {
         panic!("expected assignment statement");
     };
-    *target = Some(fixed);
+    *target = Some(BindingReference {
+        binding: fixed.id,
+        binding_name: fixed.name,
+        declaration_span: fixed.span,
+    });
 
     let error = execute(&analyzed.program).expect_err("immutable slot write must fail");
     assert_eq!(error.code, "N4005");

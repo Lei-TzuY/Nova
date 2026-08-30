@@ -170,8 +170,13 @@ layout, and ABI guarantees are not implemented.
 assigned with the narrow statement form `name = expression;`. The target must
 resolve to a lexical `var`; functions, unknown names, `let` bindings, and
 parameters are rejected as assignment targets. The replacement value must keep
-the binding's established type. Assignment is not an expression and therefore
-cannot be chained or embedded in another expression.
+the binding's established type. Resolved local/parameter reads and assignment targets
+retain the selected declaration's `BindingId`, source spelling, and declaration-name
+span in HIR. The declaration span is part of the integrity pair because nested scopes
+may legally shadow a binding with the same spelling and type; name/type alone cannot
+distinguish those declarations. This metadata does not alter lexical resolution, CFG
+binding IDs, or the semantic-inspection schema. Assignment is not an expression and
+therefore cannot be chained or embedded in another expression.
 
 A mutable local may also be declared as `var name: Type;` and initialized by a
 later assignment. The explicit type is required. Reading such a binding before
@@ -291,13 +296,16 @@ validation. These checks catch malformed HIR even when the aggregate never cross
 function boundary.
 
 Runtime frames preserve the resolved binding contract too. Each slot records its
-resolved type, mutability, and initialization state. Parameters, local bindings,
-delayed `var` declarations, and match payload bindings reject non-conforming initial
-values or incompatible reuse of one binding identity; repeated execution of the same
-lexical binding may refresh its slot only with identical type/mutability metadata.
-Assignment additionally requires a mutable slot and a conforming replacement value.
-Binding reads verify that the HIR expression type and stored runtime value still agree
-with the slot contract. Any such interpreter/HIR drift fails closed with `N4005`.
+resolved type, mutability, initialization state, declaration spelling, and declaration
+span. Parameters, local bindings, delayed `var` declarations, and match payload bindings
+reject non-conforming initial values or incompatible reuse of one binding identity;
+repeated execution of the same lexical binding may refresh its slot only with identical
+type/mutability/name/span metadata. Binding reads revalidate the retained HIR reference
+against that slot before checking expression type and stored runtime-value conformance,
+so even same-name, same-type shadow retargeting fails closed. Assignment evaluates its
+RHS first; only an ordinary produced value triggers target identity, mutability, and
+replacement-type validation, preserving structured `return`/`break`/`continue` precedence.
+Any such interpreter/HIR drift fails closed with `N4005`.
 
 Every expression that completes with an ordinary runtime value also has a final
 interpreter postcondition: the value must recursively conform to that expression's
