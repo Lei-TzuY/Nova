@@ -728,7 +728,7 @@ fn verify(graph: &FunctionControlFlow, fallback_span: Span) -> Result<(), FlowEr
         let invalid_successor =
             successors[node.id.index()]
                 .iter()
-                .any(|(_, edge)| match &node.kind {
+                .any(|(successor, edge)| match &node.kind {
                     FlowNodeKind::Transfer(FlowTransfer::Return) => {
                         *edge != FlowEdgeKind::Diagnostic
                     }
@@ -736,7 +736,13 @@ fn verify(graph: &FunctionControlFlow, fallback_span: Span) -> Result<(), FlowEr
                     FlowNodeKind::Transfer(FlowTransfer::Continue) => {
                         !matches!(edge, FlowEdgeKind::Diagnostic | FlowEdgeKind::Backedge)
                     }
-                    FlowNodeKind::Transfer(FlowTransfer::Break) => *edge == FlowEdgeKind::Backedge,
+                    FlowNodeKind::Transfer(FlowTransfer::Break) => match edge {
+                        FlowEdgeKind::Backedge => true,
+                        FlowEdgeKind::Diagnostic => false,
+                        FlowEdgeKind::Execution => {
+                            !matches!(graph.nodes[successor.index()].kind, FlowNodeKind::Join)
+                        }
+                    },
                     _ => false,
                 });
         if invalid_successor {
@@ -925,6 +931,26 @@ mod tests {
         assert!(error.message().contains("loop-header"));
         assert!(error.message().contains("Execution predecessor"));
         assert_ne!(alternate, header);
+    }
+
+    #[test]
+    fn verifier_rejects_break_execution_that_bypasses_a_join() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        let transfer = builder.advance(
+            FlowNodeKind::Transfer(FlowTransfer::Break),
+            Some(span(1, 7)),
+            FlowEdgeKind::Execution,
+        );
+        let join = builder.join([transfer], Some(span(8, 9)), FlowEdgeKind::Execution);
+        let mut graph = builder
+            .finish(None)
+            .expect("valid break-to-join seed graph");
+
+        graph.nodes[join.index()].kind = FlowNodeKind::Branch;
+
+        let error = super::verify(&graph, span(0, 20))
+            .expect_err("break execution must re-enter continuation through a Join");
+        assert!(error.message().contains("incompatible"));
     }
 
     #[test]
