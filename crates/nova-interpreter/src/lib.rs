@@ -1140,7 +1140,40 @@ impl<'program> Interpreter<'program> {
             && left_function.return_type == right_function.return_type
     }
 
+    fn type_is_runtime_valid(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Int | Type::Bool | Type::Unit => true,
+            Type::Record(record) => {
+                self.program
+                    .records
+                    .get(record.id.index())
+                    .is_some_and(|definition| {
+                        definition.id == record.id && definition.name == record.name
+                    })
+            }
+            Type::Enum(enumeration) => {
+                self.program
+                    .enums
+                    .get(enumeration.id.index())
+                    .is_some_and(|definition| {
+                        definition.id == enumeration.id && definition.name == enumeration.name
+                    })
+            }
+            Type::Function(signature) => {
+                signature
+                    .parameters
+                    .iter()
+                    .all(|parameter| self.type_is_runtime_valid(parameter))
+                    && self.type_is_runtime_valid(&signature.return_type)
+            }
+            Type::Never | Type::Error => false,
+        }
+    }
+
     fn value_conforms_to_type(&self, value: &Value, ty: &Type) -> bool {
+        if !self.type_is_runtime_valid(ty) {
+            return false;
+        }
         match (value, ty) {
             (Value::Int(_), Type::Int)
             | (Value::Bool(_), Type::Bool)
