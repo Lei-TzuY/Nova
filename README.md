@@ -23,8 +23,8 @@ interpreter slices. The toolchain is written in Rust and can:
 - parse functions, recursive explicit function types, nominal records and enums,
   explicit aggregate construction, exhaustive enum matching with payload discard, field projection,
   initialized bindings, typed delayed `var` initialization, narrow assignments,
-  expressions, blocks, calls, `if` expressions, pre-test `while` loops, and
-  statement-only `break`/`continue`;
+  expressions, blocks, calls, `if` expressions, pre-test `while` loops, bare Unit
+  returns, and statement-only `break`/`continue`;
 - lower accepted syntax into a resolved, typed HIR with stable function,
   binding, record, and enum identities, plus a verified function-level CFG;
 - resolve top-level functions and nominal types, parameters, lexical local
@@ -115,6 +115,15 @@ ordinary runtime `Value` can inhabit it. A `-> !` body that falls through or pro
 continuing tail is rejected, while proven non-continuation such as `while true {}` with no
 reachable `break` satisfies the contract. Semantic-inspection v1/v2/v3 already represent
 Never, so exposing the spelling does not change any inspection schema.
+
+A `Unit`-returning function may now write `return;` as the compact explicit form of
+returning Unit. Semantic analysis checks the bare form as `Unit` against the declared
+return type, so non-Unit functions receive the same `N3004` mismatch used for an explicit
+wrongly typed return expression. AST and HIR retain a bare return separately from
+`return ();`; the interpreter produces the ordinary `Value::Unit`, and the existing
+function-boundary conformance check still rejects malformed HIR that claims a different
+return type. Semantic-inspection v1/v2/v3 already model a return statement with zero child
+expressions, so this source distinction needs no schema version bump.
 
 Rejected calls are fail-closed for continuing flow recovery. Callees and arguments
 are still lowered left-to-right for deterministic diagnostics, but a non-callable

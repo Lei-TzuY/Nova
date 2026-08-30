@@ -80,7 +80,7 @@ assignment_statement = identifier , "=" , expression , ";" ;
 while_statement     = "while" , expression , block ;
 break_statement     = "break" , ";" ;
 continue_statement  = "continue" , ";" ;
-return_statement    = "return" , expression , ";" ;
+return_statement    = "return" , [ expression ] , ";" ;
 expression_statement = expression , ";" ;
 
 expression          = logical_or ;
@@ -130,10 +130,14 @@ are not accepted.
 
 `Unit` is a built-in surface type and `()` is its sole literal. A block with no
 tail expression also has type `Unit`. A function declared `-> Unit` may therefore
-fall through a value-less body; `return ();` is the explicit equivalent. Other
-return types still require a compatible tail or an explicit return on every
-continuing path. Parenthesized non-empty expressions retain ordinary grouping, so
-`(value)` is not a Unit literal.
+fall through a value-less body, return Unit explicitly as `return ();`, or use the
+compact `return;` spelling. Bare `return;` is semantically a Unit return rather than a
+valueless control operation, so it is rejected by the ordinary return-type check in
+`Int`, `Bool`, nominal, function-valued, or `!`-returning functions. The AST and HIR
+nevertheless preserve whether source wrote a bare return instead of manufacturing a
+synthetic `()` expression. Other return types still require a compatible tail or an
+explicit value-returning path. Parenthesized non-empty expressions retain ordinary
+grouping, so `(value)` is not a Unit literal.
 
 Function types use the recursive surface form `fn(T1, T2) -> U`; zero parameters and
 a trailing comma are allowed, and parameter/return positions may themselves be function
