@@ -1,0 +1,38 @@
+name: Radix integer literal patch
+
+on:
+  push:
+    branches:
+      - feat/radix-integer-literals
+    paths:
+      - .github/radix-integer-literals-patch.py
+      - .github/workflows/radix-integer-literals-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/radix-integer-literals
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply and validate radix integer literals
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/radix-integer-literals-patch.py
+          cargo fmt --all
+          cargo test -p nova-lexer --test radix_integer_literals --locked
+          cargo test -p nova-cli --test cli --locked
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git rm .github/radix-integer-literals-patch.py .github/workflows/radix-integer-literals-patch.yml
+          git add crates/nova-lexer/src/lib.rs crates/nova-lexer/tests/radix_integer_literals.rs crates/nova-cli/tests/cli.rs crates/nova-cli/tests/fixtures/valid/radix-integers.nv
+          git commit -m "feat: support radix integer literals"
+          git push origin HEAD:feat/radix-integer-literals
