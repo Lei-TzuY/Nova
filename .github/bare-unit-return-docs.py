@@ -28,8 +28,8 @@ replace_once(
 )
 replace_once(
     "README.md",
-    '''Rejected calls are fail-closed for continuing flow recovery.\n''',
-    '''A `Unit`-returning function may now write `return;` as the compact explicit form of\nreturning Unit. Semantic analysis checks the bare form as `Unit` against the declared\nreturn type, so non-Unit functions receive the same `N3004` mismatch used for an explicit\nwrongly typed return expression. AST and HIR retain a bare return separately from\n`return ();`; the interpreter produces the ordinary `Value::Unit`, and the existing\nfunction-boundary conformance check still rejects malformed HIR that claims a different\nreturn type. Semantic-inspection v1/v2/v3 already model a return statement with zero child\nexpressions, so this source distinction needs no schema version bump.\n\nRejected calls are fail-closed for continuing flow recovery.\n''',
+    '''Rejected calls are fail-closed for continuing flow recovery. Callees and arguments\n''',
+    '''A `Unit`-returning function may now write `return;` as the compact explicit form of\nreturning Unit. Semantic analysis checks the bare form as `Unit` against the declared\nreturn type, so non-Unit functions receive the same `N3004` mismatch used for an explicit\nwrongly typed return expression. AST and HIR retain a bare return separately from\n`return ();`; the interpreter produces the ordinary `Value::Unit`, and the existing\nfunction-boundary conformance check still rejects malformed HIR that claims a different\nreturn type. Semantic-inspection v1/v2/v3 already model a return statement with zero child\nexpressions, so this source distinction needs no schema version bump.\n\nRejected calls are fail-closed for continuing flow recovery. Callees and arguments\n''',
 )
 
 replace_once(
