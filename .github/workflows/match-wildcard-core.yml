@@ -39,65 +39,59 @@ jobs:
           from pathlib import Path
 
           p = Path('crates/nova-interpreter/tests/enum_variant_identity.rs')
-          text = p.read_text()
-          text = text.replace(
+          text = p.read_text().replace(
               'hir::{ExpressionKind, StatementKind},',
-              'hir::{ExpressionKind, MatchArmPattern, StatementKind},',
-              1,
-          )
+              'hir::{ExpressionKind, MatchArmPattern, StatementKind},', 1)
           text = text.replace(
               '    arms[0].variant_index = 1;\n    arms[1].variant_index = 0;\n',
-              '''    let MatchArmPattern::Variant { variant_index: first, .. } = &mut arms[0].pattern else { panic!("variant arm"); };\n    *first = 1;\n    let MatchArmPattern::Variant { variant_index: second, .. } = &mut arms[1].pattern else { panic!("variant arm"); };\n    *second = 0;\n''',
-              1,
-          )
+              '''    let MatchArmPattern::Variant { variant_index: first, .. } = &mut arms[0].pattern else { panic!("variant arm"); };\n    *first = 1;\n    let MatchArmPattern::Variant { variant_index: second, .. } = &mut arms[1].pattern else { panic!("variant arm"); };\n    *second = 0;\n''', 1)
           text = text.replace(
               '    arms[0].variant_index = 99;\n',
-              '''    let MatchArmPattern::Variant { variant_index, .. } = &mut arms[0].pattern else { panic!("variant arm"); };\n    *variant_index = 99;\n''',
-              1,
-          )
+              '''    let MatchArmPattern::Variant { variant_index, .. } = &mut arms[0].pattern else { panic!("variant arm"); };\n    *variant_index = 99;\n''', 1)
           p.write_text(text)
 
           p = Path('crates/nova-interpreter/tests/pattern_payload_discard.rs')
-          text = p.read_text()
-          text = text.replace(
+          text = p.read_text().replace(
               'use nova_sema::{analyze, hir::ExpressionKind};',
-              'use nova_sema::{analyze, hir::{ExpressionKind, MatchArmPattern}};',
-              1,
-          )
+              'use nova_sema::{analyze, hir::{ExpressionKind, MatchArmPattern}};', 1)
           text = text.replace(
               '    arms[1].binding = None;\n    assert!(!arms[1].payload_discarded);\n',
-              '''    let MatchArmPattern::Variant { binding, payload_discarded, .. } = &mut arms[1].pattern else { panic!("variant arm"); };\n    *binding = None;\n    assert!(!*payload_discarded);\n''',
-              1,
-          )
+              '''    let MatchArmPattern::Variant { binding, payload_discarded, .. } = &mut arms[1].pattern else { panic!("variant arm"); };\n    *binding = None;\n    assert!(!*payload_discarded);\n''', 1)
           p.write_text(text)
 
           p = Path('crates/nova-interpreter/tests/frame_slot_integrity.rs')
-          text = p.read_text()
-          text = text.replace(
+          text = p.read_text().replace(
               'hir::{BindingReference, ExpressionKind, StatementKind, Type},',
-              'hir::{BindingReference, ExpressionKind, MatchArmPattern, StatementKind, Type},',
-              1,
-          )
+              'hir::{BindingReference, ExpressionKind, MatchArmPattern, StatementKind, Type},', 1)
           text = text.replace(
               '    let binding = arms[0].binding.as_mut().expect("payload binding");\n    binding.ty = Type::Bool;\n',
-              '''    let MatchArmPattern::Variant { binding: Some(binding), .. } = &mut arms[0].pattern else { panic!("payload variant arm"); };\n    binding.ty = Type::Bool;\n''',
-              1,
-          )
+              '''    let MatchArmPattern::Variant { binding: Some(binding), .. } = &mut arms[0].pattern else { panic!("payload variant arm"); };\n    binding.ty = Type::Bool;\n''', 1)
           p.write_text(text)
 
           p = Path('crates/nova-sema/tests/enum_variant_identity.rs')
-          text = p.read_text()
-          text = text.replace(
+          text = p.read_text().replace(
               'use nova_sema::{analyze, hir::ExpressionKind};',
-              'use nova_sema::{analyze, hir::{ExpressionKind, MatchArmPattern}};',
-              1,
-          )
+              'use nova_sema::{analyze, hir::{ExpressionKind, MatchArmPattern}};', 1)
           text = text.replace(
               '''    assert_eq!(arms[0].variant_name, "Left");\n    assert_eq!(arms[0].variant_index, 0);\n    assert_eq!(arms[1].variant_name, "Right");\n    assert_eq!(arms[1].variant_index, 1);\n''',
-              '''    let MatchArmPattern::Variant { variant_name: first_name, variant_index: first_index, .. } = &arms[0].pattern else { panic!("variant arm"); };\n    assert_eq!(first_name, "Left");\n    assert_eq!(*first_index, 0);\n    let MatchArmPattern::Variant { variant_name: second_name, variant_index: second_index, .. } = &arms[1].pattern else { panic!("variant arm"); };\n    assert_eq!(second_name, "Right");\n    assert_eq!(*second_index, 1);\n''',
-              1,
-          )
+              '''    let MatchArmPattern::Variant { variant_name: first_name, variant_index: first_index, .. } = &arms[0].pattern else { panic!("variant arm"); };\n    assert_eq!(first_name, "Left");\n    assert_eq!(*first_index, 0);\n    let MatchArmPattern::Variant { variant_name: second_name, variant_index: second_index, .. } = &arms[1].pattern else { panic!("variant arm"); };\n    assert_eq!(second_name, "Right");\n    assert_eq!(*second_index, 1);\n''', 1)
           p.write_text(text)
+
+          p = Path('crates/nova-parser/src/parser.rs')
+          text = p.read_text()
+          old = '''        assert_eq!(arms.len(), 2);\n        assert_eq!(source.slice(arms[0].pattern.span), Some("Maybe::None"));\n        assert_eq!(\n            source.slice(arms[1].pattern.span),\n            Some("Maybe::Some(inner)")\n        );\n        assert_eq!(\n            arms[1]\n                .pattern\n                .binding\n                .as_ref()\n                .map(|binding| binding.text.as_str()),\n            Some("inner")\n        );\n'''
+          new = '''        assert_eq!(arms.len(), 2);\n        let MatchPattern::Variant(first) = &arms[0].pattern else { panic!("variant pattern"); };\n        let MatchPattern::Variant(second) = &arms[1].pattern else { panic!("variant pattern"); };\n        assert_eq!(source.slice(first.span), Some("Maybe::None"));\n        assert_eq!(source.slice(second.span), Some("Maybe::Some(inner)"));\n        assert_eq!(second.binding.as_ref().map(|binding| binding.text.as_str()), Some("inner"));\n'''
+          if text.count(old) != 1:
+              raise SystemExit('unexpected parser internal match fixture')
+          p.write_text(text.replace(old, new, 1))
+
+          p = Path('crates/nova-sema/src/analyzer.rs')
+          text = p.read_text()
+          old = '''        assert_eq!(enumeration.index(), 0);\n        assert_eq!(arms.len(), 2);\n        assert!(arms[0].binding.is_none());\n        assert_eq!(\n            arms[1]\n                .binding\n                .as_ref()\n                .map(|binding| binding.name.as_str()),\n            Some("previous")\n        );\n'''
+          new = '''        assert_eq!(enumeration.index(), 0);\n        assert_eq!(arms.len(), 2);\n        let MatchArmPattern::Variant { binding: first_binding, .. } = &arms[0].pattern else { panic!("variant arm"); };\n        let MatchArmPattern::Variant { binding: second_binding, .. } = &arms[1].pattern else { panic!("variant arm"); };\n        assert!(first_binding.is_none());\n        assert_eq!(second_binding.as_ref().map(|binding| binding.name.as_str()), Some("previous"));\n'''
+          if text.count(old) != 1:
+              raise SystemExit('unexpected analyzer internal match fixture')
+          p.write_text(text.replace(old, new, 1))
           PY
           cargo fmt --all
           cargo test -p nova-parser --test match_wildcard --locked
