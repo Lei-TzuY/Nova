@@ -1,5 +1,18 @@
 from pathlib import Path
 
+# Preserve the semantic producer proof that concrete arms retain source spelling + slot.
+p = Path('crates/nova-sema/tests/enum_variant_identity.rs')
+text = p.read_text()
+text = text.replace(
+    'use nova_sema::{analyze, hir::ExpressionKind};\n',
+    'use nova_sema::{analyze, hir::{ExpressionKind, MatchPattern}};\n',
+)
+text = text.replace(
+    '''    assert_eq!(arms.len(), 2);\n    assert_eq!(arms[0].variant_name, "Left");\n    assert_eq!(arms[0].variant_index, 0);\n    assert_eq!(arms[1].variant_name, "Right");\n    assert_eq!(arms[1].variant_index, 1);\n''',
+    '''    assert_eq!(arms.len(), 2);\n    let MatchPattern::Variant {\n        variant_name,\n        variant_index,\n        ..\n    } = &arms[0].pattern\n    else {\n        panic!("expected concrete Left pattern");\n    };\n    assert_eq!(variant_name, "Left");\n    assert_eq!(*variant_index, 0);\n    let MatchPattern::Variant {\n        variant_name,\n        variant_index,\n        ..\n    } = &arms[1].pattern\n    else {\n        panic!("expected concrete Right pattern");\n    };\n    assert_eq!(variant_name, "Right");\n    assert_eq!(*variant_index, 1);\n''',
+)
+p.write_text(text)
+
 # Preserve the existing enum-identity adversarial tests against the new pattern shape.
 p = Path('crates/nova-interpreter/tests/enum_variant_identity.rs')
 text = p.read_text()
