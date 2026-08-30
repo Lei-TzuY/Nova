@@ -12,4 +12,13 @@ replace_once(
 )
 
 '''
-p.write_text(text[:start] + replacement + text[end:])
+text = text[:start] + replacement + text[end:]
+needle = '# Parser integration tests for recursive syntax and fail-closed depth.\nPath("crates/nova-parser/tests/function_types.rs").write_text'
+if needle not in text:
+    raise SystemExit('parser integration test anchor not found')
+text = text.replace(
+    needle,
+    '# Parser integration tests for recursive syntax and fail-closed depth.\nPath("crates/nova-parser/tests").mkdir(parents=True, exist_ok=True)\nPath("crates/nova-parser/tests/function_types.rs").write_text',
+    1,
+)
+p.write_text(text)
