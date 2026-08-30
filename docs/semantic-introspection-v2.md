@@ -100,6 +100,9 @@ canonical: every non-`join` node has exactly one incoming edge, only `join` may 
 multiple paths, and no node publishes the same source/edge-class pair twice. A `join`
 that receives any `backedge` also publishes at least one earlier `execution` predecessor,
 so tooling can rely on every executable loop header retaining its first-entry path.
+Executable continuation from a `break` node is likewise canonical: when present it targets
+only a `join`; diagnostic successors may retain unreachable source but cannot masquerade as
+the loop's executable exit continuation.
 
 Node spans are source-qualified v1 spans when a source action or function
 boundary owns the node; compiler-created joins may have `null`. Edge arrays do
