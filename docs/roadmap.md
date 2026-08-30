@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty-seven vertical slices implemented; broader type-system work remains.**
+**Status: forty-eight vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -785,6 +785,20 @@ Implemented in the forty-seventh Phase 2 slice:
   over the generic cardinality error, keeping earlier invariant failures precise; and
 - adversarial verifier regressions lock both non-`Join` multi-predecessor corruption and
   duplicate `Join` edges while schema v2 shape and all valid lowering behavior remain unchanged.
+
+Implemented in the forty-eighth Phase 2 slice:
+
+- every verified loop-header `Join` that receives a `Backedge` must also retain at least
+  one forward `Execution` predecessor from an earlier graph-local node;
+- this makes the loop's first-entry path a verifier invariant rather than a builder-only
+  convention, preventing malformed graphs from deleting pre-iteration facts before the
+  definite-initialization fixed point is solved;
+- an adversarial cyclic graph keeps an alternate path that initializes a binding before
+  entering the cycle, then removes the header's original entry edge; the verifier now
+  rejects that corruption before it can erase the seed graph's required `N3009` read;
+- existing direction, executable-reachability, backedge-target, predecessor-cardinality,
+  and diagnostic-isolation invariants remain independently enforced; and
+- CFG/v2 schema shape and all valid structured lowering remain unchanged.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
