@@ -19,7 +19,7 @@ Completion of the initial document does not freeze unfinished semantics.
 
 ## Phase 1 — Executable frontend foundation
 
-**Status: four vertical slices implemented; broader grammar work remains.**
+**Status: five vertical slices implemented; broader grammar work remains.**
 
 - Rust workspace and official `nova` CLI bootstrap;
 - source identity, exact spans, and locations;
@@ -72,12 +72,23 @@ Implemented in the fourth Phase 1 slice:
 - parser plus CLI regressions exercise discard syntax through semantic analysis and runtime
   execution while the existing enum-pattern grammar remains fail closed elsewhere.
 
+Implemented in the fifth Phase 1 slice:
+
+- `!` becomes an explicit surface type reference using the lexer's existing bang token in
+  type context, so no new lexical form or keyword is introduced;
+- AST type references preserve a dedicated Never form rather than encoding `!` as a magic
+  identifier, and the same recursive type grammar permits it in direct or nested positions;
+- parser regressions cover direct parameter/return positions plus nested `fn() -> !` and
+  `fn(!) -> !` signatures without changing the existing type-depth budget; and
+- an end-to-end CLI fixture exercises the spelling through check, run, and all supported
+  semantic-inspection schema versions while the executing branch still returns `42`.
+
 Next Phase 1 refinements should be driven by the needs of later semantic work,
 not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: fifty-one vertical slices implemented; broader type-system work remains.**
+**Status: fifty-two vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -889,6 +900,23 @@ Implemented in the fifty-first Phase 2 slice:
 - semantic, inspection, CLI, schema, and malformed-HIR regressions lock both the new language
   fact and backward-compatible tooling version boundary without introducing catch-all
   usefulness semantics.
+
+Implemented in the fifty-second Phase 2 slice:
+
+- surface `!` resolves directly to the existing HIR `Type::Never`, preserving one bottom-type
+  identity across source signatures, expected-type compatibility, control-flow typing,
+  semantic inspection, and runtime invariants;
+- a function declared `-> !` must have a body whose reachable result is Never: continuing
+  fallthrough remains `N3007`, while a continuing tail remains the ordinary `N3004` type
+  mismatch instead of receiving a special exception;
+- calls returning Never automatically reuse the established bottom rule, so a diverging arm
+  can join with an `Int`, `Bool`, Unit, nominal, or function-valued continuing alternative
+  without a coercion or fabricated runtime value;
+- `!` is legal in every existing type-reference position, making uninhabited parameters,
+  fields, enum payloads, locals, and nested callable signatures expressible while runtime
+  conformance continues to reject any ordinary value pretending to inhabit Never; and
+- semantic and inspection regressions prove that v1/v2/v3 already publish the existing
+  `never` type fact and display `!`, so no tooling schema or runtime representation changes.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

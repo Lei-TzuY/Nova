@@ -29,7 +29,7 @@ interpreter slices. The toolchain is written in Rust and can:
   binding, record, and enum identities, plus a verified function-level CFG;
 - resolve top-level functions and nominal types, parameters, lexical local
   bindings, record-field and enum-variant name/slot identities, and match payload bindings;
-- check bootstrap `Int`, `Bool`, `Unit`, and nominal aggregate types, function
+- check bootstrap `Int`, `Bool`, `Unit`, the uninhabited `!` bottom type, and nominal aggregate types, function
   signatures, local inference and annotations, calls, operators, block tails, branches,
   returns, loop conditions, loop-control legality, record construction/projection,
   enum construction, match exhaustiveness and arm types, assignment
@@ -105,6 +105,15 @@ named top-level functions can now be passed, returned, stored in typed locals, a
 through those values. For example, a parameter `transform: fn(Int) -> Int` can be called
 like any other function value. This slice deliberately does not add lambda expressions,
 closures, captured environments, methods, or implicit callable conversions.
+
+The surface type `!` exposes the semantic core's existing uninhabited bottom type. A
+`fn forever() -> !` signature states that the function has no continuing return path; calls
+to such a function therefore fit any expected value position without manufacturing a value.
+`!` may appear in any type-reference position, including inside function types, but no
+ordinary runtime `Value` can inhabit it. A `-> !` body that falls through or produces a
+continuing tail is rejected, while proven non-continuation such as `while true {}` with no
+reachable `break` satisfies the contract. Semantic-inspection v1/v2/v3 already represent
+Never, so exposing the spelling does not change any inspection schema.
 
 Rejected calls are fail-closed for continuing flow recovery. Callees and arguments
 are still lowered left-to-right for deterministic diagnostics, but a non-callable

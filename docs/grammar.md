@@ -60,7 +60,7 @@ function            = "fn" , identifier , "(" , [ parameters ] , ")" ,
                       "->" , type_ref , block ;
 parameters          = parameter , { "," , parameter } , [ "," ] ;
 parameter           = identifier , ":" , type_ref ;
-type_ref            = identifier | function_type ;
+type_ref            = identifier | "!" | function_type ;
 function_type       = "fn" , "(" , [ type_ref_list ] , ")" , "->" , type_ref ;
 type_ref_list       = type_ref , { "," , type_ref } , [ "," ] ;
 
@@ -143,6 +143,14 @@ top-level function values to be passed, returned, stored, and invoked through ex
 signatures. It does not introduce lambdas, closures, captured environments, methods, or
 implicit callable coercions. Recursive type parsing has its own finite nesting budget and
 reports `N2009` rather than recursing without bound.
+
+`!` is the surface spelling of Nova's uninhabited bottom type. It is accepted anywhere a
+type reference is accepted, including nested function signatures. A continuing expression
+can never produce a value of type `!`; instead, a call to a declared `fn() -> !` is
+non-continuing and remains compatible with any expected result position. A function
+declared `-> !` must itself be proven non-continuing on every path, for example by a
+guaranteed loop with no reachable `break`; ordinary fallthrough or a continuing tail is
+rejected. `!` introduces no runtime value, layout, allocation, or ABI representation.
 
 Records are nominal top-level types. Each field has an explicit type and field
 names must be unique within a record. `new Type { ... }` constructs a record by
