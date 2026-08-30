@@ -84,6 +84,20 @@ jobs:
               1,
           )
           p.write_text(text)
+
+          p = Path('crates/nova-sema/tests/enum_variant_identity.rs')
+          text = p.read_text()
+          text = text.replace(
+              'use nova_sema::{analyze, hir::ExpressionKind};',
+              'use nova_sema::{analyze, hir::{ExpressionKind, MatchArmPattern}};',
+              1,
+          )
+          text = text.replace(
+              '''    assert_eq!(arms[0].variant_name, "Left");\n    assert_eq!(arms[0].variant_index, 0);\n    assert_eq!(arms[1].variant_name, "Right");\n    assert_eq!(arms[1].variant_index, 1);\n''',
+              '''    let MatchArmPattern::Variant { variant_name: first_name, variant_index: first_index, .. } = &arms[0].pattern else { panic!("variant arm"); };\n    assert_eq!(first_name, "Left");\n    assert_eq!(*first_index, 0);\n    let MatchArmPattern::Variant { variant_name: second_name, variant_index: second_index, .. } = &arms[1].pattern else { panic!("variant arm"); };\n    assert_eq!(second_name, "Right");\n    assert_eq!(*second_index, 1);\n''',
+              1,
+          )
+          p.write_text(text)
           PY
           cargo fmt --all
           cargo test -p nova-parser --test match_wildcard --locked
