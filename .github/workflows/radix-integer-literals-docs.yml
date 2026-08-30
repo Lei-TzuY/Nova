@@ -1,0 +1,32 @@
+name: Radix integer literal docs
+
+on:
+  push:
+    branches:
+      - feat/radix-integer-literals
+    paths:
+      - .github/radix-integer-literals-docs.py
+      - .github/workflows/radix-integer-literals-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/radix-integer-literals
+          fetch-depth: 0
+      - name: Apply radix integer literal docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/radix-integer-literals-docs.py
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git rm .github/radix-integer-literals-docs.py .github/workflows/radix-integer-literals-docs.yml
+          git add README.md docs/grammar.md docs/language-constitution.md docs/roadmap.md
+          git commit -m "docs: specify radix integer literals"
+          git push origin HEAD:feat/radix-integer-literals
