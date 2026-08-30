@@ -76,21 +76,22 @@ path.write_text(text.replace(old, new, 1))
 # README user-facing status.
 path = Path("README.md")
 text = path.read_text()
-old = '''The bootstrap frontend preserves decimal integer magnitudes through parsing and
-assigns signed meaning during semantic lowering. Positive `Int` literals are
-`0..=2^63-1`; the magnitude `2^63` is reserved for prefix negation, so
-`-9223372036854775808` denotes the exact signed 64-bit minimum. A positive `2^63`
-expression is rejected as semantic diagnostic `N3030`, and larger magnitudes are
-rejected lexically as `N1004`. No literal is wrapped or truncated.
+old = '''For deterministic execution while the numeric design remains provisional, the
+bootstrap frontend now covers the complete signed 64-bit literal endpoints: positive
+literals end at `9223372036854775807`, while `-9223372036854775808` is normalized
+during semantic lowering to the exact minimum `Int`. Positive `9223372036854775808`
+is `N3030`; any larger decimal magnitude is lexical `N1004`. The interpreter
+represents `Int` as signed 64-bit at runtime and uses checked arithmetic.
 '''
-new = '''Integer literals may be decimal or use binary (`0b`/`0B`), octal (`0o`/`0O`),
-or hexadecimal (`0x`/`0X`) prefixes, with single `_` separators between digits.
-The lexer validates the selected radix and decodes every accepted spelling to the same
-checked magnitude before parsing, so arithmetic and type semantics do not depend on how
-a value was written. Positive `Int` literals end at `2^63 - 1`; magnitude `2^63` in
-any supported radix is reserved for prefix negation, making both decimal
-`-9223372036854775808` and hexadecimal `-0x8000_0000_0000_0000` exact `Int::MIN`.
-Larger magnitudes are rejected lexically and no literal is wrapped or truncated.
+new = '''For deterministic execution while the numeric design remains provisional, integer
+literals may be decimal or use binary (`0b`/`0B`), octal (`0o`/`0O`), or hexadecimal
+(`0x`/`0X`) prefixes, with single `_` separators between digits. Lexing validates the
+selected radix and erases the source spelling after decoding every accepted form to the
+same checked magnitude. Positive `Int` literals end at `2^63 - 1`; magnitude `2^63`
+in any supported radix is reserved for prefix negation, so both
+`-9223372036854775808` and `-0x8000_0000_0000_0000` normalize to exact `Int::MIN`.
+Positive magnitude `2^63` is `N3030`; larger magnitudes are lexical `N1004`. The
+interpreter represents `Int` as signed 64-bit at runtime and uses checked arithmetic.
 '''
 if old not in text:
     raise SystemExit("README numeric anchor not found")
