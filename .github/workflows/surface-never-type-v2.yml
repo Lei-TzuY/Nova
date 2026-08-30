@@ -1,0 +1,43 @@
+name: Surface never type v2
+
+on:
+  push:
+    branches:
+      - feat/surface-never-type-v2
+    paths:
+      - .github/surface-never-type-v2.py
+      - .github/workflows/surface-never-type-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/surface-never-type-v2
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply and validate surface Never type
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/surface-never-type-v2.py
+          cargo fmt --all
+          cargo test -p nova-parser --test surface_never_type
+          cargo test -p nova-sema --test surface_never_type
+          cargo test -p nova-inspect --test surface_never_type
+          cargo test -p nova-cli --test surface_never_type
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git rm -f .github/surface-never-type-v2.py .github/workflows/surface-never-type-v2.yml
+          git add crates/nova-parser/src/ast.rs crates/nova-parser/src/parser.rs \
+            crates/nova-parser/tests/surface_never_type.rs crates/nova-sema/src/analyzer.rs \
+            crates/nova-sema/tests/surface_never_type.rs crates/nova-inspect/tests/surface_never_type.rs \
+            crates/nova-cli/tests/surface_never_type.rs crates/nova-cli/tests/fixtures/valid/surface-never-type.nv
+          git commit -m "feat: expose the Never type at the source level"
+          git push origin HEAD:feat/surface-never-type-v2
