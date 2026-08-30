@@ -65,6 +65,16 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<Result<i64, ConstantIn
             *enumeration,
             arms,
         )?),
+        ExpressionKind::FieldAccess {
+            base,
+            record,
+            field_index,
+            ..
+        } => evaluate(crate::constant_condition::selected_record_field_value(
+            base,
+            *record,
+            *field_index,
+        )?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             evaluate(block.tail.as_deref()?)
         }
