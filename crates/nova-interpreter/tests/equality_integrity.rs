@@ -54,6 +54,7 @@ fn malformed_payload_bearing_enum_equality_fails_closed() {
     for operand in [left, right] {
         operand.kind = ExpressionKind::EnumConstructor {
             enumeration,
+            variant_name: "None".to_owned(),
             variant_index: 0,
             payload: None,
         };
