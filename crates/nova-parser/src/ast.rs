@@ -178,8 +178,8 @@ pub enum StatementKind {
     Break,
     /// Start the next iteration of the nearest lexically enclosing loop.
     Continue,
-    /// Explicit function return.
-    Return(Expression),
+    /// Explicit function return; `None` is the bare `return;` form.
+    Return(Option<Expression>),
     /// Expression whose value is discarded by a semicolon.
     Expression(Expression),
 }

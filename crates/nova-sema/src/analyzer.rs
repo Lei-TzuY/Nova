@@ -932,14 +932,24 @@ impl Analyzer {
                 (StatementKind::Continue, legal)
             }
             ast::StatementKind::Return(expression) => {
-                let expression = self.lower_expression(expression, return_type);
-                self.require_type(
-                    &expression.ty,
-                    return_type,
-                    expression.span,
-                    "return expression",
-                );
-                if !expression.ty.is_never() {
+                let expression = expression
+                    .as_ref()
+                    .map(|expression| self.lower_expression(expression, return_type));
+                if let Some(expression) = &expression {
+                    self.require_type(
+                        &expression.ty,
+                        return_type,
+                        expression.span,
+                        "return expression",
+                    );
+                    if !expression.ty.is_never() {
+                        self.flow_advance(
+                            FlowNodeKind::Transfer(FlowTransfer::Return),
+                            Some(statement.span),
+                        );
+                    }
+                } else {
+                    self.require_type(&Type::Unit, return_type, statement.span, "bare return");
                     self.flow_advance(
                         FlowNodeKind::Transfer(FlowTransfer::Return),
                         Some(statement.span),

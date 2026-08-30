@@ -475,7 +475,9 @@ impl<'a> Builder<'a> {
                 v1::StatementKind::Continue
             }
             hir::StatementKind::Return(value) => {
-                expressions.push(self.collect_expression(value, owner)?);
+                if let Some(value) = value {
+                    expressions.push(self.collect_expression(value, owner)?);
+                }
                 v1::StatementKind::Return
             }
             hir::StatementKind::Expression(value) => {

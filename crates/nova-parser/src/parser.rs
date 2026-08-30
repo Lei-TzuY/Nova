@@ -503,8 +503,12 @@ impl<'source> Parser<'source> {
 
     fn parse_return_statement(&mut self) -> Option<Statement> {
         let keyword = self.expect(TokenKind::Return, "to start a return statement")?;
-        let expression = self.parse_expression()?;
-        let semicolon = self.expect(TokenKind::Semicolon, "after the returned expression")?;
+        let expression = if self.at(TokenKind::Semicolon) {
+            None
+        } else {
+            Some(self.parse_expression()?)
+        };
+        let semicolon = self.expect(TokenKind::Semicolon, "after `return`")?;
         Some(Statement {
             span: self.cover(keyword.span, semicolon.span),
             kind: StatementKind::Return(expression),
