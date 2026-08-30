@@ -40,9 +40,7 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
                 return None;
             }
 
-            let mut selected = arms
-                .iter()
-                .filter(|arm| arm.variant_index == variant_index);
+            let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
             let arm = selected.next()?;
             if selected.next().is_some() {
                 return None;
