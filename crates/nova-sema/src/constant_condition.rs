@@ -193,9 +193,9 @@ fn match_variant_tag(expression: &Expression) -> Option<(EnumId, usize)> {
             variant_index,
             payload,
             ..
-        } if payload
-            .as_deref()
-            .is_none_or(is_closed_total_value) => Some((*enumeration, *variant_index)),
+        } if payload.as_deref().is_none_or(is_closed_total_value) => {
+            Some((*enumeration, *variant_index))
+        }
         ExpressionKind::If {
             condition,
             then_branch,
@@ -233,9 +233,9 @@ fn is_closed_total_value(expression: &Expression) -> bool {
 
 fn record_value_is_closed(expression: &Expression) -> bool {
     match &expression.kind {
-        ExpressionKind::RecordLiteral { fields, .. } => {
-            fields.iter().all(|field| is_closed_total_value(&field.value))
-        }
+        ExpressionKind::RecordLiteral { fields, .. } => fields
+            .iter()
+            .all(|field| is_closed_total_value(&field.value)),
         ExpressionKind::FieldAccess { base, .. } => is_closed_total_value(base),
         ExpressionKind::If {
             condition,
@@ -254,12 +254,10 @@ fn record_value_is_closed(expression: &Expression) -> bool {
             scrutinee,
             enumeration,
             arms,
-        } => selected_match_value(scrutinee, *enumeration, arms)
-            .is_some_and(is_closed_total_value),
-        ExpressionKind::Block(block) if block.statements.is_empty() => block
-            .tail
-            .as_deref()
-            .is_some_and(is_closed_total_value),
+        } => selected_match_value(scrutinee, *enumeration, arms).is_some_and(is_closed_total_value),
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            block.tail.as_deref().is_some_and(is_closed_total_value)
+        }
         _ => false,
     }
 }
