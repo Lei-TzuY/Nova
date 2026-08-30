@@ -80,7 +80,11 @@ fn run_command_executes_checked_program() {
             "42\n",
             Some("warning[N3033]"),
         ),
-        ("valid/literal-match-flow.nv", "42\n", None),
+        (
+            "valid/literal-match-flow.nv",
+            "42\n",
+            Some("warning[N3034]"),
+        ),
         ("valid/unit.nv", "42\n", None),
         ("valid/unit-equality.nv", "true\n", None),
         ("valid/unit-main.nv", "()\n", None),

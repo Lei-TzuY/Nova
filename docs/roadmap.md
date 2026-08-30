@@ -77,7 +77,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: fifty-one vertical slices implemented; broader type-system work remains.**
+**Status: fifty-two vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -889,6 +889,22 @@ Implemented in the fifty-first Phase 2 slice:
 - semantic, inspection, CLI, schema, and malformed-HIR regressions lock both the new language
   fact and backward-compatible tooling version boundary without introducing catch-all
   usefulness semantics.
+
+Implemented in the fifty-second Phase 2 slice:
+
+- a direct, successfully resolved enum constructor now turns the analyzer's existing exact
+  selected-variant proof into nonfatal `N3034` warnings for every otherwise-valid concrete
+  arm that cannot be selected;
+- dynamic scrutinees flowing through locals, parameters, calls, or other expressions remain
+  outside the proof, so the checker does not guess usefulness beyond facts it already owns;
+- warning candidates are deferred until the complete semantic analysis is error-free, which
+  keeps an error discovered inside a diagnostic-only arm actionable instead of pairing it with
+  recovery noise;
+- warned arms remain fully name/type checked and retain their diagnostic-only CFG edges, while
+  continuing to contribute no definite-initialization, non-continuation, or loop-transfer facts;
+  and
+- the slice changes no syntax, HIR, CFG shape, runtime dispatch, or semantic-inspection schema,
+  and deliberately does not introduce catch-all arms or a general pattern-usefulness matrix.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

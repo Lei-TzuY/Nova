@@ -66,6 +66,7 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
         .collect();
 
     if !diagnostics_have_errors(&analyzer.diagnostics) {
+        analyzer.diagnostics.append(&mut analyzer.deferred_warnings);
         let warnings = analyzer
             .control_flow
             .iter()
@@ -235,6 +236,7 @@ const SIGNED_INT_MIN_MAGNITUDE: u64 = 1_u64 << 63;
 
 struct Analyzer {
     diagnostics: Vec<Diagnostic>,
+    deferred_warnings: Vec<Diagnostic>,
     record_definitions: Vec<RecordDefinition>,
     enum_definitions: Vec<EnumDefinition>,
     types: BTreeMap<String, TypeSymbol>,
@@ -252,6 +254,7 @@ impl Analyzer {
     fn new() -> Self {
         Self {
             diagnostics: Vec::new(),
+            deferred_warnings: Vec::new(),
             record_definitions: Vec::new(),
             enum_definitions: Vec::new(),
             types: BTreeMap::new(),
@@ -1898,6 +1901,38 @@ impl Analyzer {
 
             let selected_arm = selected_variant_index
                 .is_some_and(|selected| valid_pattern && resolved_index == Some(selected));
+            if self.diagnostic_only_depth == 0 && valid_pattern {
+                if let (Some(selected), Some(actual)) = (selected_variant_index, resolved_index) {
+                    if actual != selected {
+                        if let Some(enumeration) = &scrutinee_enum {
+                            let selected_name = &self.enum_definitions[enumeration.id.index()]
+                                .variants[selected]
+                                .name;
+                            self.deferred_warnings.push(
+                                Diagnostic::warning("N3034", "statically unreachable match arm")
+                                    .with_primary(
+                                        arm.pattern.span,
+                                        format!(
+                                            "this arm matches `{}::{}`, but this scrutinee can only select `{}::{selected_name}`",
+                                            enumeration.name,
+                                            arm.pattern.variant.text,
+                                            enumeration.name
+                                        ),
+                                    )
+                                    .with_secondary(
+                                        scrutinee.span,
+                                        format!(
+                                            "this direct constructor selects variant `{selected_name}`"
+                                        ),
+                                    )
+                                    .with_note(
+                                        "the arm remains name/type checked for deterministic diagnostics but contributes no reachable flow facts",
+                                    ),
+                            );
+                        }
+                    }
+                }
+            }
             let value =
                 if scrutinee.ty.is_never() || (selected_variant_index.is_some() && !selected_arm) {
                     self.lower_expression_for_diagnostics(&arm.value, return_type)
