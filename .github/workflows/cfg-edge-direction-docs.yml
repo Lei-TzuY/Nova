@@ -1,0 +1,32 @@
+name: CFG edge direction docs
+
+on:
+  push:
+    branches:
+      - fix/cfg-edge-direction
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/cfg-edge-direction
+          fetch-depth: 0
+      - name: Apply CFG edge direction docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/cfg_edge_direction_docs.py
+          grep -q 'forty-six vertical slices' docs/roadmap.md
+          grep -q 'direction-canonical' docs/semantic-introspection-v2.md
+          rm .github/cfg_edge_direction_docs.py .github/workflows/cfg-edge-direction-docs.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs: close CFG edge direction slice'
+          git push origin HEAD:fix/cfg-edge-direction
