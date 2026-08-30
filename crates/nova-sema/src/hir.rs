@@ -318,8 +318,8 @@ pub enum StatementKind {
     Break,
     /// Start the next iteration of the nearest lexically enclosing loop.
     Continue,
-    /// Explicit function return.
-    Return(Expression),
+    /// Explicit function return; `None` preserves a source-level bare `return;`.
+    Return(Option<Expression>),
     /// Expression whose value is discarded.
     Expression(Expression),
 }

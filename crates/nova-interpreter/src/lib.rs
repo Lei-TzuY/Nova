@@ -331,11 +331,16 @@ impl<'program> Interpreter<'program> {
             },
             StatementKind::Break => Ok(Some(Flow::Break)),
             StatementKind::Continue => Ok(Some(Flow::Continue)),
-            StatementKind::Return(expression) => match self.eval_expression(expression, frame)? {
-                Flow::Value(value) | Flow::Return(value) => Ok(Some(Flow::Return(value))),
-                Flow::Break => Ok(Some(Flow::Break)),
-                Flow::Continue => Ok(Some(Flow::Continue)),
-            },
+            StatementKind::Return(expression) => {
+                let Some(expression) = expression else {
+                    return Ok(Some(Flow::Return(Value::Unit)));
+                };
+                match self.eval_expression(expression, frame)? {
+                    Flow::Value(value) | Flow::Return(value) => Ok(Some(Flow::Return(value))),
+                    Flow::Break => Ok(Some(Flow::Break)),
+                    Flow::Continue => Ok(Some(Flow::Continue)),
+                }
+            }
             StatementKind::Expression(expression) => {
                 match self.eval_expression(expression, frame)? {
                     Flow::Value(_) => Ok(None),

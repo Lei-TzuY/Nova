@@ -19,7 +19,7 @@ Completion of the initial document does not freeze unfinished semantics.
 
 ## Phase 1 — Executable frontend foundation
 
-**Status: five vertical slices implemented; broader grammar work remains.**
+**Status: six vertical slices implemented; broader grammar work remains.**
 
 - Rust workspace and official `nova` CLI bootstrap;
 - source identity, exact spans, and locations;
@@ -83,12 +83,23 @@ Implemented in the fifth Phase 1 slice:
 - an end-to-end CLI fixture exercises the spelling through check, run, and all supported
   semantic-inspection schema versions while the executing branch still returns `42`.
 
+Implemented in the sixth Phase 1 slice:
+
+- `return_statement` accepts an optional expression, admitting the compact `return;` form
+  without changing expression grammar or semicolon rules;
+- parser AST retains `None` for a bare return and `Some(expression)` for value-bearing
+  returns, so source intent is not rewritten into a synthetic `()` node;
+- `return ();` remains valid and distinct in the syntax tree while both forms can denote
+  the same Unit result after semantic checking; and
+- parser plus CLI regressions cover bare/value-bearing preservation and complete
+  check/AST/run/inspection traversal.
+
 Next Phase 1 refinements should be driven by the needs of later semantic work,
 not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: fifty-three vertical slices implemented; broader type-system work remains.**
+**Status: fifty-four vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -934,6 +945,23 @@ Implemented in the fifty-third Phase 2 slice:
 - semantic and inspection regressions prove that v1/v2/v3 already publish the existing
   `never` type fact and display `!`, so no tooling schema or runtime representation changes.
 
+Implemented in the fifty-fourth Phase 2 slice:
+
+- bare `return;` is checked as an explicit Unit result against the function's declared
+  return type, reusing ordinary expected-type compatibility and `N3004` rather than
+  introducing a return-specific exception or diagnostic family;
+- accepted HIR preserves the absence of a source expression as `Return(None)`, while
+  `return ();` remains `Return(Some(Unit))`, keeping syntax identity separate from value
+  semantics;
+- every accepted bare return emits the same verified CFG `Return` transfer used by an
+  ordinary continuing return expression, while noncontinuing value expressions retain
+  their established rule against appending a duplicate transfer;
+- the bare form makes its containing path noncontinuing exactly like other returns and
+  therefore participates in existing branch, loop, definite-initialization, and
+  unreachable-warning behavior without new side state; and
+- semantic-inspection v1/v2/v3 naturally publish the existing Return statement with an
+  empty expression list, requiring no schema reinterpretation or version bump.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -952,7 +980,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: twenty-two vertical slices implemented; execution surface remains small.**
+**Status: twenty-three vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -1268,6 +1296,20 @@ Implemented in the twenty-second Phase 3 slice:
 - focused execution regressions plus an end-to-end CLI fixture return `42` through a discarded
   payload while preserving scrutinee-once evaluation, concrete variant selection, structured
   control flow, runtime enum representation, layout, and ABI non-claims.
+
+Implemented in the twenty-third Phase 3 slice:
+
+- the interpreter executes HIR `Return(None)` as structured `Flow::Return(Value::Unit)`
+  without allocating or evaluating a synthetic expression;
+- calls to Unit procedures using bare return therefore reuse the same ordinary Unit runtime
+  value and function-call continuation behavior as `return ();` and Unit fallthrough;
+- the existing function-boundary value/type conformance check independently rejects
+  malformed HIR that retags a bare-Unit-returning function as `Int`, `Bool`, nominal,
+  function, or Never, preserving `N4005` defense in depth;
+- structured return propagation through blocks, loops, calls, and expressions remains
+  unchanged because the new form enters the already-established Return flow channel; and
+- runtime plus end-to-end CLI regressions prove successful Unit return and a `42` caller
+  result without changing runtime `Value`, CFG, inspection schema, layout, or ABI.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

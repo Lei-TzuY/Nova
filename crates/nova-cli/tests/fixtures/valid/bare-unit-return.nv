@@ -1,0 +1,8 @@
+fn stop() -> Unit {
+    return;
+}
+
+fn main() -> Int {
+    stop();
+    42
+}

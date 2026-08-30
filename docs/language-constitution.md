@@ -83,8 +83,12 @@ initialized local binding types, and checks the implemented operators, calls,
 branches, loops, loop-control legality, returns, assignments, aggregate
 construction, field projection, exhaustive enum matching, and definite
 initialization. A function declared to return `Unit` may complete through a body
-with no tail expression; `return ();` is the explicit Unit return. Functions with
-other return types still require a compatible value on every continuing path.
+with no tail expression, return Unit explicitly as `return ();`, or use the compact
+`return;` spelling. The bare form is semantically a Unit return, not a second valueless
+return category; functions with other return types therefore reject it through the same
+return-type compatibility rule that governs explicit expressions. AST/HIR retain the
+source distinction instead of synthesizing a Unit expression. Functions with other return
+types still require a compatible value on every continuing path.
 `Unit` is reserved alongside `Int` and `Bool` and cannot be redefined as a nominal
 record or enum.
 
