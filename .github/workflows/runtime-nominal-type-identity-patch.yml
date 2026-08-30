@@ -1,0 +1,34 @@
+name: Runtime nominal type identity patch
+
+on:
+  push:
+    branches:
+      - fix/runtime-nominal-type-identity
+    paths:
+      - .github/runtime-nominal-type-identity-patch.py
+      - .github/workflows/runtime-nominal-type-identity-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/runtime-nominal-type-identity
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply and validate runtime nominal type identity patch
+        run: |
+          python .github/runtime-nominal-type-identity-patch.py
+          cargo fmt --all
+          cargo test -p nova-interpreter --test nominal_type_identity --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          rm .github/runtime-nominal-type-identity-patch.py
+          rm .github/workflows/runtime-nominal-type-identity-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: validate runtime nominal type identity"
+          git push origin HEAD:fix/runtime-nominal-type-identity
