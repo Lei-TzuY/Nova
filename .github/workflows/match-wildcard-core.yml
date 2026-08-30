@@ -21,6 +21,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python .github/match-wildcard-import.py
           python .github/match-wildcard-core.py
           cargo fmt --all
           cargo test -p nova-parser --test match_wildcard --locked
@@ -30,7 +31,7 @@ jobs:
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           git config user.name "LeiZ"
           git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
-          git rm -f .github/match-wildcard-core.py .github/workflows/match-wildcard-core.yml
+          git rm -f .github/match-wildcard-import.py .github/match-wildcard-core.py .github/workflows/match-wildcard-core.yml
           git add crates/nova-parser crates/nova-sema crates/nova-interpreter
           git commit -m "feat: add match wildcard core semantics"
           git push origin HEAD:feat/match-wildcard-catchall
