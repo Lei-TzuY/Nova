@@ -325,8 +325,14 @@ pub(crate) fn selected_record_field_value(
         ExpressionKind::RecordLiteral {
             record: actual_record,
             fields,
-        } if *actual_record == record && fields.iter().all(|field| is_closed_total_value(&field.value)) => {
-            let mut selected = fields.iter().filter(|field| field.field_index == field_index);
+        } if *actual_record == record
+            && fields
+                .iter()
+                .all(|field| is_closed_total_value(&field.value)) =>
+        {
+            let mut selected = fields
+                .iter()
+                .filter(|field| field.field_index == field_index);
             let field = selected.next()?;
             if selected.next().is_some() {
                 return None;
@@ -338,11 +344,9 @@ pub(crate) fn selected_record_field_value(
             then_branch,
             else_branch,
         } => match evaluate(condition)? {
-            true if then_branch.statements.is_empty() => selected_record_field_value(
-                then_branch.tail.as_deref()?,
-                record,
-                field_index,
-            ),
+            true if then_branch.statements.is_empty() => {
+                selected_record_field_value(then_branch.tail.as_deref()?, record, field_index)
+            }
             true => None,
             false => selected_record_field_value(else_branch, record, field_index),
         },
