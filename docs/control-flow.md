@@ -81,7 +81,11 @@ Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
   behavior;
 - every `Backedge` targets an executable-reachable `Join` node and originates on the
   same executable flow, so loop cycles cannot be attached to arbitrary nodes or live
-  only inside diagnostic recovery; and
+  only inside diagnostic recovery;
+- `Execution` and `Diagnostic` edges point strictly from lower to higher graph-local
+  node identities, while every `Backedge` points strictly from a higher identity to an
+  earlier loop-header `Join`, making the edge class the only legal encoding of a cycle;
+  and
 - a syntactic parent transfer does not append an execution node when evaluating its
   child expression has already transferred control.
 

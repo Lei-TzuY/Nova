@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty-five vertical slices implemented; broader type-system work remains.**
+**Status: forty-six vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -757,6 +757,20 @@ Implemented in the forty-fifth Phase 2 slice:
   leaving schema v1/v2 unchanged; and
 - producer and adversarial inspection regressions lock assignment targets and same-name
   shadow references without changing source scoping, assignment syntax, or valid behavior.
+
+Implemented in the forty-sixth Phase 2 slice:
+
+- verified CFG edge classes now carry a canonical direction contract in addition to
+  the existing range, reachability, transfer, exit, and backedge-target invariants;
+- ordinary `Execution` and recovery-only `Diagnostic` edges must point strictly from
+  an earlier graph-local node to a later node, matching deterministic lowering order;
+- `Backedge` must point strictly from a later node to an earlier executable `Join`, so
+  an unclassified backward execution cycle or a forward edge mislabeled as a loop edge
+  fails closed instead of entering definite-initialization or inspection as verified input;
+- adversarial verifier regressions corrupt both directions while the complete `nova-sema`
+  suite and workspace all-targets Clippy lock valid loop/recovery graphs unchanged; and
+- schema v2 shape is unchanged: semantic inspection publishes the same edge kinds, now
+  with a stronger analyzer-side canonicality guarantee.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

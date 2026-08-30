@@ -91,7 +91,11 @@ Every node carries incoming `predecessors`. An `execution` edge may contribute
 facts to runtime-reachable continuation. A `diagnostic` edge retains statically
 checked source that cannot contribute facts to executable continuation. A
 `backedge` represents executable loop fallthrough or `continue` to a verified
-loop-header `join`.
+loop-header `join`. The verified graph is direction-canonical: `execution` and
+`diagnostic` edges always point from a lower node identity to a higher one, while
+`backedge` always points from a higher identity to an earlier `join`. Tooling can
+therefore treat `backedge` as the only published cycle-closing edge class rather
+than inferring cycles from arbitrary predecessor order.
 
 Node spans are source-qualified v1 spans when a source action or function
 boundary owns the node; compiler-created joins may have `null`. Edge arrays do
