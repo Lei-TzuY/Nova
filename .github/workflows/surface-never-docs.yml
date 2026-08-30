@@ -1,0 +1,36 @@
+name: Surface never docs
+
+on:
+  push:
+    branches:
+      - feat/surface-never-type
+    paths:
+      - .github/surface-never-docs.py
+      - .github/workflows/surface-never-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/surface-never-type
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply docs and validate final tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/surface-never-docs.py
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git rm -f .github/surface-never-docs.py .github/workflows/surface-never-docs.yml
+          git add README.md docs/grammar.md docs/language-constitution.md docs/roadmap.md
+          git commit -m "docs: specify the surface Never type"
+          git push origin HEAD:feat/surface-never-type
