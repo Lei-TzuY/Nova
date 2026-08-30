@@ -1,0 +1,22 @@
+fn main() -> Int {
+    let binary = 0b10_1010;
+    let binary_upper = 0B10_1010;
+    let octal = 0o52;
+    let octal_upper = 0O52;
+    let hex = 0x2a;
+    let hex_upper = 0X2A;
+    let minimum = -0x8000_0000_0000_0000;
+
+    if binary == 42
+        && binary_upper == 42
+        && octal == 42
+        && octal_upper == 42
+        && hex == 42
+        && hex_upper == 42
+        && minimum == -9223372036854775808
+    {
+        hex
+    } else {
+        0
+    }
+}
