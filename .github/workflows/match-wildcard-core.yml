@@ -35,6 +35,42 @@ jobs:
           path.write_text(text.replace(old, new, 1))
           PY
           python .github/match-wildcard-core.py
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('crates/nova-interpreter/tests/enum_variant_identity.rs')
+          text = p.read_text()
+          text = text.replace(
+              'hir::{ExpressionKind, StatementKind},',
+              'hir::{ExpressionKind, MatchArmPattern, StatementKind},',
+              1,
+          )
+          text = text.replace(
+              '    arms[0].variant_index = 1;\n    arms[1].variant_index = 0;\n',
+              '''    let MatchArmPattern::Variant { variant_index: first, .. } = &mut arms[0].pattern else { panic!("variant arm"); };\n    *first = 1;\n    let MatchArmPattern::Variant { variant_index: second, .. } = &mut arms[1].pattern else { panic!("variant arm"); };\n    *second = 0;\n''',
+              1,
+          )
+          text = text.replace(
+              '    arms[0].variant_index = 99;\n',
+              '''    let MatchArmPattern::Variant { variant_index, .. } = &mut arms[0].pattern else { panic!("variant arm"); };\n    *variant_index = 99;\n''',
+              1,
+          )
+          p.write_text(text)
+
+          p = Path('crates/nova-interpreter/tests/pattern_payload_discard.rs')
+          text = p.read_text()
+          text = text.replace(
+              'use nova_sema::{analyze, hir::ExpressionKind};',
+              'use nova_sema::{analyze, hir::{ExpressionKind, MatchArmPattern}};',
+              1,
+          )
+          text = text.replace(
+              '    arms[1].binding = None;\n    assert!(!arms[1].payload_discarded);\n',
+              '''    let MatchArmPattern::Variant { binding, payload_discarded, .. } = &mut arms[1].pattern else { panic!("variant arm"); };\n    *binding = None;\n    assert!(!*payload_discarded);\n''',
+              1,
+          )
+          p.write_text(text)
+          PY
           cargo fmt --all
           cargo test -p nova-parser --test match_wildcard --locked
           cargo test -p nova-sema --test match_wildcard --locked
