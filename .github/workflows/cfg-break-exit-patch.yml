@@ -1,0 +1,37 @@
+name: CFG break exit topology patch
+
+on:
+  push:
+    branches:
+      - fix/cfg-break-exit-topology
+    paths:
+      - .github/cfg_break_exit_patch.py
+      - .github/workflows/cfg-break-exit-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/cfg-break-exit-topology
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Apply and validate CFG break exit topology
+        run: |
+          set -euo pipefail
+          python .github/cfg_break_exit_patch.py
+          cargo fmt --all
+          cargo test -p nova-sema --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          rm .github/cfg_break_exit_patch.py .github/workflows/cfg-break-exit-patch.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: enforce CFG break exit topology'
+          git push origin HEAD:fix/cfg-break-exit-topology
