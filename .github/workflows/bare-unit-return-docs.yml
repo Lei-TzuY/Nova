@@ -1,0 +1,32 @@
+name: Bare Unit return docs
+
+on:
+  push:
+    branches:
+      - feat/bare-unit-return
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/bare-unit-return
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply docs and validate final tree
+        run: |
+          set -euo pipefail
+          python .github/bare-unit-return-docs.py
+          cargo fmt --all -- --check
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git rm -f .github/bare-unit-return-docs.py .github/workflows/bare-unit-return-docs.yml
+          git add README.md docs/grammar.md docs/language-constitution.md docs/roadmap.md
+          git commit -m "docs: specify bare Unit return semantics"
+          git push origin HEAD:feat/bare-unit-return
