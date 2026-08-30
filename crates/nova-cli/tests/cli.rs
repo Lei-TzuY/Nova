@@ -51,6 +51,7 @@ fn accepts_positive_fixtures() {
         "valid/int-boundaries.nv",
         "valid/int-division.nv",
         "valid/radix-integers.nv",
+        "valid/higher-order-functions.nv",
     ] {
         let path = fixture(relative);
         let output = nova(&["check", path.to_str().expect("fixture path is UTF-8")]);
@@ -89,6 +90,7 @@ fn run_command_executes_checked_program() {
         ("valid/int-boundaries.nv", "-9223372036854775808\n", None),
         ("valid/int-division.nv", "-21\n", None),
         ("valid/radix-integers.nv", "42\n", None),
+        ("valid/higher-order-functions.nv", "42\n", None),
     ] {
         let path = fixture(relative);
         let output = nova(&["run", path.to_str().expect("fixture path is UTF-8")]);

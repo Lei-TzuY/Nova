@@ -1,0 +1,16 @@
+fn add_one(value: Int) -> Int {
+    value + 1
+}
+
+fn identity_transform(transform: fn(Int) -> Int) -> fn(Int) -> Int {
+    transform
+}
+
+fn twice(transform: fn(Int) -> Int, value: Int) -> Int {
+    transform(transform(value))
+}
+
+fn main() -> Int {
+    let transform: fn(Int) -> Int = identity_transform(add_one);
+    twice(transform, 40)
+}

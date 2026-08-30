@@ -530,32 +530,44 @@ impl Analyzer {
     }
 
     fn resolve_type_ref(&mut self, reference: &ast::TypeRef) -> Type {
-        match reference.name.text.as_str() {
-            "Int" => Type::Int,
-            "Bool" => Type::Bool,
-            "Unit" => Type::Unit,
-            unknown => {
-                if let Some(symbol) = self.types.get(unknown).copied() {
-                    return match symbol.definition {
-                        TypeDefinition::Record(id) => Type::Record(RecordType {
-                            id,
-                            name: unknown.to_owned(),
-                        }),
-                        TypeDefinition::Enum(id) => Type::Enum(EnumType {
-                            id,
-                            name: unknown.to_owned(),
-                        }),
-                    };
+        match &reference.kind {
+            ast::TypeRefKind::Named(name) => match name.text.as_str() {
+                "Int" => Type::Int,
+                "Bool" => Type::Bool,
+                "Unit" => Type::Unit,
+                unknown => {
+                    if let Some(symbol) = self.types.get(unknown).copied() {
+                        return match symbol.definition {
+                            TypeDefinition::Record(id) => Type::Record(RecordType {
+                                id,
+                                name: unknown.to_owned(),
+                            }),
+                            TypeDefinition::Enum(id) => Type::Enum(EnumType {
+                                id,
+                                name: unknown.to_owned(),
+                            }),
+                        };
+                    }
+                    self.diagnostics.push(
+                        Diagnostic::error("N3001", "unknown type")
+                            .with_primary(reference.span, format!("unknown type `{unknown}`"))
+                            .with_note(
+                                "the bootstrap semantic core recognizes Int, Bool, Unit, declared record or enum names, and explicit function types",
+                            ),
+                    );
+                    Type::Error
                 }
-                self.diagnostics.push(
-                    Diagnostic::error("N3001", "unknown type")
-                        .with_primary(reference.span, format!("unknown type `{unknown}`"))
-                        .with_note(
-                            "the bootstrap semantic core recognizes Int, Bool, Unit, and declared record or enum names",
-                        ),
-                );
-                Type::Error
-            }
+            },
+            ast::TypeRefKind::Function {
+                parameters,
+                return_type,
+            } => Type::Function(FunctionType {
+                parameters: parameters
+                    .iter()
+                    .map(|parameter| self.resolve_type_ref(parameter))
+                    .collect(),
+                return_type: Box::new(self.resolve_type_ref(return_type)),
+            }),
         }
     }
 

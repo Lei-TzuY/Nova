@@ -94,13 +94,27 @@ pub struct Name {
     pub span: Span,
 }
 
-/// A parsed type name. Type meaning is assigned only in later phases.
+/// A parsed type reference. Type meaning is assigned only in later phases.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeRef {
-    /// Unresolved type name.
-    pub name: Name,
-    /// Range occupied by the type reference.
+    /// Surface form of this type reference.
+    pub kind: TypeRefKind,
+    /// Range occupied by the complete type reference.
     pub span: Span,
+}
+
+/// Implemented surface type-reference forms.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TypeRefKind {
+    /// Built-in or nominal type name.
+    Named(Name),
+    /// Explicit callable signature such as `fn(Int) -> Bool`.
+    Function {
+        /// Parameter types in declaration order.
+        parameters: Vec<TypeRef>,
+        /// Explicit return type.
+        return_type: Box<TypeRef>,
+    },
 }
 
 /// A value-producing lexical block.

@@ -1,13 +1,14 @@
 use crate::ast::{
     BinaryOperator, Block, Enum, EnumPattern, EnumVariant, Expression, ExpressionKind, Function,
     MatchArm, Name, Parameter, Program, Record, RecordField, RecordLiteralField, Statement,
-    StatementKind, TypeRef, UnaryOperator,
+    StatementKind, TypeRef, TypeRefKind, UnaryOperator,
 };
 use nova_diagnostics::Diagnostic;
 use nova_lexer::{Token, TokenKind};
 use nova_source::{SourceFile, Span};
 
 const MAX_EXPRESSION_DEPTH: usize = 256;
+const MAX_TYPE_DEPTH: usize = 128;
 const OR_BINDING_POWER: (u8, u8) = (1, 2);
 const AND_BINDING_POWER: (u8, u8) = (3, 4);
 const EQUALITY_BINDING_POWER: (u8, u8) = (5, 6);
@@ -272,10 +273,57 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_type_ref(&mut self, context: &str) -> Option<TypeRef> {
+        self.parse_type_ref_with_depth(context, 0)
+    }
+
+    fn parse_type_ref_with_depth(&mut self, context: &str, depth: usize) -> Option<TypeRef> {
+        if depth >= MAX_TYPE_DEPTH {
+            let token = self.current();
+            self.diagnostics.push(
+                Diagnostic::error("N2009", "type nesting limit exceeded").with_primary(
+                    token.span,
+                    format!(
+                        "the bootstrap parser accepts at most {MAX_TYPE_DEPTH} nested type frames"
+                    ),
+                ),
+            );
+            return None;
+        }
+
+        if let Some(keyword) = self.consume(TokenKind::Fn) {
+            self.expect(TokenKind::LeftParen, "after `fn` in a function type")?;
+            let mut parameters = Vec::new();
+            if !self.at(TokenKind::RightParen) {
+                loop {
+                    parameters.push(
+                        self.parse_type_ref_with_depth("as a function-type parameter", depth + 1)?,
+                    );
+                    if self.consume(TokenKind::Comma).is_none() {
+                        break;
+                    }
+                    if self.at(TokenKind::RightParen) {
+                        break;
+                    }
+                }
+            }
+            self.expect(TokenKind::RightParen, "after function-type parameters")?;
+            self.expect(TokenKind::Arrow, "before a function-type return type")?;
+            let return_type =
+                self.parse_type_ref_with_depth("after `->` in a function type", depth + 1)?;
+            let span = self.cover(keyword.span, return_type.span);
+            return Some(TypeRef {
+                kind: TypeRefKind::Function {
+                    parameters,
+                    return_type: Box::new(return_type),
+                },
+                span,
+            });
+        }
+
         let name = self.parse_name(context)?;
         Some(TypeRef {
             span: name.span,
-            name,
+            kind: TypeRefKind::Named(name),
         })
     }
 
@@ -978,7 +1026,7 @@ impl<'source> Parser<'source> {
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use crate::ast::{BinaryOperator, ExpressionKind, StatementKind};
+    use crate::ast::{BinaryOperator, ExpressionKind, StatementKind, TypeRef, TypeRefKind};
     use nova_lexer::lex;
     use nova_source::{SourceFile, SourceId};
 
@@ -992,6 +1040,13 @@ mod tests {
         );
         let parsed = parse(&source, &lexed.tokens);
         (source, parsed)
+    }
+
+    fn named_type_text(reference: &TypeRef) -> &str {
+        let TypeRefKind::Named(name) = &reference.kind else {
+            panic!("expected a named type reference, got {:?}", reference.kind);
+        };
+        &name.text
     }
 
     #[test]
@@ -1011,7 +1066,7 @@ fn choose(flag: Bool, a: Int, b: Int) -> Int {
         let function = &parsed.program.functions[0];
         assert_eq!(function.name.text, "choose");
         assert_eq!(function.parameters.len(), 3);
-        assert_eq!(function.return_type.name.text, "Int");
+        assert_eq!(named_type_text(&function.return_type), "Int");
         assert_eq!(function.body.statements.len(), 4);
         assert!(matches!(
             &function.body.statements[0].kind,
@@ -1078,7 +1133,7 @@ fn f() -> Int {
             parsed.program.enums[0].variants[1]
                 .payload
                 .as_ref()
-                .map(|payload| payload.name.text.as_str()),
+                .map(named_type_text),
             Some("Int")
         );
 
@@ -1160,7 +1215,10 @@ fn f() -> Int {
     fn parses_surface_unit_type_and_literal() {
         let (_, parsed) = parse_text("fn noop() -> Unit { () } fn empty() -> Unit {}");
         assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
-        assert_eq!(parsed.program.functions[0].return_type.name.text, "Unit");
+        assert_eq!(
+            named_type_text(&parsed.program.functions[0].return_type),
+            "Unit"
+        );
         assert!(matches!(
             parsed.program.functions[0]
                 .body
@@ -1179,7 +1237,7 @@ fn f() -> Int {
         assert!(matches!(
             &parsed.program.functions[0].body.statements[0].kind,
             StatementKind::UninitializedBinding { name, annotation }
-                if name.text == "value" && annotation.name.text == "Int"
+                if name.text == "value" && named_type_text(annotation) == "Int"
         ));
     }
 
