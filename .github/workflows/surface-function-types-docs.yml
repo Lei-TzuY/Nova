@@ -1,0 +1,32 @@
+name: Surface function type docs
+
+on:
+  push:
+    branches:
+      - feat/surface-function-types
+    paths:
+      - .github/surface-function-types-docs.py
+      - .github/workflows/surface-function-types-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/surface-function-types
+          fetch-depth: 0
+      - name: Apply surface function type docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/surface-function-types-docs.py
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git rm .github/surface-function-types-docs.py .github/workflows/surface-function-types-docs.yml
+          git add README.md docs/grammar.md docs/language-constitution.md docs/roadmap.md
+          git commit -m "docs: specify surface function types"
+          git push origin HEAD:feat/surface-function-types
