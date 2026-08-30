@@ -1,0 +1,11 @@
+fn forever() -> ! {
+    while true {}
+}
+
+fn choose(flag: Bool) -> Int {
+    if flag { 42 } else { forever() }
+}
+
+fn main() -> Int {
+    choose(true)
+}
