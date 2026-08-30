@@ -2002,7 +2002,10 @@ impl Analyzer {
         }
         if let Some(symbol) = self.functions.get(&name.text) {
             return (
-                ExpressionKind::Function(symbol.id),
+                ExpressionKind::Function {
+                    function: symbol.id,
+                    function_name: name.text.clone(),
+                },
                 Type::Function(symbol.signature.clone()),
             );
         }
@@ -2702,7 +2705,7 @@ mod tests {
         let ExpressionKind::Call { callee, arguments } = &tail.kind else {
             panic!("expected call HIR, got {tail:?}");
         };
-        assert!(matches!(callee.kind, ExpressionKind::Function(_)));
+        assert!(matches!(callee.kind, ExpressionKind::Function { .. }));
         assert!(matches!(arguments[0].kind, ExpressionKind::Binding(_)));
     }
 

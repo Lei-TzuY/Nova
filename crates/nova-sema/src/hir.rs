@@ -362,7 +362,12 @@ pub enum ExpressionKind {
     /// Reference to a local binding or parameter.
     Binding(BindingId),
     /// Reference to a top-level function.
-    Function(FunctionId),
+    Function {
+        /// Stable source-order function identity.
+        function: FunctionId,
+        /// Source-resolved function spelling paired with the stable identity.
+        function_name: String,
+    },
     /// Nominal record construction with resolved destination slots.
     RecordLiteral {
         /// Resolved nominal record identity.

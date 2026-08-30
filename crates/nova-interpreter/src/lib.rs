@@ -419,7 +419,13 @@ impl<'program> Interpreter<'program> {
                 }
                 Ok(Flow::Value(value.clone()))
             }
-            ExpressionKind::Function(function) => Ok(Flow::Value(Value::Function(*function))),
+            ExpressionKind::Function {
+                function,
+                function_name,
+            } => {
+                self.resolved_function_reference(*function, function_name, expression.span)?;
+                Ok(Flow::Value(Value::Function(*function)))
+            }
             ExpressionKind::RecordLiteral { record, fields } => {
                 let Some(definition) = self.program.records.get(record.index()) else {
                     return Err(self.invariant(
@@ -951,6 +957,40 @@ impl<'program> Interpreter<'program> {
             },
         );
         Ok(())
+    }
+
+    fn resolved_function_reference(
+        &self,
+        function: FunctionId,
+        function_name: &str,
+        span: nova_source::Span,
+    ) -> Result<&Function, Diagnostic> {
+        let Some(definition) = self.program.functions.get(function.index()) else {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "resolved function id {} is outside the program",
+                    function.index()
+                ),
+            ));
+        };
+        if definition.id != function {
+            return Err(self.invariant(
+                span,
+                "function declaration index does not match its resolved identity",
+            ));
+        }
+        if definition.name != function_name {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "resolved function `{function_name}` does not match declaration id {} (`{}`)",
+                    function.index(),
+                    definition.name
+                ),
+            ));
+        }
+        Ok(definition)
     }
 
     fn resolved_enum_variant(
