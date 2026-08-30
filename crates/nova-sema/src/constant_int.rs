@@ -47,8 +47,49 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<Result<i64, ConstantIn
             left,
             right,
         } => evaluate_binary(*operator, left, right),
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match crate::constant_condition::evaluate(condition)? {
+            true if then_branch.statements.is_empty() => evaluate(then_branch.tail.as_deref()?),
+            true => None,
+            false => evaluate(else_branch),
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => {
+            let (scrutinee_enum, variant_index) = enum_tag(scrutinee)?;
+            if scrutinee_enum != *enumeration {
+                return None;
+            }
+
+            let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
+            let arm = selected.next()?;
+            if selected.next().is_some() {
+                return None;
+            }
+            evaluate(&arm.value)
+        }
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             evaluate(block.tail.as_deref()?)
+        }
+        _ => None,
+    }
+}
+
+fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
+    match &expression.kind {
+        ExpressionKind::EnumConstructor {
+            enumeration,
+            variant_index,
+            payload,
+            ..
+        } if payload.is_none() => Some((*enumeration, *variant_index)),
+        ExpressionKind::Block(block) if block.statements.is_empty() => {
+            enum_tag(block.tail.as_deref()?)
         }
         _ => None,
     }
