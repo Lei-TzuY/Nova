@@ -705,10 +705,18 @@ impl<'program> Interpreter<'program> {
                         ));
                     }
                     *slot = true;
-                    if declared.payload.is_some() != arm.binding.is_some() {
+                    let payload_shape_valid = matches!(
+                        (
+                            declared.payload.is_some(),
+                            arm.binding.is_some(),
+                            arm.payload_discarded,
+                        ),
+                        (true, true, false) | (true, false, true) | (false, false, false)
+                    );
+                    if !payload_shape_valid {
                         return Err(self.invariant(
                             arm.span,
-                            "resolved match binding arity does not match its variant",
+                            "resolved match payload mode does not match its variant",
                         ));
                     }
                 }
@@ -719,15 +727,15 @@ impl<'program> Interpreter<'program> {
                         "exhaustive match has no arm for the runtime variant",
                     ));
                 };
-                match (&arm.binding, payload) {
-                    (Some(binding), Some(payload)) => {
+                match (&arm.binding, arm.payload_discarded, payload) {
+                    (Some(binding), false, Some(payload)) => {
                         self.bind_runtime_slot(frame, binding, Some(*payload), arm.span)?;
                     }
-                    (None, None) => {}
+                    (None, true, Some(_)) | (None, false, None) => {}
                     _ => {
                         return Err(self.invariant(
                             arm.span,
-                            "runtime enum payload arity does not match the selected arm",
+                            "runtime enum payload mode does not match the selected arm",
                         ));
                     }
                 }

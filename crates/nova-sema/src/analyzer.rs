@@ -1776,21 +1776,28 @@ impl Analyzer {
                 {
                     let declared = &definition.variants[variant_index];
                     resolved_index = Some(variant_index);
-                    match (&declared.payload, &arm.pattern.binding) {
-                        (Some(payload_type), Some(binding_name)) => {
+                    match (
+                        &declared.payload,
+                        &arm.pattern.binding,
+                        arm.pattern.payload_discarded,
+                    ) {
+                        (Some(payload_type), Some(binding_name), false) => {
                             let binding =
                                 self.new_binding(binding_name, payload_type.clone(), false);
                             self.insert_local(&binding);
                             self.record_initialization(binding.id, binding.span);
                             payload_binding = Some(binding);
                         }
-                        (None, None) => {}
-                        (Some(_), None) => {
+                        (Some(_), None, true) | (None, None, false) => {}
+                        (Some(_), None, false) => {
                             self.diagnostics.push(
                                 Diagnostic::error("N3022", "missing pattern payload binding")
                                     .with_primary(
                                         arm.pattern.variant.span,
-                                        format!("variant `{}` carries one payload", declared.name),
+                                        format!(
+                                            "variant `{}` carries one payload; bind it or write `_` to discard it",
+                                            declared.name
+                                        ),
                                     )
                                     .with_secondary(
                                         declared.span,
@@ -1799,7 +1806,24 @@ impl Analyzer {
                             );
                             valid_pattern = false;
                         }
-                        (None, Some(binding_name)) => {
+                        (None, None, true) => {
+                            self.diagnostics.push(
+                                Diagnostic::error("N3022", "unexpected pattern payload discard")
+                                    .with_primary(
+                                        arm.pattern.span,
+                                        format!(
+                                            "variant `{}` has no payload to discard",
+                                            declared.name
+                                        ),
+                                    )
+                                    .with_secondary(
+                                        declared.span,
+                                        "payload-free variant declared here",
+                                    ),
+                            );
+                            valid_pattern = false;
+                        }
+                        (None, Some(binding_name), false) => {
                             self.diagnostics.push(
                                 Diagnostic::error("N3022", "unexpected pattern payload binding")
                                     .with_primary(
@@ -1813,6 +1837,15 @@ impl Analyzer {
                                         declared.span,
                                         "payload-free variant declared here",
                                     ),
+                            );
+                            valid_pattern = false;
+                        }
+                        (_, Some(binding_name), true) => {
+                            self.diagnostics.push(
+                                Diagnostic::error("N3022", "invalid pattern payload").with_primary(
+                                    binding_name.span,
+                                    "a payload pattern cannot both bind and discard",
+                                ),
                             );
                             valid_pattern = false;
                         }
@@ -1885,6 +1918,7 @@ impl Analyzer {
                     variant_name: arm.pattern.variant.text.clone(),
                     variant_index,
                     binding: payload_binding,
+                    payload_discarded: arm.pattern.payload_discarded,
                     value,
                     span: arm.span,
                 });

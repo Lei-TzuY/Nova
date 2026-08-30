@@ -663,8 +663,9 @@ impl<'a> Builder<'a> {
                     let arm_identity = match_arm_id(match_index, arm_index);
                     self.active_scopes.push(arm_identity.clone());
                     let arm_contents = (|| {
-                        let binding = match (&variant.payload, &arm.binding) {
-                            (Some(expected), Some(binding)) => {
+                        let binding = match (&variant.payload, &arm.binding, arm.payload_discarded)
+                        {
+                            (Some(expected), Some(binding), false) => {
                                 if &binding.ty != expected {
                                     return Err(InspectionError::invalid(format!(
                                         "match payload binding type does not match {}",
@@ -678,10 +679,10 @@ impl<'a> Builder<'a> {
                                     &arm_identity,
                                 )?)
                             }
-                            (None, None) => None,
+                            (Some(_), None, true) | (None, None, false) => None,
                             _ => {
                                 return Err(InspectionError::invalid(format!(
-                                    "match payload binding arity does not match {}",
+                                    "match payload mode does not match {}",
                                     variant_id(enumeration.index(), arm.variant_index)
                                 )));
                             }
