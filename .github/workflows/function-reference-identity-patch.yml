@@ -6,6 +6,7 @@ on:
       - fix/function-reference-identity
     paths:
       - .github/function-reference-identity-patch.py
+      - .github/function-reference-identity-fix.py
       - .github/workflows/function-reference-identity-patch.yml
 
 permissions:
@@ -22,12 +23,14 @@ jobs:
       - name: Apply and validate function reference identity patch
         run: |
           python .github/function-reference-identity-patch.py
+          python .github/function-reference-identity-fix.py
           cargo fmt --all
           cargo test -p nova-sema --test function_reference_identity --locked
           cargo test -p nova-interpreter --test function_reference_identity --locked
           cargo test -p nova-inspect --test function_reference_identity --locked
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           rm .github/function-reference-identity-patch.py
+          rm .github/function-reference-identity-fix.py
           rm .github/workflows/function-reference-identity-patch.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
