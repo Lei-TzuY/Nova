@@ -70,7 +70,10 @@ fn malformed_function_equality_signature_drift_fails_closed() {
     let ExpressionKind::Binary { right, .. } = &mut expression.kind else {
         panic!("expected equality expression");
     };
-    right.kind = ExpressionKind::Function(flag);
+    right.kind = ExpressionKind::Function {
+        function: flag,
+        function_name: "flag".to_owned(),
+    };
     right.ty = Type::Function(FunctionType {
         parameters: Vec::new(),
         return_type: Box::new(Type::Bool),

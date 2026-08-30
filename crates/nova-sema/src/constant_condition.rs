@@ -117,7 +117,7 @@ fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
 
 fn function_id(expression: &Expression) -> Option<FunctionId> {
     match &expression.kind {
-        ExpressionKind::Function(function) => Some(*function),
+        ExpressionKind::Function { function, .. } => Some(*function),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             function_id(block.tail.as_deref()?)
         }

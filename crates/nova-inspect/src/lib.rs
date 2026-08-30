@@ -466,9 +466,26 @@ impl<'a> Builder<'a> {
                 target = Some(binding_id(resolved.index()));
                 v1::ExpressionKind::BindingReference
             }
-            hir::ExpressionKind::Function(resolved) => {
-                self.require_function(*resolved)?;
-                target = Some(function_id(resolved.index()));
+            hir::ExpressionKind::Function {
+                function,
+                function_name,
+            } => {
+                let declaration = self.require_function(*function)?;
+                if declaration.name != *function_name {
+                    return Err(InspectionError::invalid(format!(
+                        "function reference `{function_name}` does not match declaration id {} (`{}`)",
+                        function.index(),
+                        declaration.name
+                    )));
+                }
+                let expected_type = function_type(declaration);
+                if expression.ty != expected_type {
+                    return Err(InspectionError::invalid(format!(
+                        "function reference `{function_name}` type {} does not match declaration signature {}",
+                        expression.ty, expected_type
+                    )));
+                }
+                target = Some(function_id(function.index()));
                 v1::ExpressionKind::FunctionReference
             }
             hir::ExpressionKind::RecordLiteral { record, fields } => {
