@@ -24,9 +24,11 @@ type declaration is rejected even when the two declarations have different
 kinds.
 
 Enum identity comes from its declaration, not from its variant spelling or
-shape. Separately declared enums are different types. All record and enum names
-are collected before payload, field, function-signature, or body types are
-resolved, so forward references and recursive enum payloads are deterministic.
+shape. Separately declared enums are different types. Within one enum, semantic HIR
+retains each source-resolved variant spelling together with its declaration-order slot;
+the spelling is compiler-owned integrity metadata rather than runtime string lookup. All
+record and enum names are collected before payload, field, function-signature, or body
+types are resolved, so forward references and recursive enum payloads are deterministic.
 
 ## Construction
 
@@ -114,11 +116,19 @@ initialization evidence.
 ## Bootstrap HIR and execution
 
 HIR assigns each enum an `EnumId` and each variant its declaration-order slot.
-Constructors and match arms use these resolved identities rather than runtime
-string lookup. Runtime enum values carry the `EnumId`, variant slot, and an
-optional boxed payload. Before executing a match, the interpreter verifies the
-resolved arms are exhaustive, non-duplicated, in range, and payload-compatible;
-malformed HIR produces runtime invariant diagnostic `N4005`.
+Constructors and match arms retain the source-resolved variant spelling alongside that
+slot, allowing trusted consumers to verify that the two still identify the same declared
+member. Runtime enum values remain compact and carry only the `EnumId`, variant slot,
+and optional boxed payload; the retained spelling does not become a runtime layout or
+ABI field. Semantic inspection independently checks the name/slot pair before publishing
+its existing stable variant IDs, so schema v1/v2 do not gain a new field.
+
+At execution time, constructor payload evaluation happens before value-only variant
+identity validation, and a match evaluates its scrutinee before validating the complete
+resolved arm table. Thus a payload or scrutinee that returns, breaks, or continues keeps
+its established structured flow. Once an ordinary enum value is required, the interpreter
+rechecks enum identity, variant spelling/slot agreement, payload arity/type, exhaustiveness,
+and duplicate coverage; malformed HIR produces invariant diagnostic `N4005`.
 
 A selected match arm propagates structured control flow unchanged. Therefore a
 `return` reaches the current function, while `break` or `continue` reaches only

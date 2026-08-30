@@ -27,7 +27,7 @@ interpreter slices. The toolchain is written in Rust and can:
 - lower accepted syntax into a resolved, typed HIR with stable function,
   binding, record, and enum identities, plus a verified function-level CFG;
 - resolve top-level functions and nominal types, parameters, lexical local
-  bindings, record field slots, enum variant slots, and match payload bindings;
+  bindings, record-field and enum-variant name/slot identities, and match payload bindings;
 - check bootstrap `Int`, `Bool`, `Unit`, and nominal aggregate types, function
   signatures, local inference and annotations, calls, operators, block tails, branches,
   returns, loop conditions, loop-control legality, record construction/projection,
@@ -155,8 +155,12 @@ carry zero or one payload in this slice. Construction is explicitly qualified as
 `Name::Empty` or `Name::Value(expression)`. A `match` scrutinee must have an enum
 type, every pattern must name a variant of that same nominal enum, and every
 variant must occur exactly once. Payload bindings are immutable and scoped to
-one arm. Wildcards, guards, nested patterns, multi-payload variants, equality for
-payload-bearing enums, layout, and ABI guarantees are not implemented.
+one arm. HIR retains the source-resolved variant spelling alongside the nominal enum
+identity and declaration-order slot for both constructors and match arms. Runtime and
+semantic-inspection consumers recheck that name/slot pair, so malformed HIR cannot
+silently retarget a constructor or pattern to a same-shaped sibling variant. Wildcards,
+guards, nested patterns, multi-payload variants, equality for payload-bearing enums,
+layout, and ABI guarantees are not implemented.
 
 `let` bindings and function parameters are immutable. `var` bindings may be
 assigned with the narrow statement form `name = expression;`. The target must
@@ -272,8 +276,11 @@ field must conform to its declaration slot type, and each enum payload must conf
 to its selected variant payload type before the aggregate value is created. Record
 construction and projection also revalidate the HIR-resolved field spelling against
 its declaration-order slot, closing same-typed member-retargeting drift that a type
-postcondition alone cannot observe. These checks catch malformed HIR even when the
-aggregate never crosses a function boundary.
+postcondition alone cannot observe. Enum construction and matching apply the analogous
+variant spelling/slot check after payload or scrutinee evaluation has produced an ordinary
+value, preserving structured return/break/continue propagation before value-only invariant
+validation. These checks catch malformed HIR even when the aggregate never crosses a
+function boundary.
 
 Runtime frames preserve the resolved binding contract too. Each slot records its
 resolved type, mutability, and initialization state. Parameters, local bindings,
