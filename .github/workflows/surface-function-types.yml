@@ -6,6 +6,7 @@ on:
       - feat/surface-function-types
     paths:
       - .github/surface-function-types.py
+      - .github/fix-surface-function-script.py
       - .github/workflows/surface-function-types.yml
 
 permissions:
@@ -24,6 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python .github/fix-surface-function-script.py
           python .github/surface-function-types.py
           cargo fmt --all
           cargo test -p nova-parser --test function_types
@@ -33,7 +35,7 @@ jobs:
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           git config user.name "LeiZ"
           git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
-          git rm .github/surface-function-types.py .github/workflows/surface-function-types.yml
+          git rm .github/surface-function-types.py .github/fix-surface-function-script.py .github/workflows/surface-function-types.yml
           git add crates/nova-parser/src/ast.rs crates/nova-parser/src/parser.rs \
             crates/nova-parser/tests/function_types.rs \
             crates/nova-sema/src/analyzer.rs crates/nova-sema/tests/surface_function_types.rs \
