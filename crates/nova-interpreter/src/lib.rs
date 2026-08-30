@@ -496,39 +496,10 @@ impl<'program> Interpreter<'program> {
             }
             ExpressionKind::EnumConstructor {
                 enumeration,
+                variant_name,
                 variant_index,
                 payload,
             } => {
-                let Some(definition) = self.program.enums.get(enumeration.index()) else {
-                    return Err(self.invariant(
-                        expression.span,
-                        format!(
-                            "resolved enum id {} is outside the program",
-                            enumeration.index()
-                        ),
-                    ));
-                };
-                if definition.id != *enumeration {
-                    return Err(self.invariant(
-                        expression.span,
-                        "enum declaration index does not match its resolved identity",
-                    ));
-                }
-                let Some(variant) = definition.variants.get(*variant_index) else {
-                    return Err(self.invariant(
-                        expression.span,
-                        format!(
-                            "variant slot {variant_index} is outside enum `{}`",
-                            definition.name
-                        ),
-                    ));
-                };
-                if variant.payload.is_some() != payload.is_some() {
-                    return Err(self.invariant(
-                        expression.span,
-                        "resolved enum constructor payload arity does not match its variant",
-                    ));
-                }
                 let payload = if let Some(payload) = payload {
                     match self.eval_expression(payload, frame)? {
                         Flow::Value(value) => Some(Box::new(value)),
@@ -537,6 +508,18 @@ impl<'program> Interpreter<'program> {
                 } else {
                     None
                 };
+                let (definition, variant) = self.resolved_enum_variant(
+                    *enumeration,
+                    *variant_index,
+                    variant_name,
+                    expression.span,
+                )?;
+                if variant.payload.is_some() != payload.is_some() {
+                    return Err(self.invariant(
+                        expression.span,
+                        "resolved enum constructor payload arity does not match its variant",
+                    ));
+                }
                 if let (Some(payload_type), Some(payload_value)) =
                     (&variant.payload, payload.as_deref())
                 {
@@ -662,45 +645,6 @@ impl<'program> Interpreter<'program> {
                 enumeration,
                 arms,
             } => {
-                let Some(definition) = self.program.enums.get(enumeration.index()) else {
-                    return Err(self.invariant(
-                        expression.span,
-                        format!(
-                            "resolved enum id {} is outside the program",
-                            enumeration.index()
-                        ),
-                    ));
-                };
-                if definition.id != *enumeration || arms.len() != definition.variants.len() {
-                    return Err(self.invariant(
-                        expression.span,
-                        "resolved match is not exhaustive for its enum declaration",
-                    ));
-                }
-                let mut covered = vec![false; definition.variants.len()];
-                for arm in arms {
-                    let Some(slot) = covered.get_mut(arm.variant_index) else {
-                        return Err(self.invariant(
-                            arm.span,
-                            "resolved match arm targets a variant outside its enum",
-                        ));
-                    };
-                    if *slot {
-                        return Err(self.invariant(
-                            arm.span,
-                            "resolved match contains a duplicate variant arm",
-                        ));
-                    }
-                    *slot = true;
-                    let declared = &definition.variants[arm.variant_index];
-                    if declared.payload.is_some() != arm.binding.is_some() {
-                        return Err(self.invariant(
-                            arm.span,
-                            "resolved match binding arity does not match its variant",
-                        ));
-                    }
-                }
-
                 let scrutinee = match self.eval_expression(scrutinee, frame)? {
                     Flow::Value(value) => value,
                     flow => return Ok(flow),
@@ -726,6 +670,51 @@ impl<'program> Interpreter<'program> {
                         ),
                     ));
                 }
+
+                let Some(definition) = self.program.enums.get(enumeration.index()) else {
+                    return Err(self.invariant(
+                        expression.span,
+                        format!(
+                            "resolved enum id {} is outside the program",
+                            enumeration.index()
+                        ),
+                    ));
+                };
+                if definition.id != *enumeration || arms.len() != definition.variants.len() {
+                    return Err(self.invariant(
+                        expression.span,
+                        "resolved match is not exhaustive for its enum declaration",
+                    ));
+                }
+                let mut covered = vec![false; definition.variants.len()];
+                for arm in arms {
+                    let (_, declared) = self.resolved_enum_variant(
+                        *enumeration,
+                        arm.variant_index,
+                        &arm.variant_name,
+                        arm.span,
+                    )?;
+                    let Some(slot) = covered.get_mut(arm.variant_index) else {
+                        return Err(self.invariant(
+                            arm.span,
+                            "resolved match arm targets a variant outside its enum",
+                        ));
+                    };
+                    if *slot {
+                        return Err(self.invariant(
+                            arm.span,
+                            "resolved match contains a duplicate variant arm",
+                        ));
+                    }
+                    *slot = true;
+                    if declared.payload.is_some() != arm.binding.is_some() {
+                        return Err(self.invariant(
+                            arm.span,
+                            "resolved match binding arity does not match its variant",
+                        ));
+                    }
+                }
+
                 let Some(arm) = arms.iter().find(|arm| arm.variant_index == variant_index) else {
                     return Err(self.invariant(
                         expression.span,
@@ -962,6 +951,49 @@ impl<'program> Interpreter<'program> {
             },
         );
         Ok(())
+    }
+
+    fn resolved_enum_variant(
+        &self,
+        enumeration: EnumId,
+        variant_index: usize,
+        variant_name: &str,
+        span: nova_source::Span,
+    ) -> Result<(&nova_sema::hir::Enum, &nova_sema::hir::EnumVariant), Diagnostic> {
+        let Some(definition) = self.program.enums.get(enumeration.index()) else {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "resolved enum id {} is outside the program",
+                    enumeration.index()
+                ),
+            ));
+        };
+        if definition.id != enumeration {
+            return Err(self.invariant(
+                span,
+                "enum declaration index does not match its resolved identity",
+            ));
+        }
+        let Some(variant) = definition.variants.get(variant_index) else {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "variant slot {variant_index} is outside enum `{}`",
+                    definition.name
+                ),
+            ));
+        };
+        if variant.name != variant_name {
+            return Err(self.invariant(
+                span,
+                format!(
+                    "resolved enum variant `{variant_name}` does not match declaration slot {variant_index} (`{}`)",
+                    variant.name
+                ),
+            ));
+        }
+        Ok((definition, variant))
     }
 
     fn resolved_record_field(

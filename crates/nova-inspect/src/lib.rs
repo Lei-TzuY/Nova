@@ -514,6 +514,7 @@ impl<'a> Builder<'a> {
             }
             hir::ExpressionKind::EnumConstructor {
                 enumeration,
+                variant_name,
                 variant_index,
                 payload,
             } => {
@@ -523,6 +524,12 @@ impl<'a> Builder<'a> {
                         "enum construction references out-of-range variant slot {variant_index}"
                     ))
                 })?;
+                if variant.name != *variant_name {
+                    return Err(InspectionError::invalid(format!(
+                        "enum construction variant `{variant_name}` does not match slot {variant_index} declaration `{}`",
+                        variant.name
+                    )));
+                }
                 if variant.payload.is_some() != payload.is_some() {
                     return Err(InspectionError::invalid(format!(
                         "enum construction payload does not match {}",
@@ -624,6 +631,12 @@ impl<'a> Builder<'a> {
                             arm.variant_index
                         ))
                     })?;
+                    if variant.name != arm.variant_name {
+                        return Err(InspectionError::invalid(format!(
+                            "match variant `{}` does not match slot {} declaration `{}`",
+                            arm.variant_name, arm.variant_index, variant.name
+                        )));
+                    }
                     if !seen.insert(arm.variant_index) {
                         return Err(InspectionError::invalid(format!(
                             "match repeats variant slot {}",

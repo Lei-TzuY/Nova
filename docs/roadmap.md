@@ -36,7 +36,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: forty-two vertical slices implemented; broader type-system work remains.**
+**Status: forty-three vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -712,6 +712,20 @@ Implemented in the forty-second Phase 2 slice:
 - the slice changes no surface syntax, record layout, field mutability, ownership, ABI, CFG,
   or valid-source behavior.
 
+Implemented in the forty-third Phase 2 slice:
+
+- enum-constructor and exhaustive-match HIR retain the source-resolved variant spelling
+  alongside nominal `EnumId` and declaration-order variant slot identity;
+- constructor and pattern lowering preserve that name/slot pair without changing source
+  syntax, payload evaluation order, match-arm order, or the compact runtime enum value;
+- semantic inspection independently rejects variant spelling/slot drift before projecting
+  the existing stable variant IDs, leaving schema v1/v2 byte shape unchanged;
+- closed-condition proof remains slot-based inside semantic analysis because it consumes
+  HIR produced in the same trusted lowering pass rather than treating the spelling as a
+  second semantic source of truth; and
+- producer plus inspection corruption regressions lock same-shaped sibling variants against
+  silent retargeting while keeping nominal enum and pattern semantics unchanged.
+
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
 - define language-level numeric types, defaulting, conversions, and overflow
@@ -730,7 +744,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: seventeen vertical slices implemented; execution surface remains small.**
+**Status: eighteen vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -979,6 +993,19 @@ Implemented in the seventeenth Phase 3 slice:
   covering semantic identity drift that remains type-correct at runtime; and
 - focused malformed-HIR regressions plus normal record execution keep valid evaluation order,
   runtime representation, and source semantics unchanged.
+
+Implemented in the eighteenth Phase 3 slice:
+
+- enum construction evaluates an optional payload first and only revalidates resolved
+  enum/variant name-slot identity when that payload completes with an ordinary value;
+- exhaustive matching likewise evaluates the scrutinee before validating the complete arm
+  identity/exhaustiveness table, so structured return/break/continue cannot be preempted by
+  value-only malformed-HIR checks;
+- the interpreter rejects same-payload-type constructor retargeting and exhaustive
+  same-shape pattern-slot swaps with `N4005`, while independently preserving payload arity,
+  payload type, duplicate-arm, and nominal-enum invariants; and
+- adversarial runtime regressions prove both corruption rejection and structured-flow
+  precedence without changing valid execution, enum runtime representation, layout, or ABI.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
