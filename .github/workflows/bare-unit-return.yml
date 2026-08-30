@@ -1,0 +1,32 @@
+name: Bare Unit return
+
+on:
+  push:
+    branches:
+      - feat/bare-unit-return
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/bare-unit-return
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply and validate bare Unit return
+        run: |
+          set -euo pipefail
+          python .github/bare-unit-return.py
+          cargo fmt --all
+          cargo test --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git rm -f .github/bare-unit-return.py .github/workflows/bare-unit-return.yml
+          git add crates/nova-parser/src/ast.rs crates/nova-parser/src/parser.rs crates/nova-parser/tests/bare_return.rs crates/nova-sema/src/hir.rs crates/nova-sema/src/analyzer.rs crates/nova-sema/tests/bare_return.rs crates/nova-interpreter/src/lib.rs crates/nova-interpreter/tests/bare_return.rs crates/nova-inspect/src/lib.rs crates/nova-inspect/tests/bare_return.rs crates/nova-cli/tests/fixtures/valid/bare-unit-return.nv crates/nova-cli/tests/bare_unit_return.rs
+          git commit -m "feat: support bare return in Unit functions"
+          git push origin HEAD:feat/bare-unit-return
