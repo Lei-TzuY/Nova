@@ -1617,6 +1617,7 @@ impl Analyzer {
             (
                 ExpressionKind::EnumConstructor {
                     enumeration: enum_id,
+                    variant_name: variant.text.clone(),
                     variant_index,
                     payload,
                 },
@@ -1865,6 +1866,7 @@ impl Analyzer {
 
             if let Some(variant_index) = resolved_index {
                 lowered_arms.push(MatchArm {
+                    variant_name: arm.pattern.variant.text.clone(),
                     variant_index,
                     binding: payload_binding,
                     value,

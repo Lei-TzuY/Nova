@@ -327,6 +327,8 @@ pub struct RecordFieldValue {
 /// One resolved arm in an exhaustive enum match.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MatchArm {
+    /// Resolved variant spelling paired with the declaration-order slot.
+    pub variant_name: String,
     /// Zero-based variant slot in declaration order.
     pub variant_index: usize,
     /// Optional immutable payload binding.
@@ -372,6 +374,8 @@ pub enum ExpressionKind {
     EnumConstructor {
         /// Resolved nominal enum identity.
         enumeration: EnumId,
+        /// Resolved variant spelling paired with the declaration-order slot.
+        variant_name: String,
         /// Zero-based variant slot in declaration order.
         variant_index: usize,
         /// Optional typed payload expression.

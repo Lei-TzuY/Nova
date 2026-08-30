@@ -106,6 +106,7 @@ fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
             enumeration,
             variant_index,
             payload,
+            ..
         } if payload.is_none() => Some((*enumeration, *variant_index)),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             enum_tag(block.tail.as_deref()?)
