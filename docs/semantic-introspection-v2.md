@@ -23,11 +23,12 @@ Omitting `--schema-version` continues to select v1. Explicit
 v2 is never selected implicitly. Unsupported versions are command-line errors.
 
 Both versions use the schema family `nova.semantic-inspection`. Consumers must
-check `schema_version` before interpreting a document. V2 adds one required
-top-level field, `control_flow`, and changes the envelope version to `2`; it does
-not add fields to v1 or reinterpret any v1 identity. The `program` member is the
-same strict v1 fact table, including its deterministic ordering and prohibition
-on unknown fields.
+check `schema_version` before interpreting a document. V2 adds one required top-level field, `control_flow`, and changes the envelope version
+to `2`; it does not add fields to v1 or reinterpret any v1 identity or match-arm field.
+The `program` member is the same strict v1 fact table, including its deterministic ordering
+and prohibition on unknown fields. Consequently v2 also refuses to reinterpret a
+payload-bearing arm with `binding: null` as the later `Variant(_)` discard feature; such
+source receives inspection invariant `N5001` and must be inspected with explicit schema v3.
 
 Inspection still runs the complete lexical, syntactic, name-resolution, type,
 and definite-initialization pipeline. Rejected source writes diagnostics and no
@@ -124,5 +125,6 @@ are present because deterministic static checking is part of Nova's semantics;
 their presence does not mean they can execute.
 
 Schema v2 is provisional before Nova 1.0. A field removal, identity-rule change,
-edge reinterpretation, or other incompatible change requires another schema
-version rather than a silent v2 mutation.
+edge or match-field reinterpretation, or other incompatible change requires another schema
+version rather than a silent v2 mutation. Schema v3 is the first version that represents
+explicit enum-payload discard.

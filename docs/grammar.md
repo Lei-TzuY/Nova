@@ -118,7 +118,8 @@ match_expression    = "match" , expression , "{" , [ match_arms ] , "}" ;
 match_arms          = match_arm , { "," , match_arm } , [ "," ] ;
 match_arm           = enum_pattern , "=>" , expression ;
 enum_pattern        = identifier , "::" , identifier ,
-                      [ "(" , identifier , ")" ] ;
+                      [ "(" , payload_pattern , ")" ] ;
+payload_pattern     = identifier | "_" ;
 ```
 
 A block may end in one expression without a semicolon; that expression is its

@@ -21,7 +21,7 @@ interpreter slices. The toolchain is written in Rust and can:
 - read a Nova file while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
 - parse functions, recursive explicit function types, nominal records and enums,
-  explicit aggregate construction, exhaustive enum matching, field projection,
+  explicit aggregate construction, exhaustive enum matching with payload discard, field projection,
   initialized bindings, typed delayed `var` initialization, narrow assignments,
   expressions, blocks, calls, `if` expressions, pre-test `while` loops, and
   statement-only `break`/`continue`;
@@ -43,8 +43,8 @@ interpreter slices. The toolchain is written in Rust and can:
 - print a deterministic debug representation of the parsed AST; and
 - emit fail-closed semantic-inspection v1 documents with resolved declarations,
   bindings, types, spans, expression relationships, and exhaustive match facts,
-  plus explicitly selected v2 documents that add the verified CFG without
-  exposing debug HIR or compiler-owned graph layouts as a protocol.
+  plus explicitly selected v2 documents that add the verified CFG and v3 documents
+  that additionally expose explicit match payload modes without reinterpreting v1/v2 fields.
 
 `nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
 definite-assignment validation. `nova run` performs those same checks and then
@@ -80,8 +80,9 @@ subset, [the enum and pattern semantics](docs/enums-and-patterns.md) for that
 aggregate slice's semantic contract,
 [the diagnostics contract](docs/diagnostics.md) for error/warning and exit-status
 behavior,
-[the semantic-introspection v1 contract](docs/semantic-introspection.md) and
-[v2 CFG extension](docs/semantic-introspection-v2.md) for the machine-readable
+[the semantic-introspection v1 contract](docs/semantic-introspection.md),
+[v2 CFG extension](docs/semantic-introspection-v2.md), and
+[v3 pattern extension](docs/semantic-introspection-v3.md) for the machine-readable
 tooling boundary,
 [the bootstrap control-flow contract](docs/control-flow.md) for CFG verification
 and definite-initialization dataflow, and
@@ -166,13 +167,15 @@ post-expression facts. A child that is already non-continuing keeps its `!` flow
 carry zero or one payload in this slice. Construction is explicitly qualified as
 `Name::Empty` or `Name::Value(expression)`. A `match` scrutinee must have an enum
 type, every pattern must name a variant of that same nominal enum, and every
-variant must occur exactly once. Payload bindings are immutable and scoped to
-one arm. HIR retains the source-resolved variant spelling alongside the nominal enum
-identity and declaration-order slot for both constructors and match arms. Runtime and
-semantic-inspection consumers recheck that name/slot pair, so malformed HIR cannot
-silently retarget a constructor or pattern to a same-shaped sibling variant. Wildcards,
-guards, nested patterns, multi-payload variants, equality for payload-bearing enums,
-layout, and ABI guarantees are not implemented.
+variant must occur exactly once. A payload-bearing arm may bind the payload immutably
+for that arm or write `_` to discard it without introducing a binding. Payload-free variants
+accept neither form. HIR retains the source-resolved variant spelling/slot and explicit
+discard intent, so runtime and inspection trust boundaries reject identity or payload-mode
+drift instead of treating a deleted binding as discard. `_` here is not a catch-all arm: a
+bare wildcard/default pattern, guards, nested patterns, multi-payload variants, equality for
+payload-bearing enums, layout, and ABI guarantees remain unimplemented. Semantic-inspection
+v1/v2 deliberately reject discard-bearing matches with `N5001`; explicit v3 adds per-arm
+`none`/`bind`/`discard` facts while preserving the older schema meanings.
 
 `let` bindings and function parameters are immutable. `var` bindings may be
 assigned with the narrow statement form `name = expression;`. The target must

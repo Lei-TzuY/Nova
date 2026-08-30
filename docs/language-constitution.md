@@ -108,13 +108,14 @@ promise about memory layout, padding, calling convention, or ABI.
 
 A bootstrap enum declares at least one uniquely named variant. Each variant has
 zero or one explicitly typed payload, and qualified construction must match that
-arity and type. Recursive enum payload types are accepted. `match` currently
-supports only qualified variant patterns with an optional single immutable
-payload binding. Every variant of the scrutinee's nominal enum must appear
-exactly once, and every continuing arm must produce a compatible type. The
-scrutinee runs once and only the selected arm runs. These rules establish a
-small executable algebraic-data-type core without selecting wildcard, guard,
-nested-pattern, usefulness, layout, or ownership semantics prematurely.
+arity and type. Recursive enum payload types are accepted. `match` currently supports only qualified concrete-variant patterns. A payload-bearing
+variant may introduce one immutable payload binding or explicitly discard that payload with
+`_`; payload-free variants accept neither. Every variant of the scrutinee's nominal enum
+must still appear exactly once, and every continuing arm must produce a compatible type.
+The scrutinee runs once and only the selected arm runs. Payload `_` is deliberately not a
+catch-all variant wildcard, so these rules extend the executable algebraic-data-type core
+without selecting default-arm, guard, nested-pattern, usefulness, layout, or ownership
+semantics prematurely.
 
 Matching `Int`, `Bool`, and `Unit` values are equality-comparable with `==` and
 `!=`. Unit has exactly one bootstrap value, so two normally evaluated Unit values compare

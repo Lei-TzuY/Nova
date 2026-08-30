@@ -51,16 +51,19 @@ The implemented pattern form is deliberately narrow:
 ```nova
 match value {
     OptionInt::None => 0,
-    OptionInt::Some(inner) => inner,
+    OptionInt::Some(_) => 1,
 }
 ```
 
 The scrutinee must have an enum type. Every arm must qualify a variant with that
-same nominal enum, and every declared variant must occur exactly once. A variant
-with a payload requires one binding; a payload-free variant forbids a binding.
-The payload binding is immutable, definitely initialized, and visible only in
-its arm expression. Different arms therefore may reuse the same spelling
-without sharing identity.
+same nominal enum, and every declared variant must occur exactly once. A payload-bearing
+variant must either bind its payload with `Variant(name)` or explicitly discard it with
+`Variant(_)`; silently omitting the payload position is still `N3022`. A payload-free
+variant accepts neither a binding nor `_`. A payload binding is immutable, definitely
+initialized, and visible only in its arm expression. A discard creates no binding and the
+payload value is unavailable to the arm. Different binding arms may reuse the same spelling
+without sharing identity. `_` is not a catch-all arm in this slice: a bare `_ => ...` pattern
+is not implemented and every concrete enum variant must still occur exactly once.
 
 The result type is determined from all arms that can continue. Continuing arms
 must agree on one type. An arm whose expression has the internal bottom type `!`
@@ -118,10 +121,17 @@ initialization evidence.
 HIR assigns each enum an `EnumId` and each variant its declaration-order slot.
 Constructors and match arms retain the source-resolved variant spelling alongside that
 slot, allowing trusted consumers to verify that the two still identify the same declared
-member. Runtime enum values remain compact and carry only the `EnumId`, variant slot,
-and optional boxed payload; the retained spelling does not become a runtime layout or
-ABI field. Semantic inspection independently checks the name/slot pair before publishing
-its existing stable variant IDs, so schema v1/v2 do not gain a new field.
+member. Match arms additionally retain whether a payload was explicitly discarded, so a
+malformed HIR mutation that merely deletes a real binding cannot be reinterpreted as `_`.
+Runtime enum values remain compact and carry only the `EnumId`, variant slot, and optional
+boxed payload; a selected discard arm consumes that payload without creating a frame slot.
+
+Semantic-inspection v1 and v2 keep their published meaning: they do not reinterpret a
+payload-bearing arm with `binding: null` as discard and therefore fail closed with `N5001`
+when source uses `Variant(_)`. Explicit schema v3 preserves the established program and CFG
+projections and adds `match_patterns`, whose `payload_mode` is `none`, `bind`, or `discard`.
+This makes the new language fact representable without silently mutating older protocol
+versions.
 
 At execution time, constructor payload evaluation happens before value-only variant
 identity validation, and a match evaluates its scrutinee before validating the complete
@@ -160,9 +170,10 @@ compatibility promise.
 
 ## Deliberate limitations
 
-This slice has no wildcard, default arm, guard, literal pattern, nested pattern,
-alternative pattern, multi-payload variant, named variant fields, record
-destructuring, exhaustiveness usefulness warning, or stable enum layout. Enums
-with payload variants and records do not yet receive recursively derived value
-equality. Those features require separate semantic and diagnostic designs rather
-than syntactic shortcuts.
+This slice has no catch-all/default arm, guard, literal pattern, nested pattern,
+alternative pattern, multi-payload variant, named variant fields, record destructuring,
+pattern-usefulness analysis, or stable enum layout. `_` exists only as the payload-discard
+subpattern of an already resolved concrete variant; it does not cover other variants. Enums
+with payload variants and records do not yet receive recursively derived value equality.
+Those features require separate semantic and diagnostic designs rather than syntactic
+shortcuts.
