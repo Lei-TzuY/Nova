@@ -1,0 +1,31 @@
+name: CFG break exit topology docs
+
+on:
+  push:
+    branches:
+      - fix/cfg-break-exit-topology
+    paths:
+      - .github/cfg_break_exit_docs.py
+      - .github/workflows/cfg-break-exit-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/cfg-break-exit-topology
+          fetch-depth: 0
+      - name: Apply CFG break exit topology docs
+        run: |
+          set -euo pipefail
+          python .github/cfg_break_exit_docs.py
+          rm .github/cfg_break_exit_docs.py .github/workflows/cfg-break-exit-docs.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs: close CFG break exit topology slice'
+          git push origin HEAD:fix/cfg-break-exit-topology
