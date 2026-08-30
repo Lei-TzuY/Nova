@@ -17,14 +17,6 @@ new = '''        } else if node.predecessors.is_empty() {
                 node.span.unwrap_or(fallback_span),
                 format!("flow node {index} has no predecessor"),
             ));
-        } else if !matches!(node.kind, FlowNodeKind::Join) && node.predecessors.len() != 1 {
-            return Err(FlowError::invalid(
-                node.span.unwrap_or(fallback_span),
-                format!(
-                    "non-Join flow node {index} has {} predecessors; expected exactly one",
-                    node.predecessors.len()
-                ),
-            ));
         }
         for (edge_index, edge) in node.predecessors.iter().enumerate() {
             if node.predecessors[..edge_index].contains(edge) {
@@ -42,6 +34,28 @@ new = '''        } else if node.predecessors.is_empty() {
 if old not in text:
     raise SystemExit('verifier anchor not found')
 text = text.replace(old, new, 1)
+
+cardinality_anchor = '''    for bindings in graph.bindings.windows(2) {\n'''
+cardinality = '''    for node in &graph.nodes {
+        if node.id != graph.entry
+            && !matches!(node.kind, FlowNodeKind::Join)
+            && node.predecessors.len() != 1
+        {
+            return Err(FlowError::invalid(
+                node.span.unwrap_or(fallback_span),
+                format!(
+                    "non-Join flow node {} has {} predecessors; expected exactly one",
+                    node.id.index(),
+                    node.predecessors.len()
+                ),
+            ));
+        }
+    }
+
+'''
+if cardinality_anchor not in text:
+    raise SystemExit('cardinality anchor not found')
+text = text.replace(cardinality_anchor, cardinality + cardinality_anchor, 1)
 
 anchor = '''    #[test]\n    fn builder_fails_closed_on_an_invalid_backedge_endpoint() {\n'''
 tests = '''    #[test]
