@@ -95,7 +95,9 @@ loop-header `join`. The verified graph is direction-canonical: `execution` and
 `diagnostic` edges always point from a lower node identity to a higher one, while
 `backedge` always points from a higher identity to an earlier `join`. Tooling can
 therefore treat `backedge` as the only published cycle-closing edge class rather
-than inferring cycles from arbitrary predecessor order.
+than inferring cycles from arbitrary predecessor order. Predecessor lists are also
+canonical: every non-`join` node has exactly one incoming edge, only `join` may merge
+multiple paths, and no node publishes the same source/edge-class pair twice.
 
 Node spans are source-qualified v1 spans when a source action or function
 boundary owns the node; compiler-created joins may have `null`. Edge arrays do

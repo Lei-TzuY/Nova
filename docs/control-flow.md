@@ -68,7 +68,10 @@ Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
 - the designated graph entry is the unique `Entry`-kind node, keeping the solver's
   empty-lattice root aligned with the graph model;
 - node identities equal their deterministic vector positions;
-- only the entry lacks predecessors;
+- only the entry lacks predecessors; every non-`Join` node has exactly one predecessor,
+  making `Join` the only legal merge point for multiple incoming paths;
+- each node's predecessor list contains no duplicate source/edge-class pair, keeping
+  the graph representation canonical before fixed-point dataflow or tooling projection;
 - every node is graph-reachable from the entry, including diagnostic source;
 - every node reachable from entry without crossing a `Diagnostic` edge has only
   non-diagnostic predecessors that are themselves reachable on such executable flow;
