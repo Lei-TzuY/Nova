@@ -60,36 +60,13 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<Result<i64, ConstantIn
             scrutinee,
             enumeration,
             arms,
-        } => {
-            let (scrutinee_enum, variant_index) = enum_tag(scrutinee)?;
-            if scrutinee_enum != *enumeration {
-                return None;
-            }
-
-            let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
-            let arm = selected.next()?;
-            if selected.next().is_some() {
-                return None;
-            }
-            evaluate(&arm.value)
-        }
+        } => evaluate(crate::constant_condition::selected_match_value(
+            scrutinee,
+            *enumeration,
+            arms,
+        )?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             evaluate(block.tail.as_deref()?)
-        }
-        _ => None,
-    }
-}
-
-fn enum_tag(expression: &Expression) -> Option<(crate::hir::EnumId, usize)> {
-    match &expression.kind {
-        ExpressionKind::EnumConstructor {
-            enumeration,
-            variant_index,
-            payload,
-            ..
-        } if payload.is_none() => Some((*enumeration, *variant_index)),
-        ExpressionKind::Block(block) if block.statements.is_empty() => {
-            enum_tag(block.tail.as_deref()?)
         }
         _ => None,
     }
