@@ -168,9 +168,7 @@ fn function_id(expression: &Expression) -> Option<FunctionId> {
             then_branch,
             else_branch,
         } => match evaluate(condition)? {
-            true if then_branch.statements.is_empty() => {
-                function_id(then_branch.tail.as_deref()?)
-            }
+            true if then_branch.statements.is_empty() => function_id(then_branch.tail.as_deref()?),
             true => None,
             false => function_id(else_branch),
         },
