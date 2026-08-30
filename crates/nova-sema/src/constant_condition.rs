@@ -30,6 +30,23 @@ pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
             true => None,
             false => evaluate(else_branch),
         },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => {
+            let (scrutinee_enum, variant_index) = enum_tag(scrutinee)?;
+            if scrutinee_enum != *enumeration {
+                return None;
+            }
+
+            let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
+            let arm = selected.next()?;
+            if selected.next().is_some() {
+                return None;
+            }
+            evaluate(&arm.value)
+        }
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             evaluate(block.tail.as_deref()?)
         }
