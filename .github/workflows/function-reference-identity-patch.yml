@@ -1,0 +1,36 @@
+name: Function reference identity patch
+
+on:
+  push:
+    branches:
+      - fix/function-reference-identity
+    paths:
+      - .github/function-reference-identity-patch.py
+      - .github/workflows/function-reference-identity-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/function-reference-identity
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply and validate function reference identity patch
+        run: |
+          python .github/function-reference-identity-patch.py
+          cargo fmt --all
+          cargo test -p nova-sema --test function_reference_identity --locked
+          cargo test -p nova-interpreter --test function_reference_identity --locked
+          cargo test -p nova-inspect --test function_reference_identity --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          rm .github/function-reference-identity-patch.py
+          rm .github/workflows/function-reference-identity-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: preserve resolved function reference identity"
+          git push origin HEAD:fix/function-reference-identity
