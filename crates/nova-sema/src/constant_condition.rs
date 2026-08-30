@@ -184,7 +184,7 @@ fn function_id(expression: &Expression) -> Option<FunctionId> {
     }
 }
 
-fn selected_match_value<'a>(
+pub(crate) fn selected_match_value<'a>(
     scrutinee: &Expression,
     enumeration: EnumId,
     arms: &'a [MatchArm],
