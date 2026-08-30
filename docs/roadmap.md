@@ -776,7 +776,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: twenty vertical slices implemented; execution surface remains small.**
+**Status: twenty-one vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -1062,6 +1062,23 @@ Implemented in the twentieth Phase 3 slice:
   checks, preserving defense in depth and repeated lexical-binding execution; and
 - adversarial runtime regressions lock same-type assignment retargeting, same-name shadow reads,
   RHS structured-flow precedence, and unchanged valid frame behavior under `N4005` fail-closed policy.
+
+Implemented in the twenty-first Phase 3 slice:
+
+- runtime value/type conformance now first validates the resolved HIR type identity instead of
+  accepting nominal IDs while ignoring retained record/enum declaration spellings;
+- `Type::Record` and `Type::Enum` require both stable declaration identity and declared name to
+  agree, while `FunctionType` recursively validates every parameter and return type under the
+  same rule before a function value can conform;
+- the single conformance entry gate automatically strengthens expression postconditions,
+  function arguments/returns, frame storage, aggregate field/payload validation, and nested
+  nominal values without adding per-boundary duplicate checks;
+- malformed HIR with same-ID/wrong-name outer types, nested record-field or enum-payload types,
+  or drifted nominal function signatures now fails closed as `N4005`, while `Never`/`Error`
+  remain impossible runtime value types; and
+- focused adversarial regressions plus a nested record/enum/match positive control and
+  all-targets Clippy coverage lock the contract without changing HIR shape, semantic-inspection
+  schemas, runtime value representation, syntax, layout, ABI, or valid-source behavior.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
