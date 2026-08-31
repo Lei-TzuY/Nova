@@ -56,10 +56,6 @@ fn evaluate_binary_with_bindings<'a>(
     })
 }
 
-pub(crate) fn evaluate(expression: &Expression) -> Option<Result<i64, ConstantIntError>> {
-    evaluate_with_bindings(expression, &[])
-}
-
 pub(crate) fn evaluate_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
