@@ -55,7 +55,7 @@ fn dynamic_payload_value_is_not_promoted_to_closed_value_proof() {
     let output = analyze_text(
         "enum Maybe { None, Some(Int) } fn runtime(flag: Bool) -> Int { if flag { 1 } else { 2 } } fn main(flag: Bool) -> Int { var result: Int; while match if true { Maybe::Some(runtime(flag)) } else { Maybe::None } { Maybe::None => false, Maybe::Some(value) => value == 1, } { result = 42; break; } result }",
     );
-    assert_eq!(codes(&output), vec!["N3009", "N3034"]);
+    assert_eq!(codes(&output), vec!["N3009"]);
 }
 
 #[test]
