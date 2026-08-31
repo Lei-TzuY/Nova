@@ -85,13 +85,36 @@ fn dynamic_if_condition_keeps_nested_match_runtime_only() {
 }
 
 #[test]
-fn statement_bearing_selected_scrutinee_branch_stops_nested_match_proof() {
+fn selected_immutable_enum_binding_scrutinee_branch_can_drive_nested_match() {
     let analyzed = analyze_text(
         "enum Choice { A, B }\n\
          fn main() -> Int {\n\
              var value: Int;\n\
              while ((match (if true {\n\
                  let choice = Choice::B;\n\
+                 choice\n\
+             } else { Choice::A }) {\n\
+                 Choice::A => 0,\n\
+                 Choice::B => 42,\n\
+             }) == 42) {\n\
+                 value = 42;\n\
+                 break;\n\
+             }\n\
+             value\n\
+         }",
+    );
+
+    assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
+}
+
+#[test]
+fn selected_mutable_enum_binding_scrutinee_branch_stops_nested_match_proof() {
+    let analyzed = analyze_text(
+        "enum Choice { A, B }\n\
+         fn main() -> Int {\n\
+             var value: Int;\n\
+             while ((match (if true {\n\
+                 var choice = Choice::B;\n\
                  choice\n\
              } else { Choice::A }) {\n\
                  Choice::A => 0,\n\
