@@ -1,73 +1,106 @@
 use crate::constant_int;
-use crate::hir::{EnumId, Expression, ExpressionKind, FunctionId, MatchArm, RecordId, Type};
+use crate::hir::{
+    Binding, BindingReference, EnumId, Expression, ExpressionKind, FunctionId, MatchArm, RecordId,
+    Type,
+};
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
+
+#[derive(Clone, Copy)]
+pub(crate) struct ClosedBinding<'a> {
+    binding: &'a Binding,
+    value: &'a Expression,
+}
 
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
 /// already determined by supported literal, identity, comparison, and Boolean proofs.
 /// The HIR is never folded.
 pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
+    evaluate_with_bindings(expression, &[])
+}
+
+pub(crate) fn evaluate_with_bindings<'a>(
+    expression: &'a Expression,
+    bindings: &[ClosedBinding<'a>],
+) -> Option<bool> {
     if expression.ty != Type::Bool {
         return None;
     }
 
     match &expression.kind {
         ExpressionKind::Boolean(value) => Some(*value),
+        ExpressionKind::Binding(reference) => evaluate_with_bindings(
+            closed_binding_value(reference, &expression.ty, bindings)?,
+            bindings,
+        ),
         ExpressionKind::Unary {
             operator: UnaryOperator::Not,
             operand,
-        } => evaluate(operand).map(|value| !value),
+        } => evaluate_with_bindings(operand, bindings).map(|value| !value),
         ExpressionKind::Binary {
             operator,
             left,
             right,
-        } => evaluate_binary(*operator, left, right),
+        } => evaluate_binary(*operator, left, right, bindings),
         ExpressionKind::If {
             condition,
             then_branch,
             else_branch,
-        } => match evaluate(condition)? {
-            true if then_branch.statements.is_empty() => evaluate(then_branch.tail.as_deref()?),
+        } => match evaluate_with_bindings(condition, bindings)? {
+            true if then_branch.statements.is_empty() => {
+                evaluate_with_bindings(then_branch.tail.as_deref()?, bindings)
+            }
             true => None,
-            false => evaluate(else_branch),
+            false => evaluate_with_bindings(else_branch, bindings),
         },
         ExpressionKind::Match {
             scrutinee,
             enumeration,
             arms,
-        } => evaluate(selected_match_value(scrutinee, *enumeration, arms)?),
+        } => {
+            let (value, selected_bindings) =
+                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)?;
+            evaluate_with_bindings(value, &selected_bindings)
+        }
         ExpressionKind::FieldAccess {
             base,
             record,
             field_index,
             ..
-        } => evaluate(selected_record_field_value(base, *record, *field_index)?),
+        } => evaluate_with_bindings(
+            selected_record_field_value(base, *record, *field_index)?,
+            bindings,
+        ),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
-            evaluate(block.tail.as_deref()?)
+            evaluate_with_bindings(block.tail.as_deref()?, bindings)
         }
         _ => None,
     }
 }
 
-fn evaluate_binary(
+fn evaluate_binary<'a>(
     operator: BinaryOperator,
-    left: &Expression,
-    right: &Expression,
+    left: &'a Expression,
+    right: &'a Expression,
+    bindings: &[ClosedBinding<'a>],
 ) -> Option<bool> {
     match operator {
-        BinaryOperator::And => match evaluate(left) {
+        BinaryOperator::And => match evaluate_with_bindings(left, bindings) {
             Some(false) => Some(false),
-            Some(true) => evaluate(right),
+            Some(true) => evaluate_with_bindings(right, bindings),
             None => None,
         },
-        BinaryOperator::Or => match evaluate(left) {
+        BinaryOperator::Or => match evaluate_with_bindings(left, bindings) {
             Some(true) => Some(true),
-            Some(false) => evaluate(right),
+            Some(false) => evaluate_with_bindings(right, bindings),
             None => None,
         },
         BinaryOperator::Equal | BinaryOperator::NotEqual => {
             let equal = match (&left.ty, &right.ty) {
-                (Type::Int, Type::Int) => int_value(left)? == int_value(right)?,
-                (Type::Bool, Type::Bool) => evaluate(left)? == evaluate(right)?,
+                (Type::Int, Type::Int) => int_value(left, bindings)? == int_value(right, bindings)?,
+                (Type::Bool, Type::Bool) => {
+                    evaluate_with_bindings(left, bindings)?
+                        == evaluate_with_bindings(right, bindings)?
+                }
                 (Type::Unit, Type::Unit) => {
                     unit_value(left)?;
                     unit_value(right)?;
@@ -91,16 +124,20 @@ fn evaluate_binary(
                 !equal
             })
         }
-        BinaryOperator::Less => Some(int_value(left)? < int_value(right)?),
-        BinaryOperator::LessEqual => Some(int_value(left)? <= int_value(right)?),
-        BinaryOperator::Greater => Some(int_value(left)? > int_value(right)?),
-        BinaryOperator::GreaterEqual => Some(int_value(left)? >= int_value(right)?),
+        BinaryOperator::Less => Some(int_value(left, bindings)? < int_value(right, bindings)?),
+        BinaryOperator::LessEqual => {
+            Some(int_value(left, bindings)? <= int_value(right, bindings)?)
+        }
+        BinaryOperator::Greater => Some(int_value(left, bindings)? > int_value(right, bindings)?),
+        BinaryOperator::GreaterEqual => {
+            Some(int_value(left, bindings)? >= int_value(right, bindings)?)
+        }
         _ => None,
     }
 }
 
-fn int_value(expression: &Expression) -> Option<i64> {
-    constant_int::evaluate(expression)?.ok()
+fn int_value<'a>(expression: &'a Expression, bindings: &[ClosedBinding<'a>]) -> Option<i64> {
+    constant_int::evaluate_with_bindings(expression, bindings)?.ok()
 }
 
 fn unit_value(expression: &Expression) -> Option<()> {
@@ -211,6 +248,11 @@ fn function_id(expression: &Expression) -> Option<FunctionId> {
 }
 
 fn match_variant_tag(expression: &Expression) -> Option<(EnumId, usize)> {
+    let (enumeration, variant_index, _) = match_variant(expression)?;
+    Some((enumeration, variant_index))
+}
+
+fn match_variant(expression: &Expression) -> Option<(EnumId, usize, Option<&Expression>)> {
     match &expression.kind {
         ExpressionKind::EnumConstructor {
             enumeration,
@@ -218,7 +260,7 @@ fn match_variant_tag(expression: &Expression) -> Option<(EnumId, usize)> {
             payload,
             ..
         } if payload.as_deref().is_none_or(is_closed_total_value) => {
-            Some((*enumeration, *variant_index))
+            Some((*enumeration, *variant_index, payload.as_deref()))
         }
         ExpressionKind::If {
             condition,
@@ -226,24 +268,24 @@ fn match_variant_tag(expression: &Expression) -> Option<(EnumId, usize)> {
             else_branch,
         } => match evaluate(condition)? {
             true if then_branch.statements.is_empty() => {
-                match_variant_tag(then_branch.tail.as_deref()?)
+                match_variant(then_branch.tail.as_deref()?)
             }
             true => None,
-            false => match_variant_tag(else_branch),
+            false => match_variant(else_branch),
         },
         ExpressionKind::Match {
             scrutinee,
             enumeration,
             arms,
-        } => match_variant_tag(selected_match_value(scrutinee, *enumeration, arms)?),
+        } => match_variant(selected_match_value(scrutinee, *enumeration, arms)?),
         ExpressionKind::FieldAccess {
             base,
             record,
             field_index,
             ..
-        } => match_variant_tag(selected_record_field_value(base, *record, *field_index)?),
+        } => match_variant(selected_record_field_value(base, *record, *field_index)?),
         ExpressionKind::Block(block) if block.statements.is_empty() => {
-            match_variant_tag(block.tail.as_deref()?)
+            match_variant(block.tail.as_deref()?)
         }
         _ => None,
     }
@@ -298,12 +340,41 @@ fn record_value_is_closed(expression: &Expression) -> bool {
     }
 }
 
+pub(crate) fn closed_binding_value<'a>(
+    reference: &BindingReference,
+    ty: &Type,
+    bindings: &[ClosedBinding<'a>],
+) -> Option<&'a Expression> {
+    let entry = bindings
+        .iter()
+        .rev()
+        .find(|entry| entry.binding.id == reference.binding)?;
+    if entry.binding.name != reference.binding_name
+        || entry.binding.span != reference.declaration_span
+        || &entry.binding.ty != ty
+        || &entry.value.ty != ty
+    {
+        return None;
+    }
+    Some(entry.value)
+}
+
 pub(crate) fn selected_match_value<'a>(
-    scrutinee: &Expression,
+    scrutinee: &'a Expression,
     enumeration: EnumId,
     arms: &'a [MatchArm],
 ) -> Option<&'a Expression> {
-    let (scrutinee_enum, variant_index) = match_variant_tag(scrutinee)?;
+    let (value, _) = selected_match_value_with_bindings(scrutinee, enumeration, arms, &[])?;
+    Some(value)
+}
+
+pub(crate) fn selected_match_value_with_bindings<'a>(
+    scrutinee: &'a Expression,
+    enumeration: EnumId,
+    arms: &'a [MatchArm],
+    bindings: &[ClosedBinding<'a>],
+) -> Option<(&'a Expression, Vec<ClosedBinding<'a>>)> {
+    let (scrutinee_enum, variant_index, payload) = match_variant(scrutinee)?;
     if scrutinee_enum != enumeration {
         return None;
     }
@@ -313,7 +384,20 @@ pub(crate) fn selected_match_value<'a>(
     if selected.next().is_some() {
         return None;
     }
-    Some(&arm.value)
+
+    let mut selected_bindings = bindings.to_vec();
+    match (payload, arm.binding.as_ref(), arm.payload_discarded) {
+        (None, None, false) | (Some(_), None, true) => {}
+        (Some(payload), Some(binding), false) if binding.ty == payload.ty => {
+            selected_bindings.push(ClosedBinding {
+                binding,
+                value: payload,
+            });
+        }
+        _ => return None,
+    }
+
+    Some((&arm.value, selected_bindings))
 }
 
 pub(crate) fn selected_record_field_value(
