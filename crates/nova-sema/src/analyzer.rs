@@ -2337,10 +2337,7 @@ impl Analyzer {
         {
             return Type::Error;
         }
-        let left_literal = match &left.kind {
-            ExpressionKind::Boolean(value) => Some(*value),
-            _ => None,
-        };
+        let left_literal = crate::constant_condition::evaluate(left);
         let right_is_required = matches!(
             (operator, left_literal),
             (BinaryOperator::And, Some(true)) | (BinaryOperator::Or, Some(false))
