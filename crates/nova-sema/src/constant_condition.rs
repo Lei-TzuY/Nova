@@ -322,12 +322,20 @@ fn match_variant_tag_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
 ) -> Option<(EnumId, usize)> {
+    if expression.ty.is_error() || expression.ty.is_never() {
+        return None;
+    }
     match &expression.kind {
         ExpressionKind::EnumConstructor {
             enumeration,
             variant_index,
             ..
-        } => Some((*enumeration, *variant_index)),
+        } => match &expression.ty {
+            Type::Enum(enum_type) if enum_type.id == *enumeration => {
+                Some((*enumeration, *variant_index))
+            }
+            _ => None,
+        },
         ExpressionKind::Binding(reference) => match_variant_tag_with_bindings(
             closed_binding_value(reference, &expression.ty, bindings)?,
             bindings,
@@ -339,8 +347,8 @@ fn match_variant_tag_with_bindings<'a>(
         } => match evaluate_with_bindings(condition, bindings)? {
             true => {
                 let (tail, selected_bindings) =
-                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
-                match_variant_tag_with_bindings(tail?, &selected_bindings)
+                    static_block_tail_with_bindings(then_branch, bindings)?;
+                match_variant_tag_with_bindings(tail, &selected_bindings)
             }
             false => match_variant_tag_with_bindings(else_branch, bindings),
         },
@@ -350,7 +358,7 @@ fn match_variant_tag_with_bindings<'a>(
             arms,
         } => {
             let (value, selected_bindings) =
-                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)?;
+                selected_match_value_for_static_tag(scrutinee, *enumeration, arms, bindings)?;
             match_variant_tag_with_bindings(value, &selected_bindings)
         }
         ExpressionKind::FieldAccess {
@@ -360,13 +368,123 @@ fn match_variant_tag_with_bindings<'a>(
             ..
         } => {
             let (value, selected_bindings) =
-                selected_record_field_value_with_bindings(base, *record, *field_index, bindings)?;
+                selected_record_field_for_static_tag(base, *record, *field_index, bindings)?;
             match_variant_tag_with_bindings(value, &selected_bindings)
         }
         ExpressionKind::Block(block) => {
-            let (tail, selected_bindings) =
-                closed_block_tail_with_bindings(block, bindings)?.ok()?;
-            match_variant_tag_with_bindings(tail?, &selected_bindings)
+            let (tail, selected_bindings) = static_block_tail_with_bindings(block, bindings)?;
+            match_variant_tag_with_bindings(tail, &selected_bindings)
+        }
+        _ => None,
+    }
+}
+
+fn static_block_tail_with_bindings<'a>(
+    block: &'a Block,
+    bindings: &[ClosedBinding<'a>],
+) -> Option<(&'a Expression, Vec<ClosedBinding<'a>>)> {
+    match closed_block_tail_with_bindings(block, bindings) {
+        Some(Ok((Some(tail), selected_bindings))) => {
+            return Some((tail, selected_bindings));
+        }
+        Some(Ok((None, _))) | Some(Err(_)) => return None,
+        None => {}
+    }
+    if block.ty.is_error() || block.ty.is_never() {
+        return None;
+    }
+    Some((block.tail.as_deref()?, bindings.to_vec()))
+}
+
+fn selected_match_value_for_static_tag<'a>(
+    scrutinee: &'a Expression,
+    enumeration: EnumId,
+    arms: &'a [MatchArm],
+    bindings: &[ClosedBinding<'a>],
+) -> Option<(&'a Expression, Vec<ClosedBinding<'a>>)> {
+    let (scrutinee_enum, variant_index) = match_variant_tag_with_bindings(scrutinee, bindings)?;
+    if scrutinee_enum != enumeration {
+        return None;
+    }
+    let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
+    let arm = selected.next()?;
+    if selected.next().is_some() {
+        return None;
+    }
+    Some((&arm.value, bindings.to_vec()))
+}
+
+fn selected_record_field_for_static_tag<'a>(
+    base: &'a Expression,
+    record: RecordId,
+    field_index: usize,
+    bindings: &[ClosedBinding<'a>],
+) -> Option<(&'a Expression, Vec<ClosedBinding<'a>>)> {
+    if base.ty.is_error() || base.ty.is_never() {
+        return None;
+    }
+    match &base.kind {
+        ExpressionKind::RecordLiteral {
+            record: actual_record,
+            fields,
+        } if *actual_record == record
+            && matches!(&base.ty, Type::Record(record_type) if record_type.id == record) =>
+        {
+            let mut selected = fields
+                .iter()
+                .filter(|field| field.field_index == field_index);
+            let field = selected.next()?;
+            if selected.next().is_some() {
+                return None;
+            }
+            Some((&field.value, bindings.to_vec()))
+        }
+        ExpressionKind::Binding(reference) => selected_record_field_for_static_tag(
+            closed_binding_value(reference, &base.ty, bindings)?,
+            record,
+            field_index,
+            bindings,
+        ),
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate_with_bindings(condition, bindings)? {
+            true => {
+                let (tail, selected_bindings) =
+                    static_block_tail_with_bindings(then_branch, bindings)?;
+                selected_record_field_for_static_tag(tail, record, field_index, &selected_bindings)
+            }
+            false => {
+                selected_record_field_for_static_tag(else_branch, record, field_index, bindings)
+            }
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => {
+            let (value, selected_bindings) =
+                selected_match_value_for_static_tag(scrutinee, *enumeration, arms, bindings)?;
+            selected_record_field_for_static_tag(value, record, field_index, &selected_bindings)
+        }
+        ExpressionKind::FieldAccess {
+            base: outer_base,
+            record: outer_record,
+            field_index: outer_field_index,
+            ..
+        } => {
+            let (outer_value, outer_bindings) = selected_record_field_for_static_tag(
+                outer_base,
+                *outer_record,
+                *outer_field_index,
+                bindings,
+            )?;
+            selected_record_field_for_static_tag(outer_value, record, field_index, &outer_bindings)
+        }
+        ExpressionKind::Block(block) => {
+            let (tail, selected_bindings) = static_block_tail_with_bindings(block, bindings)?;
+            selected_record_field_for_static_tag(tail, record, field_index, &selected_bindings)
         }
         _ => None,
     }
