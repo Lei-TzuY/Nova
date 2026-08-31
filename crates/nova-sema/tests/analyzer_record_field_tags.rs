@@ -83,10 +83,10 @@ fn mutable_record_binding_remains_conservative() {
 }
 
 #[test]
-fn nested_record_projection_remains_outside_first_level_summary() {
+fn nested_record_projection_preserves_known_tag() {
     let output = analyze_text(
-        "enum Choice { A, B } record Inner { choice: Choice } record Outer { inner: Inner } fn main() -> Int { let outer = new Outer { inner: new Inner { choice: Choice::A } }; var result: Int; match outer.inner.choice { Choice::A => { result = 1; 0 }, Choice::B => { result = 2; 0 }, }; result }",
+        "enum Choice { A, B } record Inner { choice: Choice } record Outer { inner: Inner } fn main() -> Int { let outer = new Outer { inner: new Inner { choice: Choice::A } }; var result: Int; match outer.inner.choice { Choice::A => { result = 1; 0 }, Choice::B => 0, }; result }",
     );
     assert!(output.is_success(), "{:?}", output.diagnostics);
-    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert_eq!(code_count(&output, "N3034"), 1);
 }
