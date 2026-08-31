@@ -83,10 +83,10 @@ fn payload_dependent_selected_match_record_result_remains_conservative() {
 }
 
 #[test]
-fn block_local_record_alias_remains_outside_analyzer_scope_summary() {
+fn block_local_record_alias_participates_in_record_summary() {
     let output = analyze_text(
         "enum Choice { A, B } record Holder { choice: Choice } fn main() -> Int { let holder = { let local = new Holder { choice: Choice::A }; local }; var result: Int; match holder.choice { Choice::A => { result = 1; 0 }, Choice::B => { result = 2; 0 }, }; result }",
     );
     assert!(output.is_success(), "{:?}", output.diagnostics);
-    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert_eq!(code_count(&output, "N3034"), 1);
 }
