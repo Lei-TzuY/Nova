@@ -106,8 +106,7 @@ fn names_and_calls_remain_dynamic_conditions() {
 
 #[test]
 fn closed_discarded_statement_block_can_drive_reachability() {
-    let text =
-        "fn main() -> Int { var value: Int; if ({ (); }) == () { value = 1; () } else { () }; value }";
+    let text = "fn main() -> Int { var value: Int; if ({ (); }) == () { value = 1; () } else { () }; value }";
     let output = analyze_text(text);
     assert!(
         output.is_success(),
