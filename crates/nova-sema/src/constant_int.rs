@@ -108,10 +108,16 @@ pub(crate) fn evaluate_with_bindings<'a>(
             record,
             field_index,
             ..
-        } => evaluate_with_bindings(
-            crate::constant_condition::selected_record_field_value(base, *record, *field_index)?,
-            bindings,
-        ),
+        } => {
+            let (value, selected_bindings) =
+                crate::constant_condition::selected_record_field_value_with_bindings(
+                    base,
+                    *record,
+                    *field_index,
+                    bindings,
+                )?;
+            evaluate_with_bindings(value, &selected_bindings)
+        }
         ExpressionKind::Block(block) if block.statements.is_empty() => {
             evaluate_with_bindings(block.tail.as_deref()?, bindings)
         }
