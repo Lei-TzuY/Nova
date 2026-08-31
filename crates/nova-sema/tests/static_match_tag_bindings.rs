@@ -29,18 +29,18 @@ fn code_count(output: &AnalysisOutput, code: &str) -> usize {
 }
 
 #[test]
-fn immutable_dynamic_payload_binding_preserves_static_tag() {
+fn block_local_dynamic_payload_alias_preserves_static_tag() {
     let output = analyze_text(
-        "enum Maybe { None, Some(Int) } fn runtime(flag: Bool) -> Int { if flag { 1 } else { 2 } } fn main(flag: Bool) -> Int { let maybe = Maybe::Some(runtime(flag)); var result: Int; match maybe { Maybe::None => 0, Maybe::Some(value) => { result = value; 0 }, }; result }",
+        "enum Maybe { None, Some(Int) } fn runtime(flag: Bool) -> Int { if flag { 1 } else { 2 } } fn main(flag: Bool) -> Int { var result: Int; match { let maybe = Maybe::Some(runtime(flag)); maybe } { Maybe::None => 0, Maybe::Some(value) => { result = value; 0 }, }; result }",
     );
     assert!(output.is_success(), "{:?}", output.diagnostics);
     assert_eq!(code_count(&output, "N3034"), 1);
 }
 
 #[test]
-fn immutable_record_binding_projects_tag_with_dynamic_sibling() {
+fn block_local_record_alias_projects_tag_with_dynamic_sibling() {
     let output = analyze_text(
-        "enum Choice { A, B } record Holder { choice: Choice, audit: Int } fn runtime(flag: Bool) -> Int { if flag { 1 } else { 2 } } fn main(flag: Bool) -> Int { let holder = new Holder { choice: Choice::A, audit: runtime(flag) }; var result: Int; match holder.choice { Choice::A => { result = 42; 0 }, Choice::B => 0, }; result }",
+        "enum Choice { A, B } record Holder { choice: Choice, audit: Int } fn runtime(flag: Bool) -> Int { if flag { 1 } else { 2 } } fn main(flag: Bool) -> Int { var result: Int; match { let holder = new Holder { choice: Choice::A, audit: runtime(flag) }; holder.choice } { Choice::A => { result = 42; 0 }, Choice::B => 0, }; result }",
     );
     assert!(output.is_success(), "{:?}", output.diagnostics);
     assert_eq!(code_count(&output, "N3034"), 1);
