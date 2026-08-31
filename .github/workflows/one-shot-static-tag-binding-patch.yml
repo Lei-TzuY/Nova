@@ -1,0 +1,445 @@
+name: One-shot static tag binding patch
+
+on:
+  push:
+    branches: [feat/static-match-tag-bindings]
+    paths:
+      - .github/workflows/one-shot-static-tag-binding-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/static-match-tag-bindings
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Add tag-only immutable aliases and self-delete
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/nova-sema/src/constant_condition.rs")
+          text = path.read_text()
+          start_marker = "pub(crate) fn static_match_variant(expression: &Expression) -> Option<(EnumId, usize)> {\n"
+          end_marker = "fn match_variant_with_bindings<'a>(\n"
+          assert text.count(start_marker) == 1, "static tag section start drifted"
+          assert text.count(end_marker) == 1, "closed variant helper anchor drifted"
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+          replacement = r'''#[derive(Clone, Copy)]
+          struct StaticBinding<'a> {
+              binding: &'a Binding,
+              value: &'a Expression,
+          }
+
+          type StaticVariantProof<'a> = (
+              EnumId,
+              usize,
+              Option<&'a Expression>,
+              Vec<ClosedBinding<'a>>,
+              Vec<StaticBinding<'a>>,
+          );
+
+          pub(crate) fn static_match_variant(expression: &Expression) -> Option<(EnumId, usize)> {
+              let (enumeration, variant_index, _, _, _) =
+                  match_variant_for_static_tag(expression, &[], &[])?;
+              Some((enumeration, variant_index))
+          }
+
+          fn match_variant_for_static_tag<'a>(
+              expression: &'a Expression,
+              bindings: &[ClosedBinding<'a>],
+              static_bindings: &[StaticBinding<'a>],
+          ) -> Option<StaticVariantProof<'a>> {
+              if expression.ty.is_error() || expression.ty.is_never() {
+                  return None;
+              }
+              match &expression.kind {
+                  ExpressionKind::EnumConstructor {
+                      enumeration,
+                      variant_index,
+                      payload,
+                      ..
+                  } => match &expression.ty {
+                      Type::Enum(enum_type) if enum_type.id == *enumeration => Some((
+                          *enumeration,
+                          *variant_index,
+                          payload.as_deref(),
+                          bindings.to_vec(),
+                          static_bindings.to_vec(),
+                      )),
+                      _ => None,
+                  },
+                  ExpressionKind::Binding(reference) => {
+                      let value = closed_binding_value(reference, &expression.ty, bindings)
+                          .or_else(|| {
+                              static_binding_value(reference, &expression.ty, static_bindings)
+                          })?;
+                      match_variant_for_static_tag(value, bindings, static_bindings)
+                  }
+                  ExpressionKind::If {
+                      condition,
+                      then_branch,
+                      else_branch,
+                  } => match evaluate_with_bindings(condition, bindings)? {
+                      true => {
+                          let (tail, selected_bindings, selected_static_bindings) =
+                              static_block_tail_with_bindings(
+                                  then_branch,
+                                  bindings,
+                                  static_bindings,
+                              )?;
+                          match_variant_for_static_tag(
+                              tail,
+                              &selected_bindings,
+                              &selected_static_bindings,
+                          )
+                      }
+                      false => {
+                          match_variant_for_static_tag(else_branch, bindings, static_bindings)
+                      }
+                  },
+                  ExpressionKind::Match {
+                      scrutinee,
+                      enumeration,
+                      arms,
+                  } => {
+                      let (value, selected_bindings, selected_static_bindings) =
+                          selected_match_value_for_static_tag(
+                              scrutinee,
+                              *enumeration,
+                              arms,
+                              bindings,
+                              static_bindings,
+                          )?;
+                      match_variant_for_static_tag(
+                          value,
+                          &selected_bindings,
+                          &selected_static_bindings,
+                      )
+                  }
+                  ExpressionKind::FieldAccess {
+                      base,
+                      record,
+                      field_index,
+                      ..
+                  } => {
+                      let (value, selected_bindings, selected_static_bindings) =
+                          selected_record_field_for_static_tag(
+                              base,
+                              *record,
+                              *field_index,
+                              bindings,
+                              static_bindings,
+                          )?;
+                      match_variant_for_static_tag(
+                          value,
+                          &selected_bindings,
+                          &selected_static_bindings,
+                      )
+                  }
+                  ExpressionKind::Block(block) => {
+                      let (tail, selected_bindings, selected_static_bindings) =
+                          static_block_tail_with_bindings(block, bindings, static_bindings)?;
+                      match_variant_for_static_tag(
+                          tail,
+                          &selected_bindings,
+                          &selected_static_bindings,
+                      )
+                  }
+                  _ => None,
+              }
+          }
+
+          fn static_block_tail_with_bindings<'a>(
+              block: &'a Block,
+              bindings: &[ClosedBinding<'a>],
+              static_bindings: &[StaticBinding<'a>],
+          ) -> Option<(
+              &'a Expression,
+              Vec<ClosedBinding<'a>>,
+              Vec<StaticBinding<'a>>,
+          )> {
+              match closed_block_tail_with_bindings(block, bindings) {
+                  Some(Ok((Some(tail), selected_bindings))) => {
+                      return Some((tail, selected_bindings, static_bindings.to_vec()));
+                  }
+                  Some(Ok((None, _))) | Some(Err(_)) => return None,
+                  None => {}
+              }
+              if block.ty.is_error() || block.ty.is_never() {
+                  return None;
+              }
+
+              let mut selected_bindings = bindings.to_vec();
+              let mut selected_static_bindings = static_bindings.to_vec();
+              for statement in &block.statements {
+                  match &statement.kind {
+                      StatementKind::Binding {
+                          binding,
+                          initializer,
+                      } if !binding.mutable
+                          && binding.ty == initializer.ty
+                          && !initializer.ty.is_error()
+                          && !initializer.ty.is_never() =>
+                      {
+                          if is_closed_total_value_with_bindings(initializer, &selected_bindings) {
+                              selected_bindings.push(ClosedBinding {
+                                  binding,
+                                  value: initializer,
+                              });
+                          }
+                          selected_static_bindings.push(StaticBinding {
+                              binding,
+                              value: initializer,
+                          });
+                      }
+                      StatementKind::Binding { .. } => {}
+                      StatementKind::Expression(expression)
+                          if expression.ty.is_error() || expression.ty.is_never() =>
+                      {
+                          return None;
+                      }
+                      StatementKind::Return(_) | StatementKind::Break | StatementKind::Continue => {
+                          return None;
+                      }
+                      StatementKind::UninitializedBinding(_)
+                      | StatementKind::Assignment { .. }
+                      | StatementKind::While { .. }
+                      | StatementKind::Expression(_) => {}
+                  }
+              }
+
+              Some((
+                  block.tail.as_deref()?,
+                  selected_bindings,
+                  selected_static_bindings,
+              ))
+          }
+
+          fn selected_match_value_for_static_tag<'a>(
+              scrutinee: &'a Expression,
+              enumeration: EnumId,
+              arms: &'a [MatchArm],
+              bindings: &[ClosedBinding<'a>],
+              static_bindings: &[StaticBinding<'a>],
+          ) -> Option<(
+              &'a Expression,
+              Vec<ClosedBinding<'a>>,
+              Vec<StaticBinding<'a>>,
+          )> {
+              let (
+                  scrutinee_enum,
+                  variant_index,
+                  payload,
+                  mut selected_bindings,
+                  mut selected_static_bindings,
+              ) = match_variant_for_static_tag(scrutinee, bindings, static_bindings)?;
+              if scrutinee_enum != enumeration {
+                  return None;
+              }
+              let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
+              let arm = selected.next()?;
+              if selected.next().is_some() {
+                  return None;
+              }
+
+              match (payload, arm.binding.as_ref(), arm.payload_discarded) {
+                  (None, None, false) | (Some(_), None, true) => {}
+                  (Some(payload), Some(binding), false)
+                      if !binding.mutable
+                          && binding.ty == payload.ty
+                          && !payload.ty.is_error()
+                          && !payload.ty.is_never() =>
+                  {
+                      if is_closed_total_value_with_bindings(payload, &selected_bindings) {
+                          selected_bindings.push(ClosedBinding {
+                              binding,
+                              value: payload,
+                          });
+                      }
+                      selected_static_bindings.push(StaticBinding {
+                          binding,
+                          value: payload,
+                      });
+                  }
+                  _ => return None,
+              }
+
+              Some((
+                  &arm.value,
+                  selected_bindings,
+                  selected_static_bindings,
+              ))
+          }
+
+          fn selected_record_field_for_static_tag<'a>(
+              base: &'a Expression,
+              record: RecordId,
+              field_index: usize,
+              bindings: &[ClosedBinding<'a>],
+              static_bindings: &[StaticBinding<'a>],
+          ) -> Option<(
+              &'a Expression,
+              Vec<ClosedBinding<'a>>,
+              Vec<StaticBinding<'a>>,
+          )> {
+              if base.ty.is_error() || base.ty.is_never() {
+                  return None;
+              }
+              match &base.kind {
+                  ExpressionKind::RecordLiteral {
+                      record: actual_record,
+                      fields,
+                  } if *actual_record == record
+                      && matches!(&base.ty, Type::Record(record_type) if record_type.id == record) =>
+                  {
+                      let mut selected = fields
+                          .iter()
+                          .filter(|field| field.field_index == field_index);
+                      let field = selected.next()?;
+                      if selected.next().is_some() {
+                          return None;
+                      }
+                      Some((
+                          &field.value,
+                          bindings.to_vec(),
+                          static_bindings.to_vec(),
+                      ))
+                  }
+                  ExpressionKind::Binding(reference) => {
+                      let value = closed_binding_value(reference, &base.ty, bindings)
+                          .or_else(|| static_binding_value(reference, &base.ty, static_bindings))?;
+                      selected_record_field_for_static_tag(
+                          value,
+                          record,
+                          field_index,
+                          bindings,
+                          static_bindings,
+                      )
+                  }
+                  ExpressionKind::If {
+                      condition,
+                      then_branch,
+                      else_branch,
+                  } => match evaluate_with_bindings(condition, bindings)? {
+                      true => {
+                          let (tail, selected_bindings, selected_static_bindings) =
+                              static_block_tail_with_bindings(
+                                  then_branch,
+                                  bindings,
+                                  static_bindings,
+                              )?;
+                          selected_record_field_for_static_tag(
+                              tail,
+                              record,
+                              field_index,
+                              &selected_bindings,
+                              &selected_static_bindings,
+                          )
+                      }
+                      false => selected_record_field_for_static_tag(
+                          else_branch,
+                          record,
+                          field_index,
+                          bindings,
+                          static_bindings,
+                      ),
+                  },
+                  ExpressionKind::Match {
+                      scrutinee,
+                      enumeration,
+                      arms,
+                  } => {
+                      let (value, selected_bindings, selected_static_bindings) =
+                          selected_match_value_for_static_tag(
+                              scrutinee,
+                              *enumeration,
+                              arms,
+                              bindings,
+                              static_bindings,
+                          )?;
+                      selected_record_field_for_static_tag(
+                          value,
+                          record,
+                          field_index,
+                          &selected_bindings,
+                          &selected_static_bindings,
+                      )
+                  }
+                  ExpressionKind::FieldAccess {
+                      base: outer_base,
+                      record: outer_record,
+                      field_index: outer_field_index,
+                      ..
+                  } => {
+                      let (outer_value, outer_bindings, outer_static_bindings) =
+                          selected_record_field_for_static_tag(
+                              outer_base,
+                              *outer_record,
+                              *outer_field_index,
+                              bindings,
+                              static_bindings,
+                          )?;
+                      selected_record_field_for_static_tag(
+                          outer_value,
+                          record,
+                          field_index,
+                          &outer_bindings,
+                          &outer_static_bindings,
+                      )
+                  }
+                  ExpressionKind::Block(block) => {
+                      let (tail, selected_bindings, selected_static_bindings) =
+                          static_block_tail_with_bindings(block, bindings, static_bindings)?;
+                      selected_record_field_for_static_tag(
+                          tail,
+                          record,
+                          field_index,
+                          &selected_bindings,
+                          &selected_static_bindings,
+                      )
+                  }
+                  _ => None,
+              }
+          }
+
+          fn static_binding_value<'a>(
+              reference: &BindingReference,
+              ty: &Type,
+              bindings: &[StaticBinding<'a>],
+          ) -> Option<&'a Expression> {
+              let entry = bindings
+                  .iter()
+                  .rev()
+                  .find(|entry| entry.binding.id == reference.binding)?;
+              if entry.binding.mutable
+                  || entry.binding.name != reference.binding_name
+                  || entry.binding.span != reference.declaration_span
+                  || &entry.binding.ty != ty
+                  || &entry.value.ty != ty
+              {
+                  return None;
+              }
+              Some(entry.value)
+          }
+
+          '''
+          path.write_text(text[:start] + replacement + text[end:])
+          PY
+
+          cargo fmt --all
+          rm .github/workflows/one-shot-static-tag-binding-patch.yml
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git add crates/nova-sema/src/constant_condition.rs crates/nova-sema/tests/static_match_tag_bindings.rs .github/workflows/one-shot-static-tag-binding-patch.yml
+          git diff --cached --check
+          git commit -m "feat: track immutable aliases in static match tags"
+          git push origin HEAD:feat/static-match-tag-bindings
