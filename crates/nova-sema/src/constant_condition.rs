@@ -314,9 +314,62 @@ fn function_id_with_bindings<'a>(
     }
 }
 
-pub(crate) fn closed_match_variant(expression: &Expression) -> Option<(EnumId, usize)> {
-    let (enumeration, variant_index, _, _) = match_variant_with_bindings(expression, &[])?;
-    Some((enumeration, variant_index))
+pub(crate) fn static_match_variant(expression: &Expression) -> Option<(EnumId, usize)> {
+    match_variant_tag_with_bindings(expression, &[])
+}
+
+fn match_variant_tag_with_bindings<'a>(
+    expression: &'a Expression,
+    bindings: &[ClosedBinding<'a>],
+) -> Option<(EnumId, usize)> {
+    match &expression.kind {
+        ExpressionKind::EnumConstructor {
+            enumeration,
+            variant_index,
+            ..
+        } => Some((*enumeration, *variant_index)),
+        ExpressionKind::Binding(reference) => match_variant_tag_with_bindings(
+            closed_binding_value(reference, &expression.ty, bindings)?,
+            bindings,
+        ),
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate_with_bindings(condition, bindings)? {
+            true => {
+                let (tail, selected_bindings) =
+                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
+                match_variant_tag_with_bindings(tail?, &selected_bindings)
+            }
+            false => match_variant_tag_with_bindings(else_branch, bindings),
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => {
+            let (value, selected_bindings) =
+                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)?;
+            match_variant_tag_with_bindings(value, &selected_bindings)
+        }
+        ExpressionKind::FieldAccess {
+            base,
+            record,
+            field_index,
+            ..
+        } => {
+            let (value, selected_bindings) =
+                selected_record_field_value_with_bindings(base, *record, *field_index, bindings)?;
+            match_variant_tag_with_bindings(value, &selected_bindings)
+        }
+        ExpressionKind::Block(block) => {
+            let (tail, selected_bindings) =
+                closed_block_tail_with_bindings(block, bindings)?.ok()?;
+            match_variant_tag_with_bindings(tail?, &selected_bindings)
+        }
+        _ => None,
+    }
 }
 
 fn match_variant_with_bindings<'a>(
