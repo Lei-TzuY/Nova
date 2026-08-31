@@ -86,11 +86,10 @@ fn pure_unit_blocks_participate_in_closed_equality_reachability() {
 }
 
 #[test]
-fn names_calls_and_statement_bearing_blocks_remain_dynamic_conditions() {
+fn names_and_calls_remain_dynamic_conditions() {
     for text in [
         "fn truth() -> Bool { true } fn main() -> Int { var value: Int; if truth() { value = 1; () } else { () }; value }",
         "fn main() -> Int { var flag = true; var value: Int; if flag { value = 1; () } else { () }; value }",
-        "fn main() -> Int { var value: Int; if ({ (); }) == () { value = 1; () } else { () }; value }",
         "fn unit() -> Unit {} fn main() -> Int { var value: Int; if ({ unit(); }) == () { value = 1; () } else { () }; value }",
     ] {
         let output = analyze_text(text);
@@ -103,4 +102,15 @@ fn names_calls_and_statement_bearing_blocks_remain_dynamic_conditions() {
             output.diagnostics
         );
     }
+}
+
+#[test]
+fn closed_discarded_statement_block_can_drive_reachability() {
+    let text = "fn main() -> Int { var value: Int; if ({ (); }) == () { value = 1; () } else { () }; value }";
+    let output = analyze_text(text);
+    assert!(
+        output.is_success(),
+        "source: {text}; diagnostics: {:?}",
+        output.diagnostics
+    );
 }

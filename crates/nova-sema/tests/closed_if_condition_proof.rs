@@ -45,11 +45,27 @@ fn false_condition_selects_and_recurses_into_the_else_expression() {
 }
 
 #[test]
-fn statement_bearing_selected_branch_remains_outside_the_closed_proof() {
+fn selected_immutable_bool_binding_branch_can_be_proven() {
     let analyzed = analyze_text(
         "fn main() -> Int {\n\
              var value: Int;\n\
              while (if true { let flag = true; flag } else { false }) {\n\
+                 value = 42;\n\
+                 break;\n\
+             }\n\
+             value\n\
+         }",
+    );
+
+    assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
+}
+
+#[test]
+fn selected_mutable_bool_binding_branch_remains_outside_the_closed_proof() {
+    let analyzed = analyze_text(
+        "fn main() -> Int {\n\
+             var value: Int;\n\
+             while (if true { var flag = true; flag } else { false }) {\n\
                  value = 42;\n\
                  break;\n\
              }\n\

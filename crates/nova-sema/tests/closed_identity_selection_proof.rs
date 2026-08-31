@@ -115,13 +115,33 @@ fn dynamic_match_scrutinees_remain_outside_identity_proofs() {
 }
 
 #[test]
-fn statement_bearing_selected_identity_branch_stops_the_proof() {
+fn selected_immutable_enum_binding_branch_can_be_proven() {
     let analyzed = analyze_text(
         "enum Signal { Red, Green }\n\
          fn main() -> Int {\n\
              var value: Int;\n\
              while ((if true {\n\
                  let signal = Signal::Green;\n\
+                 signal\n\
+             } else { Signal::Red }) == Signal::Green) {\n\
+                 value = 42;\n\
+                 break;\n\
+             }\n\
+             value\n\
+         }",
+    );
+
+    assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
+}
+
+#[test]
+fn selected_mutable_enum_binding_branch_stops_the_proof() {
+    let analyzed = analyze_text(
+        "enum Signal { Red, Green }\n\
+         fn main() -> Int {\n\
+             var value: Int;\n\
+             while ((if true {\n\
+                 var signal = Signal::Green;\n\
                  signal\n\
              } else { Signal::Red }) == Signal::Green) {\n\
                  value = 42;\n\

@@ -1,7 +1,7 @@
 use crate::constant_int;
 use crate::hir::{
-    Binding, BindingReference, EnumId, Expression, ExpressionKind, FunctionId, MatchArm, RecordId,
-    Type,
+    Binding, BindingReference, Block, EnumId, Expression, ExpressionKind, FunctionId, MatchArm,
+    RecordId, StatementKind, Type,
 };
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 
@@ -10,6 +10,9 @@ pub(crate) struct ClosedBinding<'a> {
     binding: &'a Binding,
     value: &'a Expression,
 }
+
+type ClosedBlockProof<'a> =
+    Result<(Option<&'a Expression>, Vec<ClosedBinding<'a>>), constant_int::ConstantIntError>;
 
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
 /// already determined by supported literal, identity, comparison, and Boolean proofs.
@@ -46,10 +49,11 @@ pub(crate) fn evaluate_with_bindings<'a>(
             then_branch,
             else_branch,
         } => match evaluate_with_bindings(condition, bindings)? {
-            true if then_branch.statements.is_empty() => {
-                evaluate_with_bindings(then_branch.tail.as_deref()?, bindings)
+            true => {
+                let (tail, selected_bindings) =
+                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
+                evaluate_with_bindings(tail?, &selected_bindings)
             }
-            true => None,
             false => evaluate_with_bindings(else_branch, bindings),
         },
         ExpressionKind::Match {
@@ -71,8 +75,10 @@ pub(crate) fn evaluate_with_bindings<'a>(
                 selected_record_field_value_with_bindings(base, *record, *field_index, bindings)?;
             evaluate_with_bindings(value, &selected_bindings)
         }
-        ExpressionKind::Block(block) if block.statements.is_empty() => {
-            evaluate_with_bindings(block.tail.as_deref()?, bindings)
+        ExpressionKind::Block(block) => {
+            let (tail, selected_bindings) =
+                closed_block_tail_with_bindings(block, bindings)?.ok()?;
+            evaluate_with_bindings(tail?, &selected_bindings)
         }
         _ => None,
     }
@@ -162,11 +168,14 @@ fn unit_value_with_bindings<'a>(
             then_branch,
             else_branch,
         } => match evaluate_with_bindings(condition, bindings)? {
-            true if then_branch.statements.is_empty() => match then_branch.tail.as_deref() {
-                Some(tail) => unit_value_with_bindings(tail, bindings),
-                None => Some(()),
-            },
-            true => None,
+            true => {
+                let (tail, selected_bindings) =
+                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
+                match tail {
+                    Some(tail) => unit_value_with_bindings(tail, &selected_bindings),
+                    None => Some(()),
+                }
+            }
             false => unit_value_with_bindings(else_branch, bindings),
         },
         ExpressionKind::Match {
@@ -188,9 +197,11 @@ fn unit_value_with_bindings<'a>(
                 selected_record_field_value_with_bindings(base, *record, *field_index, bindings)?;
             unit_value_with_bindings(value, &selected_bindings)
         }
-        ExpressionKind::Block(block) if block.statements.is_empty() => {
-            match block.tail.as_deref() {
-                Some(tail) => unit_value_with_bindings(tail, bindings),
+        ExpressionKind::Block(block) => {
+            let (tail, selected_bindings) =
+                closed_block_tail_with_bindings(block, bindings)?.ok()?;
+            match tail {
+                Some(tail) => unit_value_with_bindings(tail, &selected_bindings),
                 None => Some(()),
             }
         }
@@ -218,10 +229,11 @@ fn enum_identity_tag_with_bindings<'a>(
             then_branch,
             else_branch,
         } => match evaluate_with_bindings(condition, bindings)? {
-            true if then_branch.statements.is_empty() => {
-                enum_identity_tag_with_bindings(then_branch.tail.as_deref()?, bindings)
+            true => {
+                let (tail, selected_bindings) =
+                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
+                enum_identity_tag_with_bindings(tail?, &selected_bindings)
             }
-            true => None,
             false => enum_identity_tag_with_bindings(else_branch, bindings),
         },
         ExpressionKind::Match {
@@ -243,8 +255,10 @@ fn enum_identity_tag_with_bindings<'a>(
                 selected_record_field_value_with_bindings(base, *record, *field_index, bindings)?;
             enum_identity_tag_with_bindings(value, &selected_bindings)
         }
-        ExpressionKind::Block(block) if block.statements.is_empty() => {
-            enum_identity_tag_with_bindings(block.tail.as_deref()?, bindings)
+        ExpressionKind::Block(block) => {
+            let (tail, selected_bindings) =
+                closed_block_tail_with_bindings(block, bindings)?.ok()?;
+            enum_identity_tag_with_bindings(tail?, &selected_bindings)
         }
         _ => None,
     }
@@ -265,10 +279,11 @@ fn function_id_with_bindings<'a>(
             then_branch,
             else_branch,
         } => match evaluate_with_bindings(condition, bindings)? {
-            true if then_branch.statements.is_empty() => {
-                function_id_with_bindings(then_branch.tail.as_deref()?, bindings)
+            true => {
+                let (tail, selected_bindings) =
+                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
+                function_id_with_bindings(tail?, &selected_bindings)
             }
-            true => None,
             false => function_id_with_bindings(else_branch, bindings),
         },
         ExpressionKind::Match {
@@ -290,8 +305,10 @@ fn function_id_with_bindings<'a>(
                 selected_record_field_value_with_bindings(base, *record, *field_index, bindings)?;
             function_id_with_bindings(value, &selected_bindings)
         }
-        ExpressionKind::Block(block) if block.statements.is_empty() => {
-            function_id_with_bindings(block.tail.as_deref()?, bindings)
+        ExpressionKind::Block(block) => {
+            let (tail, selected_bindings) =
+                closed_block_tail_with_bindings(block, bindings)?.ok()?;
+            function_id_with_bindings(tail?, &selected_bindings)
         }
         _ => None,
     }
@@ -332,10 +349,11 @@ fn match_variant_with_bindings<'a>(
             then_branch,
             else_branch,
         } => match evaluate_with_bindings(condition, bindings)? {
-            true if then_branch.statements.is_empty() => {
-                match_variant_with_bindings(then_branch.tail.as_deref()?, bindings)
+            true => {
+                let (tail, selected_bindings) =
+                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
+                match_variant_with_bindings(tail?, &selected_bindings)
             }
-            true => None,
             false => match_variant_with_bindings(else_branch, bindings),
         },
         ExpressionKind::Match {
@@ -357,8 +375,10 @@ fn match_variant_with_bindings<'a>(
                 selected_record_field_value_with_bindings(base, *record, *field_index, bindings)?;
             match_variant_with_bindings(value, &selected_bindings)
         }
-        ExpressionKind::Block(block) if block.statements.is_empty() => {
-            match_variant_with_bindings(block.tail.as_deref()?, bindings)
+        ExpressionKind::Block(block) => {
+            let (tail, selected_bindings) =
+                closed_block_tail_with_bindings(block, bindings)?.ok()?;
+            match_variant_with_bindings(tail?, &selected_bindings)
         }
         _ => None,
     }
@@ -406,11 +426,13 @@ fn record_value_is_closed_with_bindings<'a>(
             then_branch,
             else_branch,
         } => match evaluate_with_bindings(condition, bindings) {
-            Some(true) if then_branch.statements.is_empty() => then_branch
-                .tail
-                .as_deref()
-                .is_some_and(|tail| is_closed_total_value_with_bindings(tail, bindings)),
-            Some(true) => false,
+            Some(true) => closed_block_tail_with_bindings(then_branch, bindings)
+                .and_then(Result::ok)
+                .is_some_and(|(tail, selected_bindings)| {
+                    tail.is_some_and(|tail| {
+                        is_closed_total_value_with_bindings(tail, &selected_bindings)
+                    })
+                }),
             Some(false) => is_closed_total_value_with_bindings(else_branch, bindings),
             None => false,
         },
@@ -422,10 +444,13 @@ fn record_value_is_closed_with_bindings<'a>(
             .is_some_and(|(value, selected_bindings)| {
                 is_closed_total_value_with_bindings(value, &selected_bindings)
             }),
-        ExpressionKind::Block(block) if block.statements.is_empty() => block
-            .tail
-            .as_deref()
-            .is_some_and(|tail| is_closed_total_value_with_bindings(tail, bindings)),
+        ExpressionKind::Block(block) => closed_block_tail_with_bindings(block, bindings)
+            .and_then(Result::ok)
+            .is_some_and(|(tail, selected_bindings)| {
+                tail.is_some_and(|tail| {
+                    is_closed_total_value_with_bindings(tail, &selected_bindings)
+                })
+            }),
         _ => false,
     }
 }
@@ -447,6 +472,48 @@ pub(crate) fn closed_binding_value<'a>(
         return None;
     }
     Some(entry.value)
+}
+
+pub(crate) fn closed_block_tail_with_bindings<'a>(
+    block: &'a Block,
+    bindings: &[ClosedBinding<'a>],
+) -> Option<ClosedBlockProof<'a>> {
+    let mut block_bindings = bindings.to_vec();
+    for statement in &block.statements {
+        match &statement.kind {
+            StatementKind::Binding {
+                binding,
+                initializer,
+            } if !binding.mutable && binding.ty == initializer.ty => {
+                if initializer.ty == Type::Int {
+                    match constant_int::evaluate_with_bindings(initializer, &block_bindings)? {
+                        Ok(_) => {}
+                        Err(error) => return Some(Err(error)),
+                    }
+                } else if !is_closed_total_value_with_bindings(initializer, &block_bindings) {
+                    return None;
+                }
+                block_bindings.push(ClosedBinding {
+                    binding,
+                    value: initializer,
+                });
+            }
+            StatementKind::Expression(expression) => {
+                if expression.ty == Type::Int {
+                    if let Err(error) =
+                        constant_int::evaluate_with_bindings(expression, &block_bindings)?
+                    {
+                        return Some(Err(error));
+                    }
+                } else if !is_closed_total_value_with_bindings(expression, &block_bindings) {
+                    return None;
+                }
+            }
+            _ => return None,
+        }
+    }
+
+    Some(Ok((block.tail.as_deref(), block_bindings)))
 }
 
 pub(crate) fn selected_match_value_with_bindings<'a>(
@@ -516,13 +583,16 @@ pub(crate) fn selected_record_field_value_with_bindings<'a>(
             then_branch,
             else_branch,
         } => match evaluate_with_bindings(condition, bindings)? {
-            true if then_branch.statements.is_empty() => selected_record_field_value_with_bindings(
-                then_branch.tail.as_deref()?,
-                record,
-                field_index,
-                bindings,
-            ),
-            true => None,
+            true => {
+                let (tail, selected_bindings) =
+                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
+                selected_record_field_value_with_bindings(
+                    tail?,
+                    record,
+                    field_index,
+                    &selected_bindings,
+                )
+            }
             false => selected_record_field_value_with_bindings(
                 else_branch,
                 record,
@@ -563,12 +633,14 @@ pub(crate) fn selected_record_field_value_with_bindings<'a>(
                 &outer_bindings,
             )
         }
-        ExpressionKind::Block(block) if block.statements.is_empty() => {
+        ExpressionKind::Block(block) => {
+            let (tail, selected_bindings) =
+                closed_block_tail_with_bindings(block, bindings)?.ok()?;
             selected_record_field_value_with_bindings(
-                block.tail.as_deref()?,
+                tail?,
                 record,
                 field_index,
-                bindings,
+                &selected_bindings,
             )
         }
         _ => None,

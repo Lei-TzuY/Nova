@@ -1,31 +1,22 @@
 use crate::constant_condition::ClosedBinding;
-use crate::hir::{
-    Binding, BindingReference, Block, Expression, ExpressionKind, StatementKind, Type,
-};
+use crate::hir::{Block, Expression, ExpressionKind};
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 
 pub(crate) use nova_int_semantics::IntArithmeticError as ConstantIntError;
-
-#[derive(Clone, Copy)]
-struct ClosedIntBinding<'a> {
-    binding: &'a Binding,
-    value: &'a Expression,
-}
 
 pub(crate) fn evaluate_unary(
     operator: UnaryOperator,
     operand: &Expression,
 ) -> Option<Result<i64, ConstantIntError>> {
-    evaluate_unary_with_context(operator, operand, &[], &[])
+    evaluate_unary_with_bindings(operator, operand, &[])
 }
 
-fn evaluate_unary_with_context<'a>(
+fn evaluate_unary_with_bindings<'a>(
     operator: UnaryOperator,
     operand: &'a Expression,
     bindings: &[ClosedBinding<'a>],
-    int_bindings: &[ClosedIntBinding<'a>],
 ) -> Option<Result<i64, ConstantIntError>> {
-    let operand = evaluate_with_context(operand, bindings, int_bindings)?;
+    let operand = evaluate_with_bindings(operand, bindings)?;
     match operator {
         UnaryOperator::Negate => Some(operand.and_then(nova_int_semantics::negate)),
         UnaryOperator::Not => None,
@@ -37,15 +28,14 @@ pub(crate) fn evaluate_binary(
     left: &Expression,
     right: &Expression,
 ) -> Option<Result<i64, ConstantIntError>> {
-    evaluate_binary_with_context(operator, left, right, &[], &[])
+    evaluate_binary_with_bindings(operator, left, right, &[])
 }
 
-fn evaluate_binary_with_context<'a>(
+fn evaluate_binary_with_bindings<'a>(
     operator: BinaryOperator,
     left: &'a Expression,
     right: &'a Expression,
     bindings: &[ClosedBinding<'a>],
-    int_bindings: &[ClosedIntBinding<'a>],
 ) -> Option<Result<i64, ConstantIntError>> {
     if !matches!(
         operator,
@@ -58,8 +48,8 @@ fn evaluate_binary_with_context<'a>(
         return None;
     }
 
-    let left = evaluate_with_context(left, bindings, int_bindings)?;
-    let right = evaluate_with_context(right, bindings, int_bindings)?;
+    let left = evaluate_with_bindings(left, bindings)?;
+    let right = evaluate_with_bindings(right, bindings)?;
     Some(match (left, right) {
         (Err(error), _) | (_, Err(error)) => Err(error),
         (Ok(left), Ok(right)) => apply_binary(operator, left, right),
@@ -70,43 +60,27 @@ pub(crate) fn evaluate_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
 ) -> Option<Result<i64, ConstantIntError>> {
-    evaluate_with_context(expression, bindings, &[])
-}
-
-fn evaluate_with_context<'a>(
-    expression: &'a Expression,
-    bindings: &[ClosedBinding<'a>],
-    int_bindings: &[ClosedIntBinding<'a>],
-) -> Option<Result<i64, ConstantIntError>> {
     match &expression.kind {
         ExpressionKind::Integer(value) => Some(Ok(*value)),
-        ExpressionKind::Binding(reference) => {
-            let value = closed_int_binding_value(reference, &expression.ty, int_bindings).or_else(
-                || {
-                    crate::constant_condition::closed_binding_value(
-                        reference,
-                        &expression.ty,
-                        bindings,
-                    )
-                },
-            )?;
-            evaluate_with_context(value, bindings, int_bindings)
-        }
+        ExpressionKind::Binding(reference) => evaluate_with_bindings(
+            crate::constant_condition::closed_binding_value(reference, &expression.ty, bindings)?,
+            bindings,
+        ),
         ExpressionKind::Unary { operator, operand } => {
-            evaluate_unary_with_context(*operator, operand, bindings, int_bindings)
+            evaluate_unary_with_bindings(*operator, operand, bindings)
         }
         ExpressionKind::Binary {
             operator,
             left,
             right,
-        } => evaluate_binary_with_context(*operator, left, right, bindings, int_bindings),
+        } => evaluate_binary_with_bindings(*operator, left, right, bindings),
         ExpressionKind::If {
             condition,
             then_branch,
             else_branch,
         } => match crate::constant_condition::evaluate_with_bindings(condition, bindings)? {
-            true => evaluate_block_with_context(then_branch, bindings, int_bindings),
-            false => evaluate_with_context(else_branch, bindings, int_bindings),
+            true => evaluate_block_with_bindings(then_branch, bindings),
+            false => evaluate_with_bindings(else_branch, bindings),
         },
         ExpressionKind::Match {
             scrutinee,
@@ -120,7 +94,7 @@ fn evaluate_with_context<'a>(
                     arms,
                     bindings,
                 )?;
-            evaluate_with_context(value, &selected_bindings, int_bindings)
+            evaluate_with_bindings(value, &selected_bindings)
         }
         ExpressionKind::FieldAccess {
             base,
@@ -135,62 +109,22 @@ fn evaluate_with_context<'a>(
                     *field_index,
                     bindings,
                 )?;
-            evaluate_with_context(value, &selected_bindings, int_bindings)
+            evaluate_with_bindings(value, &selected_bindings)
         }
-        ExpressionKind::Block(block) => evaluate_block_with_context(block, bindings, int_bindings),
+        ExpressionKind::Block(block) => evaluate_block_with_bindings(block, bindings),
         _ => None,
     }
 }
 
-fn evaluate_block_with_context<'a>(
+fn evaluate_block_with_bindings<'a>(
     block: &'a Block,
     bindings: &[ClosedBinding<'a>],
-    int_bindings: &[ClosedIntBinding<'a>],
 ) -> Option<Result<i64, ConstantIntError>> {
-    let mut block_bindings = int_bindings.to_vec();
-    for statement in &block.statements {
-        match &statement.kind {
-            StatementKind::Binding {
-                binding,
-                initializer,
-            } if !binding.mutable && binding.ty == Type::Int && initializer.ty == Type::Int => {
-                match evaluate_with_context(initializer, bindings, &block_bindings)? {
-                    Ok(_) => block_bindings.push(ClosedIntBinding {
-                        binding,
-                        value: initializer,
-                    }),
-                    Err(error) => return Some(Err(error)),
-                }
-            }
-            StatementKind::Expression(expression) if expression.ty == Type::Int => {
-                if let Err(error) = evaluate_with_context(expression, bindings, &block_bindings)? {
-                    return Some(Err(error));
-                }
-            }
-            _ => return None,
-        }
+    match crate::constant_condition::closed_block_tail_with_bindings(block, bindings)? {
+        Ok((Some(tail), selected_bindings)) => evaluate_with_bindings(tail, &selected_bindings),
+        Ok((None, _)) => None,
+        Err(error) => Some(Err(error)),
     }
-
-    evaluate_with_context(block.tail.as_deref()?, bindings, &block_bindings)
-}
-
-fn closed_int_binding_value<'a>(
-    reference: &BindingReference,
-    ty: &Type,
-    bindings: &[ClosedIntBinding<'a>],
-) -> Option<&'a Expression> {
-    let entry = bindings
-        .iter()
-        .rev()
-        .find(|entry| entry.binding.id == reference.binding)?;
-    if entry.binding.name != reference.binding_name
-        || entry.binding.span != reference.declaration_span
-        || &entry.binding.ty != ty
-        || &entry.value.ty != ty
-    {
-        return None;
-    }
-    Some(entry.value)
 }
 
 fn apply_binary(operator: BinaryOperator, left: i64, right: i64) -> Result<i64, ConstantIntError> {

@@ -62,7 +62,7 @@ fn local_scrutinee_remains_outside_the_closed_match_proof() {
 }
 
 #[test]
-fn statement_bearing_selected_arm_remains_outside_the_closed_proof() {
+fn selected_immutable_bool_binding_arm_can_be_proven() {
     let analyzed = analyze_text(
         "enum Switch { Off, On }\n\
          fn main() -> Int {\n\
@@ -70,6 +70,26 @@ fn statement_bearing_selected_arm_remains_outside_the_closed_proof() {
              while (match Switch::On {\n\
                  Switch::Off => false,\n\
                  Switch::On => { let flag = true; flag },\n\
+             }) {\n\
+                 value = 42;\n\
+                 break;\n\
+             }\n\
+             value\n\
+         }",
+    );
+
+    assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
+}
+
+#[test]
+fn selected_mutable_bool_binding_arm_remains_outside_the_closed_proof() {
+    let analyzed = analyze_text(
+        "enum Switch { Off, On }\n\
+         fn main() -> Int {\n\
+             var value: Int;\n\
+             while (match Switch::On {\n\
+                 Switch::Off => false,\n\
+                 Switch::On => { var flag = true; flag },\n\
              }) {\n\
                  value = 42;\n\
                  break;\n\
