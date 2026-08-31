@@ -2705,6 +2705,34 @@ impl Analyzer {
                 }
                 Some((**nested).clone())
             }
+            ExpressionKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => match crate::constant_condition::evaluate(condition)? {
+                true => self.static_record_tags_for_expression(then_branch.tail.as_deref()?),
+                false => self.static_record_tags_for_expression(else_branch),
+            },
+            ExpressionKind::Match {
+                scrutinee,
+                enumeration,
+                arms,
+            } => {
+                let (scrutinee_enum, variant_index) =
+                    self.static_variant_for_expression(scrutinee)?;
+                if scrutinee_enum != *enumeration {
+                    return None;
+                }
+                let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
+                let arm = selected.next()?;
+                if selected.next().is_some() {
+                    return None;
+                }
+                self.static_record_tags_for_expression(&arm.value)
+            }
+            ExpressionKind::Block(block) => {
+                self.static_record_tags_for_expression(block.tail.as_deref()?)
+            }
             _ => None,
         }
     }
