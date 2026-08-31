@@ -1,5 +1,7 @@
 use crate::constant_condition::ClosedBinding;
-use crate::hir::{Binding, BindingReference, Block, Expression, ExpressionKind, StatementKind, Type};
+use crate::hir::{
+    Binding, BindingReference, Block, Expression, ExpressionKind, StatementKind, Type,
+};
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 
 pub(crate) use nova_int_semantics::IntArithmeticError as ConstantIntError;
@@ -80,7 +82,13 @@ fn evaluate_with_context<'a>(
         ExpressionKind::Integer(value) => Some(Ok(*value)),
         ExpressionKind::Binding(reference) => {
             let value = closed_int_binding_value(reference, &expression.ty, int_bindings).or_else(
-                || crate::constant_condition::closed_binding_value(reference, &expression.ty, bindings),
+                || {
+                    crate::constant_condition::closed_binding_value(
+                        reference,
+                        &expression.ty,
+                        bindings,
+                    )
+                },
             )?;
             evaluate_with_context(value, bindings, int_bindings)
         }
@@ -155,9 +163,7 @@ fn evaluate_block_with_context<'a>(
                 }
             }
             StatementKind::Expression(expression) if expression.ty == Type::Int => {
-                if let Err(error) =
-                    evaluate_with_context(expression, bindings, &block_bindings)?
-                {
+                if let Err(error) = evaluate_with_context(expression, bindings, &block_bindings)? {
                     return Some(Err(error));
                 }
             }
