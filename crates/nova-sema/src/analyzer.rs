@@ -208,6 +208,13 @@ struct LocalSymbol {
     mutable: bool,
     span: Span,
     static_variant: Option<(EnumId, usize)>,
+    static_record_tags: Option<StaticRecordTags>,
+}
+
+#[derive(Clone, Debug)]
+struct StaticRecordTags {
+    record: RecordId,
+    fields: BTreeMap<usize, (EnumId, usize)>,
 }
 
 type Scope = BTreeMap<String, LocalSymbol>;
@@ -740,8 +747,16 @@ impl Analyzer {
                 } else {
                     None
                 };
+                let static_record_tags = if !*mutable
+                    && initializer.ty == binding_type
+                    && matches!(&binding_type, Type::Record(_))
+                {
+                    self.static_record_tags_for_expression(&initializer)
+                } else {
+                    None
+                };
                 let binding = self.new_binding(name, binding_type, *mutable);
-                self.insert_local_with_static_variant(&binding, static_variant);
+                self.insert_local_with_static_facts(&binding, static_variant, static_record_tags);
                 if !initializer.ty.is_never() {
                     self.record_initialization(binding.id, binding.span);
                 }
@@ -2598,30 +2613,92 @@ impl Analyzer {
         if let Some(variant) = crate::constant_condition::static_match_variant(expression) {
             return Some(variant);
         }
-        let ExpressionKind::Binding(reference) = &expression.kind else {
+        match &expression.kind {
+            ExpressionKind::Binding(reference) => {
+                self.resolved_immutable_symbol(reference, &expression.ty)?
+                    .static_variant
+            }
+            ExpressionKind::FieldAccess {
+                base,
+                record,
+                field_index,
+                ..
+            } => self.static_record_field_variant(base, *record, *field_index),
+            _ => None,
+        }
+    }
+
+    fn static_record_field_variant(
+        &self,
+        base: &hir::Expression,
+        record: RecordId,
+        field_index: usize,
+    ) -> Option<(EnumId, usize)> {
+        let facts = self.static_record_tags_for_expression(base)?;
+        if facts.record != record {
+            return None;
+        }
+        facts.fields.get(&field_index).copied()
+    }
+
+    fn static_record_tags_for_expression(
+        &self,
+        expression: &hir::Expression,
+    ) -> Option<StaticRecordTags> {
+        let Type::Record(record_type) = &expression.ty else {
             return None;
         };
+        match &expression.kind {
+            ExpressionKind::RecordLiteral { record, fields } if *record == record_type.id => {
+                let mut tags = BTreeMap::new();
+                for field in fields {
+                    if !matches!(&field.value.ty, Type::Enum(_)) {
+                        continue;
+                    }
+                    if let Some(variant) = self.static_variant_for_expression(&field.value) {
+                        tags.insert(field.field_index, variant);
+                    }
+                }
+                Some(StaticRecordTags {
+                    record: *record,
+                    fields: tags,
+                })
+            }
+            ExpressionKind::Binding(reference) => self
+                .resolved_immutable_symbol(reference, &expression.ty)?
+                .static_record_tags
+                .clone(),
+            _ => None,
+        }
+    }
+
+    fn resolved_immutable_symbol(
+        &self,
+        reference: &hir::BindingReference,
+        expected_type: &Type,
+    ) -> Option<&LocalSymbol> {
         self.scopes.iter().rev().find_map(|scope| {
             let symbol = scope.get(&reference.binding_name)?;
             if symbol.id != reference.binding
                 || symbol.span != reference.declaration_span
-                || symbol.ty != expression.ty
+                || &symbol.ty != expected_type
                 || symbol.mutable
             {
                 return None;
             }
-            symbol.static_variant
+            Some(symbol)
         })
     }
 
     fn insert_local(&mut self, binding: &hir::Binding) {
-        self.insert_local_with_static_variant(binding, None);
+        self.insert_local_with_static_facts(binding, None, None);
     }
 
-    fn insert_local_with_static_variant(
+    fn insert_local_with_static_facts(
         &mut self,
         binding: &hir::Binding,
         static_variant: Option<(EnumId, usize)>,
+        static_record_tags: Option<StaticRecordTags>,
     ) {
         let scope = self
             .scopes
@@ -2646,6 +2723,7 @@ impl Analyzer {
                 mutable: binding.mutable,
                 span: binding.span,
                 static_variant,
+                static_record_tags,
             },
         );
     }
