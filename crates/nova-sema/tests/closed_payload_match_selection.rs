@@ -82,12 +82,32 @@ fn dynamic_call_payload_keeps_match_selection_runtime_only() {
 }
 
 #[test]
-fn statement_bearing_payload_block_stops_closed_match_selection() {
+fn immutable_binding_payload_block_can_select_a_match_arm() {
     let analyzed = analyze_text(
         "enum Choice { A(Int), B(Int) }\n\
          fn main() -> Int {\n\
              var value: Int;\n\
              while (match Choice::B({ let payload = 7; payload }) {\n\
+                 Choice::A(_) => false,\n\
+                 Choice::B(_) => true,\n\
+             }) {\n\
+                 value = 42;\n\
+                 break;\n\
+             }\n\
+             value\n\
+         }",
+    );
+
+    assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
+}
+
+#[test]
+fn mutable_binding_payload_block_keeps_match_selection_runtime_only() {
+    let analyzed = analyze_text(
+        "enum Choice { A(Int), B(Int) }\n\
+         fn main() -> Int {\n\
+             var value: Int;\n\
+             while (match Choice::B({ var payload = 7; payload }) {\n\
                  Choice::A(_) => false,\n\
                  Choice::B(_) => true,\n\
              }) {\n\
