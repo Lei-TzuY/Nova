@@ -22,18 +22,14 @@ fn analyze_text(text: &str) -> AnalysisOutput {
 
 #[test]
 fn closed_immutable_true_and_noncontinuing_rhs_is_noncontinuing() {
-    let output = analyze_text(
-        "fn main() -> Int { { let flag = true; flag } && { return 42; } }",
-    );
+    let output = analyze_text("fn main() -> Int { { let flag = true; flag } && { return 42; } }");
     assert!(output.is_success(), "{:?}", output.diagnostics);
     assert!(output.program.functions[0].body.ty.is_never());
 }
 
 #[test]
 fn closed_immutable_false_or_noncontinuing_rhs_is_noncontinuing() {
-    let output = analyze_text(
-        "fn main() -> Int { { let flag = false; flag } || { return 42; } }",
-    );
+    let output = analyze_text("fn main() -> Int { { let flag = false; flag } || { return 42; } }");
     assert!(output.is_success(), "{:?}", output.diagnostics);
     assert!(output.program.functions[0].body.ty.is_never());
 }
@@ -45,8 +41,15 @@ fn selected_if_and_record_projection_proofs_propagate_required_rhs_never() {
         "record Flag { value: Bool } fn main() -> Int { (new Flag { value: false }).value || { return 42; } }",
     ] {
         let output = analyze_text(text);
-        assert!(output.is_success(), "source: {text}; diagnostics: {:?}", output.diagnostics);
-        assert!(output.program.functions[0].body.ty.is_never(), "source: {text}");
+        assert!(
+            output.is_success(),
+            "source: {text}; diagnostics: {:?}",
+            output.diagnostics
+        );
+        assert!(
+            output.program.functions[0].body.ty.is_never(),
+            "source: {text}"
+        );
     }
 }
 
@@ -66,8 +69,15 @@ fn composite_skipped_rhs_remains_continuing() {
         "fn main() -> Int { { let flag = true; flag } || { return 1; }; 42 }",
     ] {
         let output = analyze_text(text);
-        assert!(output.is_success(), "source: {text}; diagnostics: {:?}", output.diagnostics);
-        assert!(!output.program.functions[0].body.ty.is_never(), "source: {text}");
+        assert!(
+            output.is_success(),
+            "source: {text}; diagnostics: {:?}",
+            output.diagnostics
+        );
+        assert!(
+            !output.program.functions[0].body.ty.is_never(),
+            "source: {text}"
+        );
     }
 }
 
@@ -78,7 +88,14 @@ fn dynamic_short_circuit_left_remains_conservative() {
         "fn main(flag: Bool) -> Int { flag || { return 1; }; 42 }",
     ] {
         let output = analyze_text(text);
-        assert!(output.is_success(), "source: {text}; diagnostics: {:?}", output.diagnostics);
-        assert!(!output.program.functions[0].body.ty.is_never(), "source: {text}");
+        assert!(
+            output.is_success(),
+            "source: {text}; diagnostics: {:?}",
+            output.diagnostics
+        );
+        assert!(
+            !output.program.functions[0].body.ty.is_never(),
+            "source: {text}"
+        );
     }
 }
