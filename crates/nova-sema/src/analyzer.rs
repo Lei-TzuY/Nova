@@ -207,6 +207,7 @@ struct LocalSymbol {
     ty: Type,
     mutable: bool,
     span: Span,
+    static_variant: Option<(EnumId, usize)>,
 }
 
 type Scope = BTreeMap<String, LocalSymbol>;
@@ -731,8 +732,16 @@ impl Analyzer {
                     );
                 }
                 let binding_type = annotation_type.unwrap_or_else(|| initializer.ty.clone());
+                let static_variant = if !*mutable
+                    && initializer.ty == binding_type
+                    && matches!(&binding_type, Type::Enum(_))
+                {
+                    self.static_variant_for_expression(&initializer)
+                } else {
+                    None
+                };
                 let binding = self.new_binding(name, binding_type, *mutable);
-                self.insert_local(&binding);
+                self.insert_local_with_static_variant(&binding, static_variant);
                 if !initializer.ty.is_never() {
                     self.record_initialization(binding.id, binding.span);
                 }
@@ -1679,7 +1688,7 @@ impl Analyzer {
                 },
                 Type::Enum(scrutinee_type),
             ) if *enumeration == scrutinee_type.id => Some(*variant_index),
-            _ => crate::constant_condition::static_match_variant(&scrutinee).and_then(
+            _ => self.static_variant_for_expression(&scrutinee).and_then(
                 |(enumeration, variant_index)| match &scrutinee.ty {
                     Type::Enum(scrutinee_type) if enumeration == scrutinee_type.id => {
                         Some(variant_index)
@@ -2582,7 +2591,38 @@ impl Analyzer {
         binding
     }
 
+    fn static_variant_for_expression(
+        &self,
+        expression: &hir::Expression,
+    ) -> Option<(EnumId, usize)> {
+        if let Some(variant) = crate::constant_condition::static_match_variant(expression) {
+            return Some(variant);
+        }
+        let ExpressionKind::Binding(reference) = &expression.kind else {
+            return None;
+        };
+        self.scopes.iter().rev().find_map(|scope| {
+            let symbol = scope.get(&reference.binding_name)?;
+            if symbol.id != reference.binding
+                || symbol.span != reference.declaration_span
+                || symbol.ty != expression.ty
+                || symbol.mutable
+            {
+                return None;
+            }
+            symbol.static_variant
+        })
+    }
+
     fn insert_local(&mut self, binding: &hir::Binding) {
+        self.insert_local_with_static_variant(binding, None);
+    }
+
+    fn insert_local_with_static_variant(
+        &mut self,
+        binding: &hir::Binding,
+        static_variant: Option<(EnumId, usize)>,
+    ) {
         let scope = self
             .scopes
             .last_mut()
@@ -2605,6 +2645,7 @@ impl Analyzer {
                 ty: binding.ty.clone(),
                 mutable: binding.mutable,
                 span: binding.span,
+                static_variant,
             },
         );
     }
