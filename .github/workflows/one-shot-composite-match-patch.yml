@@ -1,0 +1,86 @@
+name: One-shot composite match patch
+
+on:
+  push:
+    branches: [feat/composite-match-static-selection]
+    paths:
+      - .github/workflows/one-shot-composite-match-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/composite-match-static-selection
+      - name: Apply exact semantic patch and self-delete
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          condition = Path("crates/nova-sema/src/constant_condition.rs")
+          condition_text = condition.read_text()
+          condition_anchor = "fn match_variant_with_bindings<'a>(\n"
+          helper = """pub(crate) fn closed_match_variant(expression: &Expression) -> Option<(EnumId, usize)> {
+              let (enumeration, variant_index, _, _) = match_variant_with_bindings(expression, &[])?;
+              Some((enumeration, variant_index))
+          }
+
+          """
+          assert condition_text.count(condition_anchor) == 1, "constant-condition anchor drifted"
+          assert "pub(crate) fn closed_match_variant(" not in condition_text, "helper already exists"
+          condition.write_text(condition_text.replace(condition_anchor, helper + condition_anchor, 1))
+
+          analyzer = Path("crates/nova-sema/src/analyzer.rs")
+          analyzer_text = analyzer.read_text()
+          old_selection = """        let selected_variant_index = match (&scrutinee.kind, &scrutinee.ty) {
+              (
+                  ExpressionKind::EnumConstructor {
+                      enumeration,
+                      variant_index,
+                      ..
+                  },
+                  Type::Enum(scrutinee_type),
+              ) if *enumeration == scrutinee_type.id => Some(*variant_index),
+              _ => None,
+          };
+          """
+          new_selection = """        let selected_variant_index = match (&scrutinee.kind, &scrutinee.ty) {
+              (
+                  ExpressionKind::EnumConstructor {
+                      enumeration,
+                      variant_index,
+                      ..
+                  },
+                  Type::Enum(scrutinee_type),
+              ) if *enumeration == scrutinee_type.id => Some(*variant_index),
+              _ => crate::constant_condition::closed_match_variant(&scrutinee).and_then(
+                  |(enumeration, variant_index)| match &scrutinee.ty {
+                      Type::Enum(scrutinee_type) if enumeration == scrutinee_type.id => {
+                          Some(variant_index)
+                      }
+                      _ => None,
+                  },
+              ),
+          };
+          """
+          assert analyzer_text.count(old_selection) == 1, "match-selection anchor drifted"
+          analyzer_text = analyzer_text.replace(old_selection, new_selection, 1)
+
+          old_label = 'format!(\n                                            "this direct constructor selects variant `{selected_name}`"\n                                        ),'
+          new_label = 'format!(\n                                            "this scrutinee is statically known to select variant `{selected_name}`"\n                                        ),'
+          assert analyzer_text.count(old_label) == 1, "usefulness-label anchor drifted"
+          analyzer.write_text(analyzer_text.replace(old_label, new_label, 1))
+          PY
+
+          rm .github/workflows/one-shot-composite-match-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/nova-sema/src/constant_condition.rs crates/nova-sema/src/analyzer.rs .github/workflows/one-shot-composite-match-patch.yml
+          git diff --cached --check
+          git commit -m "feat: select composite closed match scrutinees"
+          git push origin HEAD:feat/composite-match-static-selection
