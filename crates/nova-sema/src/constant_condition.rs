@@ -11,6 +11,11 @@ pub(crate) struct ClosedBinding<'a> {
     value: &'a Expression,
 }
 
+type ClosedBlockProof<'a> = Result<
+    (Option<&'a Expression>, Vec<ClosedBinding<'a>>),
+    constant_int::ConstantIntError,
+>;
+
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
 /// already determined by supported literal, identity, comparison, and Boolean proofs.
 /// The HIR is never folded.
@@ -474,12 +479,7 @@ pub(crate) fn closed_binding_value<'a>(
 pub(crate) fn closed_block_tail_with_bindings<'a>(
     block: &'a Block,
     bindings: &[ClosedBinding<'a>],
-) -> Option<
-    Result<
-        (Option<&'a Expression>, Vec<ClosedBinding<'a>>),
-        constant_int::ConstantIntError,
-    >,
-> {
+) -> Option<ClosedBlockProof<'a>> {
     let mut block_bindings = bindings.to_vec();
     for statement in &block.statements {
         match &statement.kind {
