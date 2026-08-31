@@ -1679,7 +1679,7 @@ impl Analyzer {
                 },
                 Type::Enum(scrutinee_type),
             ) if *enumeration == scrutinee_type.id => Some(*variant_index),
-            _ => crate::constant_condition::closed_match_variant(&scrutinee).and_then(
+            _ => crate::constant_condition::static_match_variant(&scrutinee).and_then(
                 |(enumeration, variant_index)| match &scrutinee.ty {
                     Type::Enum(scrutinee_type) if enumeration == scrutinee_type.id => {
                         Some(variant_index)
