@@ -69,18 +69,31 @@ fn statement_free_enum_blocks_preserve_direct_constructor_proofs() {
 }
 
 #[test]
-fn statement_bearing_blocks_remain_dynamic() {
+fn closed_statement_bearing_blocks_participate_in_proofs() {
     let condition = analyze_text(
         "fn main() -> Int { var value: Int; if { (); true } { value = 42; () } else { () }; value }",
     );
-    assert!(has_code(&condition, "N3009"), "{:?}", condition.diagnostics);
+    assert!(condition.is_success(), "{:?}", condition.diagnostics);
 
     let arithmetic = analyze_text("fn main() -> Int { 9223372036854775807 + { (); 1 } }");
     assert!(
-        arithmetic.is_success(),
-        "statement-bearing block must remain runtime-checked: {:?}",
+        has_code(&arithmetic, "N3031"),
+        "{:?}",
         arithmetic.diagnostics
     );
+}
+
+#[test]
+fn mutable_and_dynamic_statement_bearing_blocks_remain_runtime_only() {
+    let mutable = analyze_text(
+        "fn main() -> Int { var value: Int; if { var flag = true; flag } { value = 42; () } else { () }; value }",
+    );
+    assert!(has_code(&mutable, "N3009"), "{:?}", mutable.diagnostics);
+
+    let dynamic = analyze_text(
+        "fn truth() -> Bool { true } fn main() -> Int { var value: Int; if { truth(); true } { value = 42; () } else { () }; value }",
+    );
+    assert!(has_code(&dynamic, "N3009"), "{:?}", dynamic.diagnostics);
 }
 
 #[test]
