@@ -4,7 +4,11 @@ use nova_sema::{AnalysisOutput, analyze};
 use nova_source::{SourceFile, SourceId};
 
 fn analyze_text(text: &str) -> AnalysisOutput {
-    let source = SourceFile::new(SourceId::new(0), "static-match-composite-usefulness.nv", text);
+    let source = SourceFile::new(
+        SourceId::new(0),
+        "static-match-composite-usefulness.nv",
+        text,
+    );
     let lexed = lex(&source);
     assert!(
         lexed.is_success(),
