@@ -143,10 +143,6 @@ fn int_value<'a>(expression: &'a Expression, bindings: &[ClosedBinding<'a>]) -> 
     constant_int::evaluate_with_bindings(expression, bindings)?.ok()
 }
 
-fn unit_value(expression: &Expression) -> Option<()> {
-    unit_value_with_bindings(expression, &[])
-}
-
 fn unit_value_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
@@ -202,10 +198,6 @@ fn unit_value_with_bindings<'a>(
     }
 }
 
-fn enum_identity_tag(expression: &Expression) -> Option<(EnumId, usize)> {
-    enum_identity_tag_with_bindings(expression, &[])
-}
-
 fn enum_identity_tag_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
@@ -258,10 +250,6 @@ fn enum_identity_tag_with_bindings<'a>(
     }
 }
 
-fn function_id(expression: &Expression) -> Option<FunctionId> {
-    function_id_with_bindings(expression, &[])
-}
-
 fn function_id_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
@@ -309,15 +297,15 @@ fn function_id_with_bindings<'a>(
     }
 }
 
-fn match_variant_tag(expression: &Expression) -> Option<(EnumId, usize)> {
-    let (enumeration, variant_index, _, _) = match_variant_with_bindings(expression, &[])?;
-    Some((enumeration, variant_index))
-}
-
 fn match_variant_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
-) -> Option<(EnumId, usize, Option<&'a Expression>, Vec<ClosedBinding<'a>>)> {
+) -> Option<(
+    EnumId,
+    usize,
+    Option<&'a Expression>,
+    Vec<ClosedBinding<'a>>,
+)> {
     match &expression.kind {
         ExpressionKind::EnumConstructor {
             enumeration,
@@ -376,10 +364,6 @@ fn match_variant_with_bindings<'a>(
     }
 }
 
-fn is_closed_total_value(expression: &Expression) -> bool {
-    is_closed_total_value_with_bindings(expression, &[])
-}
-
 fn is_closed_total_value_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
@@ -396,10 +380,6 @@ fn is_closed_total_value_with_bindings<'a>(
     }
 }
 
-fn record_value_is_closed(expression: &Expression) -> bool {
-    record_value_is_closed_with_bindings(expression, &[])
-}
-
 fn record_value_is_closed_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
@@ -408,8 +388,10 @@ fn record_value_is_closed_with_bindings<'a>(
         ExpressionKind::RecordLiteral { fields, .. } => fields
             .iter()
             .all(|field| is_closed_total_value_with_bindings(&field.value, bindings)),
-        ExpressionKind::Binding(reference) => closed_binding_value(reference, &expression.ty, bindings)
-            .is_some_and(|value| record_value_is_closed_with_bindings(value, bindings)),
+        ExpressionKind::Binding(reference) => {
+            closed_binding_value(reference, &expression.ty, bindings)
+                .is_some_and(|value| record_value_is_closed_with_bindings(value, bindings))
+        }
         ExpressionKind::FieldAccess {
             base,
             record,
@@ -467,15 +449,6 @@ pub(crate) fn closed_binding_value<'a>(
     Some(entry.value)
 }
 
-pub(crate) fn selected_match_value<'a>(
-    scrutinee: &'a Expression,
-    enumeration: EnumId,
-    arms: &'a [MatchArm],
-) -> Option<&'a Expression> {
-    let (value, _) = selected_match_value_with_bindings(scrutinee, enumeration, arms, &[])?;
-    Some(value)
-}
-
 pub(crate) fn selected_match_value_with_bindings<'a>(
     scrutinee: &'a Expression,
     enumeration: EnumId,
@@ -506,15 +479,6 @@ pub(crate) fn selected_match_value_with_bindings<'a>(
     }
 
     Some((&arm.value, selected_bindings))
-}
-
-pub(crate) fn selected_record_field_value(
-    base: &Expression,
-    record: RecordId,
-    field_index: usize,
-) -> Option<&Expression> {
-    let (value, _) = selected_record_field_value_with_bindings(base, record, field_index, &[])?;
-    Some(value)
 }
 
 pub(crate) fn selected_record_field_value_with_bindings<'a>(
