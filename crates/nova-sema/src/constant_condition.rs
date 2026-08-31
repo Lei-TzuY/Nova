@@ -11,10 +11,8 @@ pub(crate) struct ClosedBinding<'a> {
     value: &'a Expression,
 }
 
-type ClosedBlockProof<'a> = Result<
-    (Option<&'a Expression>, Vec<ClosedBinding<'a>>),
-    constant_int::ConstantIntError,
->;
+type ClosedBlockProof<'a> =
+    Result<(Option<&'a Expression>, Vec<ClosedBinding<'a>>), constant_int::ConstantIntError>;
 
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
 /// already determined by supported literal, identity, comparison, and Boolean proofs.
