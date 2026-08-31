@@ -96,9 +96,7 @@ fn evaluate_binary<'a>(
         },
         BinaryOperator::Equal | BinaryOperator::NotEqual => {
             let equal = match (&left.ty, &right.ty) {
-                (Type::Int, Type::Int) => {
-                    int_value(left, bindings)? == int_value(right, bindings)?
-                }
+                (Type::Int, Type::Int) => int_value(left, bindings)? == int_value(right, bindings)?,
                 (Type::Bool, Type::Bool) => {
                     evaluate_with_bindings(left, bindings)?
                         == evaluate_with_bindings(right, bindings)?
