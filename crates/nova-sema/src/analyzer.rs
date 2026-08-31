@@ -1679,7 +1679,14 @@ impl Analyzer {
                 },
                 Type::Enum(scrutinee_type),
             ) if *enumeration == scrutinee_type.id => Some(*variant_index),
-            _ => None,
+            _ => crate::constant_condition::closed_match_variant(&scrutinee).and_then(
+                |(enumeration, variant_index)| match &scrutinee.ty {
+                    Type::Enum(scrutinee_type) if enumeration == scrutinee_type.id => {
+                        Some(variant_index)
+                    }
+                    _ => None,
+                },
+            ),
         };
         let post_scrutinee_loop_stack = self.loop_stack.clone();
         let mut scrutinee_enum = match &scrutinee.ty {
@@ -1933,7 +1940,7 @@ impl Analyzer {
                                     .with_secondary(
                                         scrutinee.span,
                                         format!(
-                                            "this direct constructor selects variant `{selected_name}`"
+                                            "this scrutinee is statically known to select variant `{selected_name}`"
                                         ),
                                     )
                                     .with_note(
