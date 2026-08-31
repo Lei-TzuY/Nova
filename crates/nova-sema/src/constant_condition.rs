@@ -314,6 +314,11 @@ fn function_id_with_bindings<'a>(
     }
 }
 
+pub(crate) fn closed_match_variant(expression: &Expression) -> Option<(EnumId, usize)> {
+    let (enumeration, variant_index, _, _) = match_variant_with_bindings(expression, &[])?;
+    Some((enumeration, variant_index))
+}
+
 fn match_variant_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
