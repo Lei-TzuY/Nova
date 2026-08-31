@@ -2681,7 +2681,9 @@ impl Analyzer {
                 if selected.next().is_some() {
                     return None;
                 }
-                self.static_variant_for_expression_with_bindings(&arm.value, bindings)
+                let selected_bindings = self
+                    .static_summary_bindings_for_selected_match_payload(scrutinee, arm, bindings);
+                self.static_variant_for_expression_with_bindings(&arm.value, &selected_bindings)
             }
             ExpressionKind::Block(block) => self.static_variant_for_block(block, bindings),
             _ => None,
@@ -2695,6 +2697,49 @@ impl Analyzer {
     ) -> Option<(EnumId, usize)> {
         let bindings = self.static_summary_bindings_for_block(block, bindings);
         self.static_variant_for_expression_with_bindings(block.tail.as_deref()?, &bindings)
+    }
+
+    fn static_summary_bindings_for_selected_match_payload(
+        &self,
+        scrutinee: &hir::Expression,
+        arm: &hir::MatchArm,
+        bindings: &[StaticSummaryBinding],
+    ) -> Vec<StaticSummaryBinding> {
+        let mut selected_bindings = bindings.to_vec();
+        let Some(binding) = arm.binding.as_ref() else {
+            return selected_bindings;
+        };
+        if binding.mutable || arm.payload_discarded {
+            return selected_bindings;
+        }
+        let ExpressionKind::EnumConstructor {
+            payload: Some(payload),
+            ..
+        } = &scrutinee.kind
+        else {
+            return selected_bindings;
+        };
+        if payload.ty.is_error() || payload.ty.is_never() || payload.ty != binding.ty {
+            return selected_bindings;
+        }
+
+        let static_variant = matches!(&binding.ty, Type::Enum(_))
+            .then(|| self.static_variant_for_expression_with_bindings(payload, &selected_bindings))
+            .flatten();
+        let static_record_tags = matches!(&binding.ty, Type::Record(_))
+            .then(|| {
+                self.static_record_tags_for_expression_with_bindings(payload, &selected_bindings)
+            })
+            .flatten();
+        selected_bindings.push(StaticSummaryBinding {
+            id: binding.id,
+            name: binding.name.clone(),
+            ty: binding.ty.clone(),
+            span: binding.span,
+            static_variant,
+            static_record_tags,
+        });
+        selected_bindings
     }
 
     fn static_record_field_variant_with_bindings(
@@ -2808,7 +2853,9 @@ impl Analyzer {
                 if selected.next().is_some() {
                     return None;
                 }
-                self.static_record_tags_for_expression_with_bindings(&arm.value, bindings)
+                let selected_bindings = self
+                    .static_summary_bindings_for_selected_match_payload(scrutinee, arm, bindings);
+                self.static_record_tags_for_expression_with_bindings(&arm.value, &selected_bindings)
             }
             ExpressionKind::Block(block) => self.static_record_tags_for_block(block, bindings),
             _ => None,
