@@ -212,9 +212,15 @@ struct LocalSymbol {
 }
 
 #[derive(Clone, Debug)]
+enum StaticFieldTag {
+    Enum(EnumId, usize),
+    Record(Box<StaticRecordTags>),
+}
+
+#[derive(Clone, Debug)]
 struct StaticRecordTags {
     record: RecordId,
-    fields: BTreeMap<usize, (EnumId, usize)>,
+    fields: BTreeMap<usize, StaticFieldTag>,
 }
 
 type Scope = BTreeMap<String, LocalSymbol>;
@@ -2638,7 +2644,12 @@ impl Analyzer {
         if facts.record != record {
             return None;
         }
-        facts.fields.get(&field_index).copied()
+        match facts.fields.get(&field_index)? {
+            StaticFieldTag::Enum(enumeration, variant_index) => {
+                Some((*enumeration, *variant_index))
+            }
+            StaticFieldTag::Record(_) => None,
+        }
     }
 
     fn static_record_tags_for_expression(
@@ -2652,11 +2663,19 @@ impl Analyzer {
             ExpressionKind::RecordLiteral { record, fields } if *record == record_type.id => {
                 let mut tags = BTreeMap::new();
                 for field in fields {
-                    if !matches!(&field.value.ty, Type::Enum(_)) {
-                        continue;
-                    }
-                    if let Some(variant) = self.static_variant_for_expression(&field.value) {
-                        tags.insert(field.field_index, variant);
+                    let tag = match &field.value.ty {
+                        Type::Enum(_) => self.static_variant_for_expression(&field.value).map(
+                            |(enumeration, variant_index)| {
+                                StaticFieldTag::Enum(enumeration, variant_index)
+                            },
+                        ),
+                        Type::Record(_) => self
+                            .static_record_tags_for_expression(&field.value)
+                            .map(|nested| StaticFieldTag::Record(Box::new(nested))),
+                        _ => None,
+                    };
+                    if let Some(tag) = tag {
+                        tags.insert(field.field_index, tag);
                     }
                 }
                 Some(StaticRecordTags {
@@ -2668,6 +2687,24 @@ impl Analyzer {
                 .resolved_immutable_symbol(reference, &expression.ty)?
                 .static_record_tags
                 .clone(),
+            ExpressionKind::FieldAccess {
+                base,
+                record,
+                field_index,
+                ..
+            } => {
+                let outer = self.static_record_tags_for_expression(base)?;
+                if outer.record != *record {
+                    return None;
+                }
+                let StaticFieldTag::Record(nested) = outer.fields.get(field_index)? else {
+                    return None;
+                };
+                if nested.record != record_type.id {
+                    return None;
+                }
+                Some((**nested).clone())
+            }
             _ => None,
         }
     }
