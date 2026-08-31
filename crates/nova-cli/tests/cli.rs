@@ -85,7 +85,7 @@ fn run_command_executes_checked_program() {
             "42\n",
             Some("warning[N3034]"),
         ),
-        ("valid/unit.nv", "42\n", None),
+        ("valid/unit.nv", "42\n", Some("warning[N3034]")),
         ("valid/unit-equality.nv", "true\n", None),
         ("valid/unit-main.nv", "()\n", None),
         ("valid/payload-free-enum-equality.nv", "true\n", None),
