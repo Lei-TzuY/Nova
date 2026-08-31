@@ -114,13 +114,34 @@ fn dynamic_payload_binding_remains_runtime_only() {
 }
 
 #[test]
-fn statement_bearing_payload_binding_remains_runtime_only() {
-    let actual = codes(
+fn closed_immutable_binding_payload_can_be_proven() {
+    let output = analyze_text(
         r#"
         enum Choice { Value(Int), Other(Int) }
         fn main() -> Int {
             var answer: Int;
             while match Choice::Value({ let inner = 42; inner }) {
+                Choice::Value(payload) => payload == 42,
+                Choice::Other(_) => false,
+            } {
+                answer = 42;
+                break;
+            }
+            answer
+        }
+        "#,
+    );
+    assert!(output.is_success(), "{:?}", output.diagnostics);
+}
+
+#[test]
+fn mutable_binding_payload_block_remains_runtime_only() {
+    let actual = codes(
+        r#"
+        enum Choice { Value(Int), Other(Int) }
+        fn main() -> Int {
+            var answer: Int;
+            while match Choice::Value({ var inner = 42; inner }) {
                 Choice::Value(payload) => payload == 42,
                 Choice::Other(_) => false,
             } {

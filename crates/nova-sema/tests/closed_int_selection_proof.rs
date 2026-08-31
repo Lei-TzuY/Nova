@@ -49,11 +49,27 @@ fn selected_match_int_value_composes_with_comparison_proof() {
 }
 
 #[test]
-fn selected_statement_bearing_int_branch_remains_outside_the_proof() {
+fn selected_immutable_binding_int_branch_can_be_proven() {
     let analyzed = analyze_text(
         "fn main() -> Int {\n\
              var value: Int;\n\
              while (if true { let selected = 42; selected } else { 0 } == 42) {\n\
+                 value = 42;\n\
+                 break;\n\
+             }\n\
+             value\n\
+         }",
+    );
+
+    assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
+}
+
+#[test]
+fn selected_mutable_binding_int_branch_remains_outside_the_proof() {
+    let analyzed = analyze_text(
+        "fn main() -> Int {\n\
+             var value: Int;\n\
+             while (if true { var selected = 42; selected } else { 0 } == 42) {\n\
                  value = 42;\n\
                  break;\n\
              }\n\
