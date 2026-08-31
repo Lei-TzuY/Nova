@@ -2750,11 +2750,50 @@ impl Analyzer {
                     .static_payload_tag
                     .clone()
             }
+            ExpressionKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => match crate::constant_condition::evaluate(condition)? {
+                true => {
+                    let selected_bindings =
+                        self.static_summary_bindings_for_block(then_branch, bindings);
+                    self.static_payload_tag_for_enum_expression_with_bindings(
+                        then_branch.tail.as_deref()?,
+                        &selected_bindings,
+                    )
+                }
+                false => {
+                    self.static_payload_tag_for_enum_expression_with_bindings(else_branch, bindings)
+                }
+            },
+            ExpressionKind::Match {
+                scrutinee,
+                enumeration,
+                arms,
+            } => {
+                let (scrutinee_enum, variant_index) =
+                    self.static_variant_for_expression_with_bindings(scrutinee, bindings)?;
+                if scrutinee_enum != *enumeration {
+                    return None;
+                }
+                let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
+                let arm = selected.next()?;
+                if selected.next().is_some() {
+                    return None;
+                }
+                let selected_bindings = self
+                    .static_summary_bindings_for_selected_match_payload(scrutinee, arm, bindings);
+                self.static_payload_tag_for_enum_expression_with_bindings(
+                    &arm.value,
+                    &selected_bindings,
+                )
+            }
             ExpressionKind::Block(block) => {
-                let bindings = self.static_summary_bindings_for_block(block, bindings);
+                let selected_bindings = self.static_summary_bindings_for_block(block, bindings);
                 self.static_payload_tag_for_enum_expression_with_bindings(
                     block.tail.as_deref()?,
-                    &bindings,
+                    &selected_bindings,
                 )
             }
             _ => None,
