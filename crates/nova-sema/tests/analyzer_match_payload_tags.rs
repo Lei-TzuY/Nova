@@ -83,12 +83,12 @@ fn dynamically_selected_record_payload_remains_conservative() {
 }
 
 #[test]
-fn enum_alias_scrutinee_keeps_payload_provenance_conservative() {
+fn enum_alias_scrutinee_preserves_payload_tag_summary() {
     let output = analyze_text(
         "enum Choice { A, B } record Holder { choice: Choice } enum Wrap { Empty, Value(Holder) } fn main() -> Int { let source = new Holder { choice: Choice::A }; let wrapped = Wrap::Value(source); let holder = match wrapped { Wrap::Empty => new Holder { choice: Choice::B }, Wrap::Value(value) => value, }; var result: Int; match holder.choice { Choice::A => { result = 1; 0 }, Choice::B => { result = 2; 0 }, }; result }",
     );
     assert!(output.is_success(), "{:?}", output.diagnostics);
-    assert_eq!(code_count(&output, "N3034"), 1);
+    assert_eq!(code_count(&output, "N3034"), 2);
 }
 
 #[test]
