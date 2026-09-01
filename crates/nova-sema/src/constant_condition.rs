@@ -982,12 +982,7 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
 ) {
     match &expression.kind {
         ExpressionKind::Block(block) => {
-            collect_closed_block_arithmetic_failures(
-                block,
-                bindings,
-                static_bindings,
-                failures,
-            );
+            collect_closed_block_arithmetic_failures(block, bindings, static_bindings, failures);
         }
         ExpressionKind::If {
             condition,
