@@ -1285,6 +1285,43 @@ fn collect_closed_block_arithmetic_failures<'a>(
                     return;
                 }
             }
+            StatementKind::While { condition, body } => {
+                let before = failures.len();
+                collect_closed_value_arithmetic_failures_with_bindings(
+                    condition,
+                    &block_bindings,
+                    &block_static_bindings,
+                    failures,
+                );
+                if failures.len() != before || condition.ty != Type::Bool {
+                    return;
+                }
+
+                match evaluate_checked_with_bindings(condition, &block_bindings) {
+                    Ok(Some(false)) => {}
+                    Ok(Some(true)) => {
+                        collect_closed_block_arithmetic_failures(
+                            body,
+                            &block_bindings,
+                            &block_static_bindings,
+                            failures,
+                        );
+                        return;
+                    }
+                    Ok(None) => {
+                        collect_closed_block_arithmetic_failures(
+                            body,
+                            &block_bindings,
+                            &block_static_bindings,
+                            failures,
+                        );
+                    }
+                    Err(failure) => {
+                        failures.push(failure);
+                        return;
+                    }
+                }
+            }
             _ => return,
         }
     }
