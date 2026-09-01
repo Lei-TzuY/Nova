@@ -377,6 +377,14 @@ boundaries preserve a deterministic arithmetic failure instead of degrading it t
 unknown proof. Source lowered only for diagnostics because control flow proves it
 unreachable does not manufacture these execution-failure diagnostics.
 
+Execution-failure collection is statement-aware without making statements closed values.
+Initialized bindings and expression statements are scanned in source order; assignment RHS
+values, potentially executable `while` conditions and bodies, and value-bearing `return`
+expressions are inspected using the closed/static facts available at that program point.
+Delayed `var` declarations and ordinary assignments remain continuing but do not create new
+closed facts; an assignment RHS typed `!` or a `return`, `break`, or `continue` statement
+stops collection after the corresponding noncontinuing transfer.
+
 The same proof engine may refine `if`, `while`, short-circuit, and closed `match`
 reachability without folding retained HIR. Analyzer-side structural summaries are a
 separate, weaker fact system: immutable enum/record aliases and selected paths may retain
