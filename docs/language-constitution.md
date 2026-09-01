@@ -170,7 +170,11 @@ statically unreachable path is excluded from these execution-failure diagnostics
 
 This proof changes reachability and diagnostic certainty only; it never folds retained
 HIR or executes calls. Calls, mutable bindings, assignment/loop/control-transfer effects,
-and genuinely dynamic operands stop closed-value reasoning. Separately, analyzer-side
+and genuinely dynamic arithmetic operands stop closed-value reasoning. A dynamic selector
+is a separate reachability case: when a valid continuing `if` condition or `match`
+scrutinee is unknown, every potentially executable branch or arm remains eligible for
+closed arithmetic diagnostics derived solely from facts already established outside that
+selector; neither the selector nor a dynamic payload binding becomes closed. Separately, analyzer-side
 structural summaries may retain an immutable enum variant or record-field tag through
 aliases and selected expressions even when an enum payload or unrelated record sibling
 is dynamic. Those structural tag facts are intentionally weaker than closed values: they

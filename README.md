@@ -383,8 +383,12 @@ separate, weaker fact system: immutable enum/record aliases and selected paths m
 a known enum variant or known record-field tags even when a payload or unrelated sibling
 is dynamic, but those tag facts never promote the dynamic payload/value itself to a
 constant. Calls, mutable bindings, assignment/loop/control-transfer effects, and genuinely
-dynamic operands stop the closed-value proof and remain runtime evaluated.
-More generally, when an `if`/`while` condition or `match` scrutinee is already
+dynamic operands stop the closed-value proof and remain runtime evaluated. A dynamic
+selector is different from a dynamic arithmetic operand: when a valid continuing `if`
+condition or `match` scrutinee is unknown, every potentially executable branch or arm is
+still inspected for deterministic arithmetic failures that depend only on closed facts
+already available outside that selector. This does not close the selector or any dynamic
+payload binding. More generally, when an `if`/`while` condition or `match` scrutinee is already
 non-continuing (`!`), its successor branches/body/arms are lowered only for static
 diagnostics: execution-only constant failures and flow mutations cannot come from a
 path runtime control never reaches. Successful constant arithmetic is not folded, and

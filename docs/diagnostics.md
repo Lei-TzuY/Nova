@@ -58,9 +58,13 @@ closed-HIR proof establishes that a reachable arithmetic expression must fail:
   HIR.
 
 This is an execution-certainty boundary, not general constant propagation. A
-call, mutable value, or other genuinely dynamic operand stops the proof, leaving
-runtime arithmetic checks (`N4002` overflow and `N4003` zero divisor) responsible
-for failures that cannot be known statically. Likewise, source lowered only for
+call, mutable value, or other genuinely dynamic arithmetic operand stops the proof,
+leaving runtime arithmetic checks (`N4002` overflow and `N4003` zero divisor) responsible
+for failures that cannot be known statically. A dynamic selector does not erase closed
+facts already established outside it: if a valid continuing `if` condition or `match`
+scrutinee is unknown, every potentially executable branch or arm is still inspected for
+deterministic arithmetic failures that depend only on those outer closed facts. The
+selector and any dynamic payload binding remain dynamic. Likewise, source lowered only for
 diagnostics because control flow proves it cannot execute does not emit
 `N3031`/`N3032`. Static name, type, pattern, and exhaustiveness diagnostics still
 run on such diagnostic-only source under their ordinary policies.
