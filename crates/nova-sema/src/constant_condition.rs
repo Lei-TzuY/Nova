@@ -966,10 +966,83 @@ fn match_variant_checked_with_bindings<'a>(
     }
 }
 
-pub(crate) fn closed_value_arithmetic_failure(
+pub(crate) fn closed_value_arithmetic_failures(
     expression: &Expression,
-) -> Option<ClosedConditionArithmeticFailure> {
-    is_closed_total_value_checked_with_bindings(expression, &[]).err()
+) -> Vec<ClosedConditionArithmeticFailure> {
+    let mut failures = Vec::new();
+    collect_closed_value_arithmetic_failures_with_bindings(expression, &[], &mut failures);
+    failures
+}
+
+fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
+    expression: &'a Expression,
+    bindings: &[ClosedBinding<'a>],
+    failures: &mut Vec<ClosedConditionArithmeticFailure>,
+) {
+    if let ExpressionKind::Block(block) = &expression.kind {
+        collect_closed_block_arithmetic_failures(block, bindings, failures);
+        return;
+    }
+
+    if let Err(failure) = is_closed_total_value_checked_with_bindings(expression, bindings) {
+        failures.push(failure);
+    }
+}
+
+fn collect_closed_block_arithmetic_failures<'a>(
+    block: &'a Block,
+    bindings: &[ClosedBinding<'a>],
+    failures: &mut Vec<ClosedConditionArithmeticFailure>,
+) {
+    let mut block_bindings = bindings.to_vec();
+
+    for statement in &block.statements {
+        match &statement.kind {
+            StatementKind::Binding {
+                binding,
+                initializer,
+            } => {
+                collect_closed_value_arithmetic_failures_with_bindings(
+                    initializer,
+                    &block_bindings,
+                    failures,
+                );
+
+                if initializer.ty.is_never() {
+                    return;
+                }
+
+                if !binding.mutable
+                    && binding.ty == initializer.ty
+                    && !initializer.ty.is_error()
+                    && matches!(
+                        is_closed_total_value_checked_with_bindings(initializer, &block_bindings),
+                        Ok(true)
+                    )
+                {
+                    block_bindings.push(ClosedBinding {
+                        binding,
+                        value: initializer,
+                    });
+                }
+            }
+            StatementKind::Expression(expression) => {
+                collect_closed_value_arithmetic_failures_with_bindings(
+                    expression,
+                    &block_bindings,
+                    failures,
+                );
+                if expression.ty.is_never() {
+                    return;
+                }
+            }
+            _ => return,
+        }
+    }
+
+    if let Some(tail) = block.tail.as_deref() {
+        collect_closed_value_arithmetic_failures_with_bindings(tail, &block_bindings, failures);
+    }
 }
 
 fn is_closed_total_value_with_bindings<'a>(

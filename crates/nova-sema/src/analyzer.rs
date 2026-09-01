@@ -1321,9 +1321,7 @@ impl Analyzer {
             &lowered.kind,
             ExpressionKind::Block(_) | ExpressionKind::If { .. } | ExpressionKind::Match { .. }
         ) {
-            if let Some(failure) =
-                crate::constant_condition::closed_value_arithmetic_failure(&lowered)
-            {
+            for failure in crate::constant_condition::closed_value_arithmetic_failures(&lowered) {
                 self.constant_int_failure(Some(Err(failure.error)), failure.span);
             }
         }
