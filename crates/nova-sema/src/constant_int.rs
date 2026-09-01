@@ -123,7 +123,7 @@ fn evaluate_block_with_bindings<'a>(
     match crate::constant_condition::closed_block_tail_with_bindings(block, bindings)? {
         Ok((Some(tail), selected_bindings)) => evaluate_with_bindings(tail, &selected_bindings),
         Ok((None, _)) => None,
-        Err(error) => Some(Err(error)),
+        Err(failure) => Some(Err(failure.error)),
     }
 }
 

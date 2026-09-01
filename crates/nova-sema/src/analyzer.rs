@@ -851,7 +851,7 @@ impl Analyzer {
                 );
 
                 let post_condition_state = self.capture_scope_flow_state();
-                let condition_literal = crate::constant_condition::evaluate(&condition);
+                let condition_literal = self.checked_constant_condition(&condition);
                 let guaranteed_entry = condition_literal == Some(true);
                 let guaranteed_skip = condition_literal == Some(false);
                 let impossible_entry =
@@ -1065,7 +1065,7 @@ impl Analyzer {
                 let operator_entry_state = self.capture_reachable_state();
                 let left = self.lower_expression(left, return_type);
                 let left_state = self.capture_scope_flow_state();
-                let left_literal = crate::constant_condition::evaluate(&left);
+                let left_literal = self.checked_constant_condition(&left);
                 let skips_right = matches!(
                     (*operator, left_literal),
                     (BinaryOperator::And, Some(false)) | (BinaryOperator::Or, Some(true))
@@ -1154,7 +1154,7 @@ impl Analyzer {
                 let condition = self.lower_expression(condition, return_type);
                 self.require_type(&condition.ty, &Type::Bool, condition.span, "if condition");
 
-                let condition_literal = crate::constant_condition::evaluate(&condition);
+                let condition_literal = self.checked_constant_condition(&condition);
                 let entry_state = self.capture_scope_flow_state();
                 let post_condition_loop_stack = self.loop_stack.clone();
                 let branch_edge = if condition.ty == Type::Bool {
@@ -2262,6 +2262,16 @@ impl Analyzer {
         }
     }
 
+    fn checked_constant_condition(&mut self, expression: &hir::Expression) -> Option<bool> {
+        match crate::constant_condition::evaluate_checked(expression) {
+            Ok(value) => value,
+            Err(failure) => {
+                self.constant_int_failure(Some(Err(failure.error)), failure.span);
+                None
+            }
+        }
+    }
+
     fn constant_int_failure(
         &mut self,
         result: Option<Result<i64, ConstantIntError>>,
@@ -2278,7 +2288,7 @@ impl Analyzer {
                 Diagnostic::error("N3031", "constant Int arithmetic overflow")
                     .with_primary(
                         span,
-                        "this closed literal arithmetic expression cannot produce a signed 64-bit Int",
+                        "this closed arithmetic expression cannot produce a signed 64-bit Int",
                     )
                     .with_note(
                         "successful constant arithmetic is validated but not folded; dynamic overflow remains runtime N4002",
@@ -2288,7 +2298,7 @@ impl Analyzer {
                 Diagnostic::error("N3032", "constant zero divisor")
                     .with_primary(
                         span,
-                        "this closed literal arithmetic expression divides or takes remainder by zero",
+                        "this closed arithmetic expression divides or takes remainder by zero",
                     )
                     .with_note(
                         "dynamic zero divisors remain runtime N4003",

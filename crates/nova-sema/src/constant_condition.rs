@@ -4,6 +4,7 @@ use crate::hir::{
     RecordId, StatementKind, Type,
 };
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
+use nova_source::Span;
 
 #[derive(Clone, Copy)]
 pub(crate) struct ClosedBinding<'a> {
@@ -11,59 +12,92 @@ pub(crate) struct ClosedBinding<'a> {
     value: &'a Expression,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ClosedConditionArithmeticFailure {
+    pub(crate) error: constant_int::ConstantIntError,
+    pub(crate) span: Span,
+}
+
 type ClosedBlockProof<'a> =
-    Result<(Option<&'a Expression>, Vec<ClosedBinding<'a>>), constant_int::ConstantIntError>;
+    Result<(Option<&'a Expression>, Vec<ClosedBinding<'a>>), ClosedConditionArithmeticFailure>;
 
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
 /// already determined by supported literal, identity, comparison, and Boolean proofs.
-/// The HIR is never folded.
+/// The HIR is never folded. Arithmetic failures are intentionally hidden from this
+/// convenience API; semantic control-flow sites use `evaluate_checked` instead.
 pub(crate) fn evaluate(expression: &Expression) -> Option<bool> {
-    evaluate_with_bindings(expression, &[])
+    evaluate_checked(expression).ok().flatten()
+}
+
+pub(crate) fn evaluate_checked(
+    expression: &Expression,
+) -> Result<Option<bool>, ClosedConditionArithmeticFailure> {
+    evaluate_checked_with_bindings(expression, &[])
 }
 
 pub(crate) fn evaluate_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
 ) -> Option<bool> {
+    evaluate_checked_with_bindings(expression, bindings)
+        .ok()
+        .flatten()
+}
+
+fn evaluate_checked_with_bindings<'a>(
+    expression: &'a Expression,
+    bindings: &[ClosedBinding<'a>],
+) -> Result<Option<bool>, ClosedConditionArithmeticFailure> {
     if expression.ty != Type::Bool {
-        return None;
+        return Ok(None);
     }
 
     match &expression.kind {
-        ExpressionKind::Boolean(value) => Some(*value),
-        ExpressionKind::Binding(reference) => evaluate_with_bindings(
-            closed_binding_value(reference, &expression.ty, bindings)?,
-            bindings,
-        ),
+        ExpressionKind::Boolean(value) => Ok(Some(*value)),
+        ExpressionKind::Binding(reference) => {
+            let Some(value) = closed_binding_value(reference, &expression.ty, bindings) else {
+                return Ok(None);
+            };
+            evaluate_checked_with_bindings(value, bindings)
+        }
         ExpressionKind::Unary {
             operator: UnaryOperator::Not,
             operand,
-        } => evaluate_with_bindings(operand, bindings).map(|value| !value),
+        } => Ok(evaluate_checked_with_bindings(operand, bindings)?.map(|value| !value)),
         ExpressionKind::Binary {
             operator,
             left,
             right,
-        } => evaluate_binary(*operator, left, right, bindings),
+        } => evaluate_binary_checked(*operator, left, right, bindings),
         ExpressionKind::If {
             condition,
             then_branch,
             else_branch,
-        } => match evaluate_with_bindings(condition, bindings)? {
-            true => {
-                let (tail, selected_bindings) =
-                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
-                evaluate_with_bindings(tail?, &selected_bindings)
+        } => match evaluate_checked_with_bindings(condition, bindings)? {
+            Some(true) => {
+                let Some(proof) = closed_block_tail_with_bindings(then_branch, bindings) else {
+                    return Ok(None);
+                };
+                let (tail, selected_bindings) = proof?;
+                let Some(tail) = tail else {
+                    return Ok(None);
+                };
+                evaluate_checked_with_bindings(tail, &selected_bindings)
             }
-            false => evaluate_with_bindings(else_branch, bindings),
+            Some(false) => evaluate_checked_with_bindings(else_branch, bindings),
+            None => Ok(None),
         },
         ExpressionKind::Match {
             scrutinee,
             enumeration,
             arms,
         } => {
-            let (value, selected_bindings) =
-                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)?;
-            evaluate_with_bindings(value, &selected_bindings)
+            let Some((value, selected_bindings)) =
+                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)
+            else {
+                return Ok(None);
+            };
+            evaluate_checked_with_bindings(value, &selected_bindings)
         }
         ExpressionKind::FieldAccess {
             base,
@@ -71,82 +105,136 @@ pub(crate) fn evaluate_with_bindings<'a>(
             field_index,
             ..
         } => {
-            let (value, selected_bindings) =
-                selected_record_field_value_with_bindings(base, *record, *field_index, bindings)?;
-            evaluate_with_bindings(value, &selected_bindings)
+            let Some((value, selected_bindings)) =
+                selected_record_field_value_with_bindings(base, *record, *field_index, bindings)
+            else {
+                return Ok(None);
+            };
+            evaluate_checked_with_bindings(value, &selected_bindings)
         }
         ExpressionKind::Block(block) => {
-            let (tail, selected_bindings) =
-                closed_block_tail_with_bindings(block, bindings)?.ok()?;
-            evaluate_with_bindings(tail?, &selected_bindings)
+            let Some(proof) = closed_block_tail_with_bindings(block, bindings) else {
+                return Ok(None);
+            };
+            let (tail, selected_bindings) = proof?;
+            let Some(tail) = tail else {
+                return Ok(None);
+            };
+            evaluate_checked_with_bindings(tail, &selected_bindings)
         }
-        _ => None,
+        _ => Ok(None),
     }
 }
 
-fn evaluate_binary<'a>(
+fn evaluate_binary_checked<'a>(
     operator: BinaryOperator,
     left: &'a Expression,
     right: &'a Expression,
     bindings: &[ClosedBinding<'a>],
-) -> Option<bool> {
+) -> Result<Option<bool>, ClosedConditionArithmeticFailure> {
     match operator {
-        BinaryOperator::And => match evaluate_with_bindings(left, bindings) {
-            Some(false) => Some(false),
-            Some(true) => evaluate_with_bindings(right, bindings),
-            None => None,
+        BinaryOperator::And => match evaluate_checked_with_bindings(left, bindings)? {
+            Some(false) => Ok(Some(false)),
+            Some(true) => evaluate_checked_with_bindings(right, bindings),
+            None => Ok(None),
         },
-        BinaryOperator::Or => match evaluate_with_bindings(left, bindings) {
-            Some(true) => Some(true),
-            Some(false) => evaluate_with_bindings(right, bindings),
-            None => None,
+        BinaryOperator::Or => match evaluate_checked_with_bindings(left, bindings)? {
+            Some(true) => Ok(Some(true)),
+            Some(false) => evaluate_checked_with_bindings(right, bindings),
+            None => Ok(None),
         },
         BinaryOperator::Equal | BinaryOperator::NotEqual => {
             let equal = match (&left.ty, &right.ty) {
-                (Type::Int, Type::Int) => int_value(left, bindings)? == int_value(right, bindings)?,
+                (Type::Int, Type::Int) => {
+                    let Some(left) = int_value_checked(left, bindings)? else {
+                        return Ok(None);
+                    };
+                    let Some(right) = int_value_checked(right, bindings)? else {
+                        return Ok(None);
+                    };
+                    left == right
+                }
                 (Type::Bool, Type::Bool) => {
-                    evaluate_with_bindings(left, bindings)?
-                        == evaluate_with_bindings(right, bindings)?
+                    let Some(left) = evaluate_checked_with_bindings(left, bindings)? else {
+                        return Ok(None);
+                    };
+                    let Some(right) = evaluate_checked_with_bindings(right, bindings)? else {
+                        return Ok(None);
+                    };
+                    left == right
                 }
                 (Type::Unit, Type::Unit) => {
-                    unit_value_with_bindings(left, bindings)?;
-                    unit_value_with_bindings(right, bindings)?;
+                    if unit_value_with_bindings(left, bindings).is_none()
+                        || unit_value_with_bindings(right, bindings).is_none()
+                    {
+                        return Ok(None);
+                    }
                     true
                 }
                 (Type::Function(left_function), Type::Function(right_function))
                     if left_function == right_function =>
                 {
-                    function_id_with_bindings(left, bindings)?
-                        == function_id_with_bindings(right, bindings)?
+                    let Some(left) = function_id_with_bindings(left, bindings) else {
+                        return Ok(None);
+                    };
+                    let Some(right) = function_id_with_bindings(right, bindings) else {
+                        return Ok(None);
+                    };
+                    left == right
                 }
                 (Type::Enum(left_enum), Type::Enum(right_enum))
                     if left_enum.id == right_enum.id =>
                 {
-                    enum_identity_tag_with_bindings(left, bindings)?
-                        == enum_identity_tag_with_bindings(right, bindings)?
+                    let Some(left) = enum_identity_tag_with_bindings(left, bindings) else {
+                        return Ok(None);
+                    };
+                    let Some(right) = enum_identity_tag_with_bindings(right, bindings) else {
+                        return Ok(None);
+                    };
+                    left == right
                 }
-                _ => return None,
+                _ => return Ok(None),
             };
-            Some(if operator == BinaryOperator::Equal {
+            Ok(Some(if operator == BinaryOperator::Equal {
                 equal
             } else {
                 !equal
-            })
+            }))
         }
-        BinaryOperator::Less => Some(int_value(left, bindings)? < int_value(right, bindings)?),
-        BinaryOperator::LessEqual => {
-            Some(int_value(left, bindings)? <= int_value(right, bindings)?)
+        BinaryOperator::Less
+        | BinaryOperator::LessEqual
+        | BinaryOperator::Greater
+        | BinaryOperator::GreaterEqual => {
+            let Some(left) = int_value_checked(left, bindings)? else {
+                return Ok(None);
+            };
+            let Some(right) = int_value_checked(right, bindings)? else {
+                return Ok(None);
+            };
+            Ok(Some(match operator {
+                BinaryOperator::Less => left < right,
+                BinaryOperator::LessEqual => left <= right,
+                BinaryOperator::Greater => left > right,
+                BinaryOperator::GreaterEqual => left >= right,
+                _ => unreachable!("comparison operator matched above"),
+            }))
         }
-        BinaryOperator::Greater => Some(int_value(left, bindings)? > int_value(right, bindings)?),
-        BinaryOperator::GreaterEqual => {
-            Some(int_value(left, bindings)? >= int_value(right, bindings)?)
-        }
-        _ => None,
+        _ => Ok(None),
     }
 }
 
-fn int_value<'a>(expression: &'a Expression, bindings: &[ClosedBinding<'a>]) -> Option<i64> {
-    constant_int::evaluate_with_bindings(expression, bindings)?.ok()
+fn int_value_checked<'a>(
+    expression: &'a Expression,
+    bindings: &[ClosedBinding<'a>],
+) -> Result<Option<i64>, ClosedConditionArithmeticFailure> {
+    match constant_int::evaluate_with_bindings(expression, bindings) {
+        Some(Ok(value)) => Ok(Some(value)),
+        Some(Err(error)) => Err(ClosedConditionArithmeticFailure {
+            error,
+            span: expression.span,
+        }),
+        None => Ok(None),
+    }
 }
 
 fn unit_value_with_bindings<'a>(
@@ -849,7 +937,12 @@ pub(crate) fn closed_block_tail_with_bindings<'a>(
                 if initializer.ty == Type::Int {
                     match constant_int::evaluate_with_bindings(initializer, &block_bindings)? {
                         Ok(_) => {}
-                        Err(error) => return Some(Err(error)),
+                        Err(error) => {
+                            return Some(Err(ClosedConditionArithmeticFailure {
+                                error,
+                                span: initializer.span,
+                            }));
+                        }
                     }
                 } else if !is_closed_total_value_with_bindings(initializer, &block_bindings) {
                     return None;
@@ -864,7 +957,10 @@ pub(crate) fn closed_block_tail_with_bindings<'a>(
                     if let Err(error) =
                         constant_int::evaluate_with_bindings(expression, &block_bindings)?
                     {
-                        return Some(Err(error));
+                        return Some(Err(ClosedConditionArithmeticFailure {
+                            error,
+                            span: expression.span,
+                        }));
                     }
                 } else if !is_closed_total_value_with_bindings(expression, &block_bindings) {
                     return None;
