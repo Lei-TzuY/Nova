@@ -20,6 +20,13 @@ pub(crate) struct ClosedConditionArithmeticFailure {
 
 type ClosedBlockProof<'a> =
     Result<(Option<&'a Expression>, Vec<ClosedBinding<'a>>), ClosedConditionArithmeticFailure>;
+type ClosedVariantProof<'a> = (
+    EnumId,
+    usize,
+    Option<&'a Expression>,
+    Vec<ClosedBinding<'a>>,
+);
+type ClosedSelectedValue<'a> = (&'a Expression, Vec<ClosedBinding<'a>>);
 
 /// Evaluates only side-effect-free, closed bootstrap conditions whose value is
 /// already determined by supported literal, identity, comparison, and Boolean proofs.
@@ -92,8 +99,12 @@ fn evaluate_checked_with_bindings<'a>(
             enumeration,
             arms,
         } => {
-            let Some((value, selected_bindings)) =
-                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)
+            let Some((value, selected_bindings)) = selected_match_value_checked_with_bindings(
+                scrutinee,
+                *enumeration,
+                arms,
+                bindings,
+            )?
             else {
                 return Ok(None);
             };
@@ -106,7 +117,12 @@ fn evaluate_checked_with_bindings<'a>(
             ..
         } => {
             let Some((value, selected_bindings)) =
-                selected_record_field_value_with_bindings(base, *record, *field_index, bindings)
+                selected_record_field_value_checked_with_bindings(
+                    base,
+                    *record,
+                    *field_index,
+                    bindings,
+                )?
             else {
                 return Ok(None);
             };
@@ -288,8 +304,12 @@ fn unit_value_checked_with_bindings<'a>(
             enumeration,
             arms,
         } => {
-            let Some((value, selected_bindings)) =
-                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)
+            let Some((value, selected_bindings)) = selected_match_value_checked_with_bindings(
+                scrutinee,
+                *enumeration,
+                arms,
+                bindings,
+            )?
             else {
                 return Ok(None);
             };
@@ -302,7 +322,12 @@ fn unit_value_checked_with_bindings<'a>(
             ..
         } => {
             let Some((value, selected_bindings)) =
-                selected_record_field_value_with_bindings(base, *record, *field_index, bindings)
+                selected_record_field_value_checked_with_bindings(
+                    base,
+                    *record,
+                    *field_index,
+                    bindings,
+                )?
             else {
                 return Ok(None);
             };
@@ -362,8 +387,12 @@ fn enum_identity_tag_checked_with_bindings<'a>(
             enumeration,
             arms,
         } => {
-            let Some((value, selected_bindings)) =
-                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)
+            let Some((value, selected_bindings)) = selected_match_value_checked_with_bindings(
+                scrutinee,
+                *enumeration,
+                arms,
+                bindings,
+            )?
             else {
                 return Ok(None);
             };
@@ -376,7 +405,12 @@ fn enum_identity_tag_checked_with_bindings<'a>(
             ..
         } => {
             let Some((value, selected_bindings)) =
-                selected_record_field_value_with_bindings(base, *record, *field_index, bindings)
+                selected_record_field_value_checked_with_bindings(
+                    base,
+                    *record,
+                    *field_index,
+                    bindings,
+                )?
             else {
                 return Ok(None);
             };
@@ -440,8 +474,12 @@ fn function_id_checked_with_bindings<'a>(
             enumeration,
             arms,
         } => {
-            let Some((value, selected_bindings)) =
-                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)
+            let Some((value, selected_bindings)) = selected_match_value_checked_with_bindings(
+                scrutinee,
+                *enumeration,
+                arms,
+                bindings,
+            )?
             else {
                 return Ok(None);
             };
@@ -454,7 +492,12 @@ fn function_id_checked_with_bindings<'a>(
             ..
         } => {
             let Some((value, selected_bindings)) =
-                selected_record_field_value_with_bindings(base, *record, *field_index, bindings)
+                selected_record_field_value_checked_with_bindings(
+                    base,
+                    *record,
+                    *field_index,
+                    bindings,
+                )?
             else {
                 return Ok(None);
             };
@@ -835,15 +878,30 @@ fn static_binding_value<'a>(
     Some(entry.value)
 }
 
+pub(crate) fn closed_match_variant_checked(
+    expression: &Expression,
+) -> Result<Option<(EnumId, usize)>, ClosedConditionArithmeticFailure> {
+    let Some((enumeration, variant_index, _, _)) =
+        match_variant_checked_with_bindings(expression, &[])?
+    else {
+        return Ok(None);
+    };
+    Ok(Some((enumeration, variant_index)))
+}
+
 fn match_variant_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
-) -> Option<(
-    EnumId,
-    usize,
-    Option<&'a Expression>,
-    Vec<ClosedBinding<'a>>,
-)> {
+) -> Option<ClosedVariantProof<'a>> {
+    match_variant_checked_with_bindings(expression, bindings)
+        .ok()
+        .flatten()
+}
+
+fn match_variant_checked_with_bindings<'a>(
+    expression: &'a Expression,
+    bindings: &[ClosedBinding<'a>],
+) -> Result<Option<ClosedVariantProof<'a>>, ClosedConditionArithmeticFailure> {
     match &expression.kind {
         ExpressionKind::EnumConstructor {
             enumeration,
@@ -854,37 +912,52 @@ fn match_variant_with_bindings<'a>(
             .as_deref()
             .is_none_or(|payload| is_closed_total_value_with_bindings(payload, bindings)) =>
         {
-            Some((
+            Ok(Some((
                 *enumeration,
                 *variant_index,
                 payload.as_deref(),
                 bindings.to_vec(),
-            ))
+            )))
         }
-        ExpressionKind::Binding(reference) => match_variant_with_bindings(
-            closed_binding_value(reference, &expression.ty, bindings)?,
-            bindings,
-        ),
+        ExpressionKind::Binding(reference) => {
+            let Some(value) = closed_binding_value(reference, &expression.ty, bindings) else {
+                return Ok(None);
+            };
+            match_variant_checked_with_bindings(value, bindings)
+        }
         ExpressionKind::If {
             condition,
             then_branch,
             else_branch,
-        } => match evaluate_with_bindings(condition, bindings)? {
-            true => {
-                let (tail, selected_bindings) =
-                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
-                match_variant_with_bindings(tail?, &selected_bindings)
+        } => match evaluate_checked_with_bindings(condition, bindings)? {
+            Some(true) => {
+                let Some(proof) = closed_block_tail_with_bindings(then_branch, bindings) else {
+                    return Ok(None);
+                };
+                let (tail, selected_bindings) = proof?;
+                let Some(tail) = tail else {
+                    return Ok(None);
+                };
+                match_variant_checked_with_bindings(tail, &selected_bindings)
             }
-            false => match_variant_with_bindings(else_branch, bindings),
+            Some(false) => match_variant_checked_with_bindings(else_branch, bindings),
+            None => Ok(None),
         },
         ExpressionKind::Match {
             scrutinee,
             enumeration,
             arms,
         } => {
-            let (value, selected_bindings) =
-                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)?;
-            match_variant_with_bindings(value, &selected_bindings)
+            let Some((value, selected_bindings)) = selected_match_value_checked_with_bindings(
+                scrutinee,
+                *enumeration,
+                arms,
+                bindings,
+            )?
+            else {
+                return Ok(None);
+            };
+            match_variant_checked_with_bindings(value, &selected_bindings)
         }
         ExpressionKind::FieldAccess {
             base,
@@ -892,16 +965,29 @@ fn match_variant_with_bindings<'a>(
             field_index,
             ..
         } => {
-            let (value, selected_bindings) =
-                selected_record_field_value_with_bindings(base, *record, *field_index, bindings)?;
-            match_variant_with_bindings(value, &selected_bindings)
+            let Some((value, selected_bindings)) =
+                selected_record_field_value_checked_with_bindings(
+                    base,
+                    *record,
+                    *field_index,
+                    bindings,
+                )?
+            else {
+                return Ok(None);
+            };
+            match_variant_checked_with_bindings(value, &selected_bindings)
         }
         ExpressionKind::Block(block) => {
-            let (tail, selected_bindings) =
-                closed_block_tail_with_bindings(block, bindings)?.ok()?;
-            match_variant_with_bindings(tail?, &selected_bindings)
+            let Some(proof) = closed_block_tail_with_bindings(block, bindings) else {
+                return Ok(None);
+            };
+            let (tail, selected_bindings) = proof?;
+            let Some(tail) = tail else {
+                return Ok(None);
+            };
+            match_variant_checked_with_bindings(tail, &selected_bindings)
         }
-        _ => None,
+        _ => Ok(None),
     }
 }
 
@@ -1050,17 +1136,33 @@ pub(crate) fn selected_match_value_with_bindings<'a>(
     enumeration: EnumId,
     arms: &'a [MatchArm],
     bindings: &[ClosedBinding<'a>],
-) -> Option<(&'a Expression, Vec<ClosedBinding<'a>>)> {
-    let (scrutinee_enum, variant_index, payload, mut selected_bindings) =
-        match_variant_with_bindings(scrutinee, bindings)?;
+) -> Option<ClosedSelectedValue<'a>> {
+    selected_match_value_checked_with_bindings(scrutinee, enumeration, arms, bindings)
+        .ok()
+        .flatten()
+}
+
+pub(crate) fn selected_match_value_checked_with_bindings<'a>(
+    scrutinee: &'a Expression,
+    enumeration: EnumId,
+    arms: &'a [MatchArm],
+    bindings: &[ClosedBinding<'a>],
+) -> Result<Option<ClosedSelectedValue<'a>>, ClosedConditionArithmeticFailure> {
+    let Some((scrutinee_enum, variant_index, payload, mut selected_bindings)) =
+        match_variant_checked_with_bindings(scrutinee, bindings)?
+    else {
+        return Ok(None);
+    };
     if scrutinee_enum != enumeration {
-        return None;
+        return Ok(None);
     }
 
     let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
-    let arm = selected.next()?;
+    let Some(arm) = selected.next() else {
+        return Ok(None);
+    };
     if selected.next().is_some() {
-        return None;
+        return Ok(None);
     }
 
     match (payload, arm.binding.as_ref(), arm.payload_discarded) {
@@ -1071,10 +1173,10 @@ pub(crate) fn selected_match_value_with_bindings<'a>(
                 value: payload,
             });
         }
-        _ => return None,
+        _ => return Ok(None),
     }
 
-    Some((&arm.value, selected_bindings))
+    Ok(Some((&arm.value, selected_bindings)))
 }
 
 pub(crate) fn selected_record_field_value_with_bindings<'a>(
@@ -1082,61 +1184,89 @@ pub(crate) fn selected_record_field_value_with_bindings<'a>(
     record: RecordId,
     field_index: usize,
     bindings: &[ClosedBinding<'a>],
-) -> Option<(&'a Expression, Vec<ClosedBinding<'a>>)> {
+) -> Option<ClosedSelectedValue<'a>> {
+    selected_record_field_value_checked_with_bindings(base, record, field_index, bindings)
+        .ok()
+        .flatten()
+}
+
+pub(crate) fn selected_record_field_value_checked_with_bindings<'a>(
+    base: &'a Expression,
+    record: RecordId,
+    field_index: usize,
+    bindings: &[ClosedBinding<'a>],
+) -> Result<Option<ClosedSelectedValue<'a>>, ClosedConditionArithmeticFailure> {
     match &base.kind {
         ExpressionKind::RecordLiteral {
             record: actual_record,
             fields,
-        } if *actual_record == record
-            && fields
+        } if *actual_record == record => {
+            if !fields
                 .iter()
-                .all(|field| is_closed_total_value_with_bindings(&field.value, bindings)) =>
-        {
+                .all(|field| is_closed_total_value_with_bindings(&field.value, bindings))
+            {
+                return Ok(None);
+            }
             let mut selected = fields
                 .iter()
                 .filter(|field| field.field_index == field_index);
-            let field = selected.next()?;
+            let Some(field) = selected.next() else {
+                return Ok(None);
+            };
             if selected.next().is_some() {
-                return None;
+                return Ok(None);
             }
-            Some((&field.value, bindings.to_vec()))
+            Ok(Some((&field.value, bindings.to_vec())))
         }
-        ExpressionKind::Binding(reference) => selected_record_field_value_with_bindings(
-            closed_binding_value(reference, &base.ty, bindings)?,
-            record,
-            field_index,
-            bindings,
-        ),
+        ExpressionKind::Binding(reference) => {
+            let Some(value) = closed_binding_value(reference, &base.ty, bindings) else {
+                return Ok(None);
+            };
+            selected_record_field_value_checked_with_bindings(value, record, field_index, bindings)
+        }
         ExpressionKind::If {
             condition,
             then_branch,
             else_branch,
-        } => match evaluate_with_bindings(condition, bindings)? {
-            true => {
-                let (tail, selected_bindings) =
-                    closed_block_tail_with_bindings(then_branch, bindings)?.ok()?;
-                selected_record_field_value_with_bindings(
-                    tail?,
+        } => match evaluate_checked_with_bindings(condition, bindings)? {
+            Some(true) => {
+                let Some(proof) = closed_block_tail_with_bindings(then_branch, bindings) else {
+                    return Ok(None);
+                };
+                let (tail, selected_bindings) = proof?;
+                let Some(tail) = tail else {
+                    return Ok(None);
+                };
+                selected_record_field_value_checked_with_bindings(
+                    tail,
                     record,
                     field_index,
                     &selected_bindings,
                 )
             }
-            false => selected_record_field_value_with_bindings(
+            Some(false) => selected_record_field_value_checked_with_bindings(
                 else_branch,
                 record,
                 field_index,
                 bindings,
             ),
+            None => Ok(None),
         },
         ExpressionKind::Match {
             scrutinee,
             enumeration,
             arms,
         } => {
-            let (value, selected_bindings) =
-                selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)?;
-            selected_record_field_value_with_bindings(
+            let Some((value, selected_bindings)) = selected_match_value_checked_with_bindings(
+                scrutinee,
+                *enumeration,
+                arms,
+                bindings,
+            )?
+            else {
+                return Ok(None);
+            };
+            selected_record_field_value_checked_with_bindings(
                 value,
                 record,
                 field_index,
@@ -1149,13 +1279,17 @@ pub(crate) fn selected_record_field_value_with_bindings<'a>(
             field_index: outer_field_index,
             ..
         } => {
-            let (outer_value, outer_bindings) = selected_record_field_value_with_bindings(
-                outer_base,
-                *outer_record,
-                *outer_field_index,
-                bindings,
-            )?;
-            selected_record_field_value_with_bindings(
+            let Some((outer_value, outer_bindings)) =
+                selected_record_field_value_checked_with_bindings(
+                    outer_base,
+                    *outer_record,
+                    *outer_field_index,
+                    bindings,
+                )?
+            else {
+                return Ok(None);
+            };
+            selected_record_field_value_checked_with_bindings(
                 outer_value,
                 record,
                 field_index,
@@ -1163,15 +1297,20 @@ pub(crate) fn selected_record_field_value_with_bindings<'a>(
             )
         }
         ExpressionKind::Block(block) => {
-            let (tail, selected_bindings) =
-                closed_block_tail_with_bindings(block, bindings)?.ok()?;
-            selected_record_field_value_with_bindings(
-                tail?,
+            let Some(proof) = closed_block_tail_with_bindings(block, bindings) else {
+                return Ok(None);
+            };
+            let (tail, selected_bindings) = proof?;
+            let Some(tail) = tail else {
+                return Ok(None);
+            };
+            selected_record_field_value_checked_with_bindings(
+                tail,
                 record,
                 field_index,
                 &selected_bindings,
             )
         }
-        _ => None,
+        _ => Ok(None),
     }
 }

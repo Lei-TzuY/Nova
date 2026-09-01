@@ -1706,6 +1706,9 @@ impl Analyzer {
         span: Span,
     ) -> (ExpressionKind, Type) {
         let scrutinee = self.lower_expression(scrutinee, return_type);
+        if let Err(failure) = crate::constant_condition::closed_match_variant_checked(&scrutinee) {
+            self.constant_int_failure(Some(Err(failure.error)), failure.span);
+        }
         let selected_variant_index = match (&scrutinee.kind, &scrutinee.ty) {
             (
                 ExpressionKind::EnumConstructor {
