@@ -2283,6 +2283,19 @@ impl Analyzer {
         let Some(Err(error)) = result else {
             return false;
         };
+        let code = match error {
+            ConstantIntError::Overflow => "N3031",
+            ConstantIntError::ZeroDivisor => "N3032",
+        };
+        if self.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == code
+                && diagnostic
+                    .labels
+                    .iter()
+                    .any(|label| label.style == LabelStyle::Primary && label.span == span)
+        }) {
+            return true;
+        }
         match error {
             ConstantIntError::Overflow => self.diagnostics.push(
                 Diagnostic::error("N3031", "constant Int arithmetic overflow")
