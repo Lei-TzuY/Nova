@@ -65,15 +65,6 @@ fn evaluate_binary_checked_with_bindings<'a>(
     }))
 }
 
-pub(crate) fn evaluate_with_bindings<'a>(
-    expression: &'a Expression,
-    bindings: &[ClosedBinding<'a>],
-) -> Option<Result<i64, ConstantIntError>> {
-    evaluate_checked_with_bindings(expression, bindings)
-        .ok()
-        .flatten()
-}
-
 pub(crate) fn evaluate_checked_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
