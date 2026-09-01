@@ -40,9 +40,7 @@ fn nested_enum_definitions(depth: usize) -> String {
         } else {
             format!("E{}", index + 1)
         };
-        source.push_str(&format!(
-            "enum E{index} {{ Empty, Value({payload}) }} "
-        ));
+        source.push_str(&format!("enum E{index} {{ Empty, Value({payload}) }} "));
     }
     source.push_str("enum Leaf { A, B } ");
     source
@@ -57,9 +55,7 @@ fn nested_constructor(depth: usize, leaf: &str) -> String {
 }
 
 fn nested_match_chain(depth: usize) -> String {
-    let mut value = format!(
-        "match v{depth} {{ Leaf::A => 1, Leaf::B => 2, }}"
-    );
+    let mut value = format!("match v{depth} {{ Leaf::A => 1, Leaf::B => 2, }}");
     for index in (0..depth).rev() {
         let scrutinee = if index == 0 {
             "root".to_string()
