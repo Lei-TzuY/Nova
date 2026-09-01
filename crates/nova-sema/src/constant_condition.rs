@@ -1027,6 +1027,98 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
                 Err(failure) => failures.push(failure),
             }
         }
+        ExpressionKind::Binding(reference) => {
+            if let Some(value) = closed_binding_value(reference, &expression.ty, bindings) {
+                collect_closed_value_arithmetic_failures_with_bindings(value, bindings, failures);
+            } else if let Err(failure) =
+                is_closed_total_value_checked_with_bindings(expression, bindings)
+            {
+                failures.push(failure);
+            }
+        }
+        ExpressionKind::Unary { operand, .. } => {
+            let before = failures.len();
+            collect_closed_value_arithmetic_failures_with_bindings(operand, bindings, failures);
+            if !operand.ty.is_never() && failures.len() == before {
+                if let Err(failure) =
+                    is_closed_total_value_checked_with_bindings(expression, bindings)
+                {
+                    failures.push(failure);
+                }
+            }
+        }
+        ExpressionKind::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let before = failures.len();
+            collect_closed_value_arithmetic_failures_with_bindings(left, bindings, failures);
+            if left.ty.is_never() {
+                return;
+            }
+
+            let skips_right = matches!(
+                (*operator, evaluate_checked_with_bindings(left, bindings)),
+                (BinaryOperator::And, Ok(Some(false))) | (BinaryOperator::Or, Ok(Some(true)))
+            );
+            if !skips_right {
+                collect_closed_value_arithmetic_failures_with_bindings(right, bindings, failures);
+                if right.ty.is_never() {
+                    return;
+                }
+            }
+
+            if failures.len() == before {
+                if let Err(failure) =
+                    is_closed_total_value_checked_with_bindings(expression, bindings)
+                {
+                    failures.push(failure);
+                }
+            }
+        }
+        ExpressionKind::Call { callee, arguments } => {
+            collect_closed_value_arithmetic_failures_with_bindings(callee, bindings, failures);
+            if callee.ty.is_never() {
+                return;
+            }
+            for argument in arguments {
+                collect_closed_value_arithmetic_failures_with_bindings(
+                    argument, bindings, failures,
+                );
+                if argument.ty.is_never() {
+                    return;
+                }
+            }
+        }
+        ExpressionKind::RecordLiteral { fields, .. } => {
+            for field in fields {
+                collect_closed_value_arithmetic_failures_with_bindings(
+                    &field.value,
+                    bindings,
+                    failures,
+                );
+                if field.value.ty.is_never() {
+                    return;
+                }
+            }
+        }
+        ExpressionKind::EnumConstructor { payload, .. } => {
+            if let Some(payload) = payload.as_deref() {
+                collect_closed_value_arithmetic_failures_with_bindings(payload, bindings, failures);
+            }
+        }
+        ExpressionKind::FieldAccess { base, .. } => {
+            let before = failures.len();
+            collect_closed_value_arithmetic_failures_with_bindings(base, bindings, failures);
+            if !base.ty.is_never() && failures.len() == before {
+                if let Err(failure) =
+                    is_closed_total_value_checked_with_bindings(expression, bindings)
+                {
+                    failures.push(failure);
+                }
+            }
+        }
         _ => {
             if let Err(failure) = is_closed_total_value_checked_with_bindings(expression, bindings)
             {
