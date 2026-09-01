@@ -158,22 +158,29 @@ with checked arithmetic. Signed division truncates toward zero. The associated
 remainder has the dividend's sign when non-zero, has magnitude smaller than the
 divisor's magnitude, and satisfies `a = (a / b) * b + (a % b)` whenever the
 operation succeeds. `Int::MIN / -1` and `Int::MIN % -1` are both overflow.
-Semantic analysis preflights only reachable closed arithmetic trees composed entirely
-of `Int` literals and arithmetic operators: a provable overflow is `N3031`, while a
-provable zero divisor is `N3032`. Source lowered only for diagnostics on a statically
-unreachable path is excluded from these execution-failure diagnostics. Semantic
-reachability may also evaluate closed, side-effect-free Bool/Int literal expressions
-for `if`, `while`, and `&&`/`||`, including checked arithmetic feeding comparisons.
-This evaluator never propagates names, executes calls or blocks, inspects aggregates,
-or folds the retained HIR. A `while` condition proven false therefore lowers its body
-only for static diagnostics, while a proven true condition participates in the same
-guaranteed-loop reasoning previously reserved for literal `true`. Independently of
-constant evaluation, an `if`/`while` condition or `match` scrutinee already typed `!`
+Semantic analysis preflights reachable deterministic arithmetic through a
+side-effect-free closed-HIR proof: a provable overflow is `N3031`, while a provable zero
+divisor is `N3032`. Literal arithmetic is only the base case. The proof may carry
+immutable closed `let` bindings through blocks, select already-proven `if`/`match`
+results and enum payload bindings, project closed record fields, and reason about closed
+Bool/Unit/enum/function identity. Checked selector, aggregate, and composite-value
+boundaries preserve deterministic arithmetic failures with their source span instead of
+silently turning them into an unknown proof. Source lowered only for diagnostics on a
+statically unreachable path is excluded from these execution-failure diagnostics.
+
+This proof changes reachability and diagnostic certainty only; it never folds retained
+HIR or executes calls. Calls, mutable bindings, assignment/loop/control-transfer effects,
+and genuinely dynamic operands stop closed-value reasoning. Separately, analyzer-side
+structural summaries may retain an immutable enum variant or record-field tag through
+aliases and selected expressions even when an enum payload or unrelated record sibling
+is dynamic. Those structural tag facts are intentionally weaker than closed values: they
+may select a match arm for flow/usefulness reasoning but cannot make the dynamic payload,
+Bool, or Int value constant. A `while` condition proven false therefore lowers its body
+only for static diagnostics, while a proven true condition participates in guaranteed-loop
+reasoning. Independently, an `if`/`while` condition or `match` scrutinee already typed `!`
 proves every successor branch/body/arm unreachable; those successors remain statically
 checked but are lowered in diagnostic-only mode so execution-failure diagnostics and
-flow mutations cannot escape a path that cannot run. Successful arithmetic trees are
-deliberately not folded, and dynamic operands stop constant proofs rather than
-triggering general constant propagation.
+flow mutations cannot escape a path that cannot run.
 Dynamic arithmetic remains checked by the
 interpreter: overflow is `N4002`, and division or remainder by zero is `N4003`.
 Both layers consume the same dependency-free `nova-int-semantics` arithmetic
