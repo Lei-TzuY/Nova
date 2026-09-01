@@ -970,12 +970,8 @@ pub(crate) fn closed_value_arithmetic_failures(
     expression: &Expression,
 ) -> Vec<ClosedConditionArithmeticFailure> {
     let mut failures = Vec::new();
-    let _ = collect_closed_value_arithmetic_failures_with_bindings(
-        expression,
-        &[],
-        &[],
-        &mut failures,
-    );
+    let _ =
+        collect_closed_value_arithmetic_failures_with_bindings(expression, &[], &[], &mut failures);
     failures
 }
 
