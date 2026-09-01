@@ -51,7 +51,7 @@ pub(crate) fn evaluate_with_bindings<'a>(
         .flatten()
 }
 
-fn evaluate_checked_with_bindings<'a>(
+pub(crate) fn evaluate_checked_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
 ) -> Result<Option<bool>, ClosedConditionArithmeticFailure> {
@@ -246,7 +246,7 @@ fn int_value_checked<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
 ) -> Result<Option<i64>, ClosedConditionArithmeticFailure> {
-    match constant_int::evaluate_with_bindings(expression, bindings) {
+    match constant_int::evaluate_checked_with_bindings(expression, bindings)? {
         Some(Ok(value)) => Ok(Some(value)),
         Some(Err(error)) => Err(ClosedConditionArithmeticFailure {
             error,
@@ -1093,14 +1093,19 @@ pub(crate) fn closed_block_tail_with_bindings<'a>(
                 initializer,
             } if !binding.mutable && binding.ty == initializer.ty => {
                 if initializer.ty == Type::Int {
-                    match constant_int::evaluate_with_bindings(initializer, &block_bindings)? {
-                        Ok(_) => {}
-                        Err(error) => {
-                            return Some(Err(ClosedConditionArithmeticFailure {
-                                error,
-                                span: initializer.span,
-                            }));
-                        }
+                    let value = match constant_int::evaluate_checked_with_bindings(
+                        initializer,
+                        &block_bindings,
+                    ) {
+                        Ok(Some(value)) => value,
+                        Ok(None) => return None,
+                        Err(failure) => return Some(Err(failure)),
+                    };
+                    if let Err(error) = value {
+                        return Some(Err(ClosedConditionArithmeticFailure {
+                            error,
+                            span: initializer.span,
+                        }));
                     }
                 } else if !is_closed_total_value_with_bindings(initializer, &block_bindings) {
                     return None;
@@ -1112,9 +1117,15 @@ pub(crate) fn closed_block_tail_with_bindings<'a>(
             }
             StatementKind::Expression(expression) => {
                 if expression.ty == Type::Int {
-                    if let Err(error) =
-                        constant_int::evaluate_with_bindings(expression, &block_bindings)?
-                    {
+                    let value = match constant_int::evaluate_checked_with_bindings(
+                        expression,
+                        &block_bindings,
+                    ) {
+                        Ok(Some(value)) => value,
+                        Ok(None) => return None,
+                        Err(failure) => return Some(Err(failure)),
+                    };
+                    if let Err(error) = value {
                         return Some(Err(ClosedConditionArithmeticFailure {
                             error,
                             span: expression.span,

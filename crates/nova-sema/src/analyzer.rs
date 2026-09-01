@@ -2275,6 +2275,17 @@ impl Analyzer {
         }
     }
 
+    fn checked_constant_int_failure(
+        &mut self,
+        result: constant_int::CheckedConstantIntProof,
+        span: Span,
+    ) -> bool {
+        match result {
+            Ok(result) => self.constant_int_failure(result, span),
+            Err(failure) => self.constant_int_failure(Some(Err(failure.error)), failure.span),
+        }
+    }
+
     fn constant_int_failure(
         &mut self,
         result: Option<Result<i64, ConstantIntError>>,
@@ -2341,7 +2352,10 @@ impl Analyzer {
         if operand.ty.is_error() {
             Type::Error
         } else if expected_type_compatible(&operand.ty, &expected) {
-            if self.constant_int_failure(constant_int::evaluate_unary(operator, operand), span) {
+            if self.checked_constant_int_failure(
+                constant_int::evaluate_unary_checked(operator, operand),
+                span,
+            ) {
                 Type::Error
             } else {
                 expected
@@ -2367,8 +2381,8 @@ impl Analyzer {
                 self.require_binary_operands(left, right, &Type::Int, span, "arithmetic operator");
                 let ty = strict_binary_result_type(&left.ty, &right.ty, &Type::Int, Type::Int);
                 if ty == Type::Int
-                    && self.constant_int_failure(
-                        constant_int::evaluate_binary(operator, left, right),
+                    && self.checked_constant_int_failure(
+                        constant_int::evaluate_binary_checked(operator, left, right),
                         span,
                     )
                 {
