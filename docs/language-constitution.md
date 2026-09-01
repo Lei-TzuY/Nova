@@ -168,6 +168,15 @@ boundaries preserve deterministic arithmetic failures with their source span ins
 silently turning them into an unknown proof. Source lowered only for diagnostics on a
 statically unreachable path is excluded from these execution-failure diagnostics.
 
+Execution-failure collection is also statement-aware. Initialized bindings and expression
+statements are traversed in source order; assignment RHS values, potentially executable
+`while` conditions and bodies, and value-bearing `return` expressions are inspected using
+proof facts available at that program point. Delayed mutable declarations and ordinary
+assignments do not themselves establish closed facts, while an assignment RHS typed `!` or a
+`return`, `break`, or `continue` statement stops collection beyond the corresponding
+noncontinuing transfer. Thus statement effects may stop closed-value reasoning without making
+evaluated child expressions opaque to deterministic arithmetic diagnostics.
+
 This proof changes reachability and diagnostic certainty only; it never folds retained
 HIR or executes calls. Calls, mutable bindings, assignment/loop/control-transfer effects,
 and genuinely dynamic arithmetic operands stop closed-value reasoning. A dynamic selector
