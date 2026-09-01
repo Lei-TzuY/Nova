@@ -211,28 +211,26 @@ struct LocalSymbol {
 }
 
 #[derive(Clone, Debug)]
-enum StaticPayloadTag {
-    Enum(EnumId, usize),
+enum StaticValueTag {
+    Enum {
+        enumeration: EnumId,
+        variant_index: usize,
+        payload: Option<Box<StaticValueTag>>,
+    },
     Record(StaticRecordTags),
-}
-
-#[derive(Clone, Debug)]
-enum StaticFieldTag {
-    Enum(EnumId, usize),
-    Record(Box<StaticRecordTags>),
 }
 
 #[derive(Clone, Debug)]
 struct StaticRecordTags {
     record: RecordId,
-    fields: BTreeMap<usize, StaticFieldTag>,
+    fields: BTreeMap<usize, StaticValueTag>,
 }
 
 #[derive(Clone, Debug, Default)]
 struct StaticTagFacts {
     variant: Option<(EnumId, usize)>,
     record_tags: Option<StaticRecordTags>,
-    payload_tag: Option<StaticPayloadTag>,
+    payload_tag: Option<StaticValueTag>,
 }
 
 #[derive(Clone, Debug)]
@@ -2730,15 +2728,15 @@ impl Analyzer {
         &self,
         expression: &hir::Expression,
         bindings: &[StaticSummaryBinding],
-    ) -> Option<StaticPayloadTag> {
-        if !matches!(&expression.ty, Type::Enum(_)) {
+    ) -> Option<StaticValueTag> {
+        let Type::Enum(enum_type) = &expression.ty else {
             return None;
-        }
+        };
         match &expression.kind {
             ExpressionKind::EnumConstructor {
                 payload: Some(payload),
                 ..
-            } => self.static_payload_tag_for_value(payload, bindings),
+            } => self.static_value_tag_for_expression_with_bindings(payload, bindings),
             ExpressionKind::Binding(reference) => {
                 if let Some(binding) =
                     Self::resolved_summary_binding(reference, &expression.ty, bindings)
@@ -2750,6 +2748,24 @@ impl Analyzer {
                     .payload_tag
                     .clone()
             }
+            ExpressionKind::FieldAccess {
+                base,
+                record,
+                field_index,
+                ..
+            } => match self.static_record_field_value_tag_with_bindings(
+                base,
+                *record,
+                *field_index,
+                bindings,
+            )? {
+                StaticValueTag::Enum {
+                    enumeration,
+                    payload,
+                    ..
+                } if enumeration == enum_type.id => payload.map(|payload| *payload),
+                StaticValueTag::Enum { .. } | StaticValueTag::Record(_) => None,
+            },
             ExpressionKind::If {
                 condition,
                 then_branch,
@@ -2800,20 +2816,27 @@ impl Analyzer {
         }
     }
 
-    fn static_payload_tag_for_value(
+    fn static_value_tag_for_expression_with_bindings(
         &self,
         expression: &hir::Expression,
         bindings: &[StaticSummaryBinding],
-    ) -> Option<StaticPayloadTag> {
+    ) -> Option<StaticValueTag> {
         match &expression.ty {
-            Type::Enum(_) => self
-                .static_variant_for_expression_with_bindings(expression, bindings)
-                .map(|(enumeration, variant_index)| {
-                    StaticPayloadTag::Enum(enumeration, variant_index)
-                }),
+            Type::Enum(_) => {
+                let (enumeration, variant_index) =
+                    self.static_variant_for_expression_with_bindings(expression, bindings)?;
+                let payload = self
+                    .static_payload_tag_for_enum_expression_with_bindings(expression, bindings)
+                    .map(Box::new);
+                Some(StaticValueTag::Enum {
+                    enumeration,
+                    variant_index,
+                    payload,
+                })
+            }
             Type::Record(_) => self
                 .static_record_tags_for_expression_with_bindings(expression, bindings)
-                .map(StaticPayloadTag::Record),
+                .map(StaticValueTag::Record),
             _ => None,
         }
     }
@@ -2838,11 +2861,19 @@ impl Analyzer {
         };
 
         let static_facts = match (&binding.ty, payload_tag) {
-            (Type::Enum(_), StaticPayloadTag::Enum(enumeration, variant_index)) => StaticTagFacts {
+            (
+                Type::Enum(_),
+                StaticValueTag::Enum {
+                    enumeration,
+                    variant_index,
+                    payload,
+                },
+            ) => StaticTagFacts {
                 variant: Some((enumeration, variant_index)),
+                payload_tag: payload.map(|payload| *payload),
                 ..StaticTagFacts::default()
             },
-            (Type::Record(_), StaticPayloadTag::Record(tags)) => StaticTagFacts {
+            (Type::Record(_), StaticValueTag::Record(tags)) => StaticTagFacts {
                 record_tags: Some(tags),
                 ..StaticTagFacts::default()
             },
@@ -2865,16 +2896,33 @@ impl Analyzer {
         field_index: usize,
         bindings: &[StaticSummaryBinding],
     ) -> Option<(EnumId, usize)> {
+        match self.static_record_field_value_tag_with_bindings(
+            base,
+            record,
+            field_index,
+            bindings,
+        )? {
+            StaticValueTag::Enum {
+                enumeration,
+                variant_index,
+                ..
+            } => Some((enumeration, variant_index)),
+            StaticValueTag::Record(_) => None,
+        }
+    }
+
+    fn static_record_field_value_tag_with_bindings(
+        &self,
+        base: &hir::Expression,
+        record: RecordId,
+        field_index: usize,
+        bindings: &[StaticSummaryBinding],
+    ) -> Option<StaticValueTag> {
         let facts = self.static_record_tags_for_expression_with_bindings(base, bindings)?;
         if facts.record != record {
             return None;
         }
-        match facts.fields.get(&field_index)? {
-            StaticFieldTag::Enum(enumeration, variant_index) => {
-                Some((*enumeration, *variant_index))
-            }
-            StaticFieldTag::Record(_) => None,
-        }
+        facts.fields.get(&field_index).cloned()
     }
 
     fn static_record_tags_for_expression_with_bindings(
@@ -2889,18 +2937,9 @@ impl Analyzer {
             ExpressionKind::RecordLiteral { record, fields } if *record == record_type.id => {
                 let mut tags = BTreeMap::new();
                 for field in fields {
-                    let tag = match &field.value.ty {
-                        Type::Enum(_) => self
-                            .static_variant_for_expression_with_bindings(&field.value, bindings)
-                            .map(|(enumeration, variant_index)| {
-                                StaticFieldTag::Enum(enumeration, variant_index)
-                            }),
-                        Type::Record(_) => self
-                            .static_record_tags_for_expression_with_bindings(&field.value, bindings)
-                            .map(|nested| StaticFieldTag::Record(Box::new(nested))),
-                        _ => None,
-                    };
-                    if let Some(tag) = tag {
+                    if let Some(tag) =
+                        self.static_value_tag_for_expression_with_bindings(&field.value, bindings)
+                    {
                         tags.insert(field.field_index, tag);
                     }
                 }
@@ -2925,19 +2964,15 @@ impl Analyzer {
                 record,
                 field_index,
                 ..
-            } => {
-                let outer = self.static_record_tags_for_expression_with_bindings(base, bindings)?;
-                if outer.record != *record {
-                    return None;
-                }
-                let StaticFieldTag::Record(nested) = outer.fields.get(field_index)? else {
-                    return None;
-                };
-                if nested.record != record_type.id {
-                    return None;
-                }
-                Some((**nested).clone())
-            }
+            } => match self.static_record_field_value_tag_with_bindings(
+                base,
+                *record,
+                *field_index,
+                bindings,
+            )? {
+                StaticValueTag::Record(nested) if nested.record == record_type.id => Some(nested),
+                StaticValueTag::Record(_) | StaticValueTag::Enum { .. } => None,
+            },
             ExpressionKind::If {
                 condition,
                 then_branch,
