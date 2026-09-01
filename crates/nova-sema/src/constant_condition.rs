@@ -1000,6 +1000,14 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
                         failures,
                     );
                 }
+                Ok(None) if condition.ty == Type::Bool => {
+                    collect_closed_block_arithmetic_failures(then_branch, bindings, failures);
+                    collect_closed_value_arithmetic_failures_with_bindings(
+                        else_branch,
+                        bindings,
+                        failures,
+                    );
+                }
                 Ok(None) => {}
                 Err(failure) => failures.push(failure),
             }
@@ -1022,6 +1030,18 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
                         &selected_bindings,
                         failures,
                     );
+                }
+                Ok(None)
+                    if matches!(
+                        &scrutinee.ty,
+                        Type::Enum(scrutinee_enum) if scrutinee_enum.id == *enumeration
+                    ) =>
+                {
+                    for arm in arms {
+                        collect_closed_value_arithmetic_failures_with_bindings(
+                            &arm.value, bindings, failures,
+                        );
+                    }
                 }
                 Ok(None) => {}
                 Err(failure) => failures.push(failure),
