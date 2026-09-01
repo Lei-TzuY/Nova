@@ -1957,6 +1957,19 @@ impl Analyzer {
 
             let selected_arm = selected_variant_index
                 .is_some_and(|selected| valid_pattern && resolved_index == Some(selected));
+            if selected_arm {
+                if let Some(binding) = payload_binding.as_ref() {
+                    if let Some(static_facts) = self
+                        .static_tag_facts_for_selected_match_payload_binding(
+                            &scrutinee,
+                            &binding.ty,
+                            &[],
+                        )
+                    {
+                        self.update_local_static_facts(binding, static_facts);
+                    }
+                }
+            }
             if self.diagnostic_only_depth == 0 && valid_pattern {
                 if let (Some(selected), Some(actual)) = (selected_variant_index, resolved_index) {
                     if actual != selected {
@@ -2841,6 +2854,35 @@ impl Analyzer {
         }
     }
 
+    fn static_tag_facts_for_selected_match_payload_binding(
+        &self,
+        scrutinee: &hir::Expression,
+        binding_type: &Type,
+        bindings: &[StaticSummaryBinding],
+    ) -> Option<StaticTagFacts> {
+        let payload_tag =
+            self.static_payload_tag_for_enum_expression_with_bindings(scrutinee, bindings)?;
+        match (binding_type, payload_tag) {
+            (
+                Type::Enum(_),
+                StaticValueTag::Enum {
+                    enumeration,
+                    variant_index,
+                    payload,
+                },
+            ) => Some(StaticTagFacts {
+                variant: Some((enumeration, variant_index)),
+                payload_tag: payload.map(|payload| *payload),
+                ..StaticTagFacts::default()
+            }),
+            (Type::Record(_), StaticValueTag::Record(tags)) => Some(StaticTagFacts {
+                record_tags: Some(tags),
+                ..StaticTagFacts::default()
+            }),
+            _ => None,
+        }
+    }
+
     fn static_summary_bindings_for_selected_match_payload(
         &self,
         scrutinee: &hir::Expression,
@@ -2854,30 +2896,12 @@ impl Analyzer {
         if binding.mutable || arm.payload_discarded {
             return selected_bindings;
         }
-        let Some(payload_tag) =
-            self.static_payload_tag_for_enum_expression_with_bindings(scrutinee, bindings)
-        else {
+        let Some(static_facts) = self.static_tag_facts_for_selected_match_payload_binding(
+            scrutinee,
+            &binding.ty,
+            bindings,
+        ) else {
             return selected_bindings;
-        };
-
-        let static_facts = match (&binding.ty, payload_tag) {
-            (
-                Type::Enum(_),
-                StaticValueTag::Enum {
-                    enumeration,
-                    variant_index,
-                    payload,
-                },
-            ) => StaticTagFacts {
-                variant: Some((enumeration, variant_index)),
-                payload_tag: payload.map(|payload| *payload),
-                ..StaticTagFacts::default()
-            },
-            (Type::Record(_), StaticValueTag::Record(tags)) => StaticTagFacts {
-                record_tags: Some(tags),
-                ..StaticTagFacts::default()
-            },
-            _ => return selected_bindings,
         };
         selected_bindings.push(StaticSummaryBinding {
             id: binding.id,
@@ -3079,6 +3103,23 @@ impl Analyzer {
             }
             Some(symbol)
         })
+    }
+
+    fn update_local_static_facts(&mut self, binding: &hir::Binding, static_facts: StaticTagFacts) {
+        let Some(symbol) = self
+            .scopes
+            .last_mut()
+            .and_then(|scope| scope.get_mut(&binding.name))
+        else {
+            return;
+        };
+        if symbol.id == binding.id
+            && symbol.span == binding.span
+            && symbol.ty == binding.ty
+            && !symbol.mutable
+        {
+            symbol.static_facts = static_facts;
+        }
     }
 
     fn insert_local(&mut self, binding: &hir::Binding) {
