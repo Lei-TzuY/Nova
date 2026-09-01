@@ -367,16 +367,23 @@ interpreter represents `Int` as signed 64-bit at runtime and uses checked arithm
 Signed division truncates the quotient toward zero; a non-zero remainder has the
 same sign as the dividend and satisfies `a = (a / b) * b + (a % b)`. Both
 `i64::MIN / -1` and `i64::MIN % -1` are classified as integer overflow. Before
-execution, semantic analysis also preflights reachable closed arithmetic trees made
-entirely from `Int` literals and arithmetic operators: statically certain overflow is
-`N3031` and a statically certain zero divisor is `N3032`. Source lowered only for
-diagnostics because control flow proves it unreachable does not manufacture these
-execution-failure diagnostics. The same side-effect-free closed evaluator may
-determine `if`, `while`, and short-circuit reachability from Bool/Int/Unit values,
-direct payload-free enum constructors, direct top-level function references,
-statement-free block wrappers, comparisons, and Boolean operations; this changes
-flow analysis only and never folds the retained HIR. Local bindings, calls,
-statement-bearing blocks, other aggregates, and other dynamic operands stop the proof.
+execution, semantic analysis also preflights reachable deterministic arithmetic through
+a side-effect-free closed-HIR proof engine: statically certain overflow is `N3031` and
+a statically certain zero divisor is `N3032`. Literal arithmetic remains the simplest
+case, but the proof can also carry immutable closed `let` bindings through blocks,
+selected `if`/`match` values, selected enum payload bindings, record projections, and
+closed Bool/Unit/enum/function identity. Checked selector, aggregate, and composite-value
+boundaries preserve a deterministic arithmetic failure instead of degrading it to an
+unknown proof. Source lowered only for diagnostics because control flow proves it
+unreachable does not manufacture these execution-failure diagnostics.
+
+The same proof engine may refine `if`, `while`, short-circuit, and closed `match`
+reachability without folding retained HIR. Analyzer-side structural summaries are a
+separate, weaker fact system: immutable enum/record aliases and selected paths may retain
+a known enum variant or known record-field tags even when a payload or unrelated sibling
+is dynamic, but those tag facts never promote the dynamic payload/value itself to a
+constant. Calls, mutable bindings, assignment/loop/control-transfer effects, and genuinely
+dynamic operands stop the closed-value proof and remain runtime evaluated.
 More generally, when an `if`/`while` condition or `match` scrutinee is already
 non-continuing (`!`), its successor branches/body/arms are lowered only for static
 diagnostics: execution-only constant failures and flow mutations cannot come from a
