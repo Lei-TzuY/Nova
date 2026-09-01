@@ -383,7 +383,10 @@ values, potentially executable `while` conditions and bodies, and value-bearing 
 expressions are inspected using the closed/static facts available at that program point.
 Delayed `var` declarations and ordinary assignments remain continuing but do not create new
 closed facts; an assignment RHS typed `!` or a `return`, `break`, or `continue` statement
-stops collection after the corresponding noncontinuing transfer.
+stops collection after the corresponding noncontinuing transfer. A proven-true `while`
+continues scanning its successor only when the body has a reachable `break` targeting that
+loop; breaks consumed by nested loops, statically unselected breaks, and loop-exit facts
+inside rejected expressions do not create a false successor.
 
 The same proof engine may refine `if`, `while`, short-circuit, and closed `match`
 reachability without folding retained HIR. Analyzer-side structural summaries are a

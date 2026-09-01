@@ -174,8 +174,11 @@ statements are traversed in source order; assignment RHS values, potentially exe
 proof facts available at that program point. Delayed mutable declarations and ordinary
 assignments do not themselves establish closed facts, while an assignment RHS typed `!` or a
 `return`, `break`, or `continue` statement stops collection beyond the corresponding
-noncontinuing transfer. Thus statement effects may stop closed-value reasoning without making
-evaluated child expressions opaque to deterministic arithmetic diagnostics.
+noncontinuing transfer. For a proven-true `while`, collection reaches the following statement
+only through a reachable `break` targeting that exact loop; nested-loop breaks are consumed,
+statically unselected breaks stay excluded, and rejected expressions cannot manufacture a loop
+exit. Thus statement effects may stop closed-value reasoning without making evaluated child
+expressions opaque to deterministic arithmetic diagnostics.
 
 This proof changes reachability and diagnostic certainty only; it never folds retained
 HIR or executes calls. Calls, mutable bindings, assignment/loop/control-transfer effects,

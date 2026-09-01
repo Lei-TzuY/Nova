@@ -69,6 +69,11 @@ diagnostics because control flow proves it cannot execute does not emit
 `N3031`/`N3032`. Static name, type, pattern, and exhaustiveness diagnostics still
 run on such diagnostic-only source under their ordinary policies.
 
+A closed-true `while` has a reachable successor for this preflight only when its body has a
+reachable `break` targeting that loop. A nested loop consumes its own breaks, an unselected
+branch contributes no exit, and a rejected expression cannot reconnect its recovery-only
+loop-exit facts.
+
 ## `N3033` unreachable code
 
 The first implemented warning is deliberately narrow. After a function CFG has

@@ -232,3 +232,139 @@ fn while_condition_reports_proof_local_failure_before_body() {
 
     assert_eq!(code_count(&output, "N3032"), 1, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn proven_true_while_with_reachable_break_preserves_following_failure() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        break;
+                    }
+                    let bad = 1 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 1, "{:?}", output.diagnostics);
+}
+
+#[test]
+fn proven_true_while_with_potential_break_preserves_following_failure() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn runtime_bool(value: Bool) -> Bool { value }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        if runtime_bool(true) {
+                            break;
+                        } else {
+                            continue;
+                        };
+                    }
+                    let bad = 2 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 1, "{:?}", output.diagnostics);
+}
+
+#[test]
+fn nested_loop_break_does_not_exit_proven_true_outer_loop() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        while true {
+                            break;
+                        }
+                    }
+                    let diagnostic_only = 3 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 0, "{:?}", output.diagnostics);
+}
+
+#[test]
+fn unreachable_break_does_not_exit_proven_true_loop() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        continue;
+                        break;
+                    }
+                    let diagnostic_only = 4 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 0, "{:?}", output.diagnostics);
+}
+
+#[test]
+fn rejected_call_does_not_create_a_loop_exit_for_following_failure() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn runtime_bool(value: Bool) -> Bool { value }
+        fn takes_int(value: Int) -> Int { value }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        takes_int(if runtime_bool(true) {
+                            break;
+                        } else {
+                            false
+                        });
+                    }
+                    let diagnostic_only = 5 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 0, "{:?}", output.diagnostics);
+}
