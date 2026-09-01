@@ -228,9 +228,7 @@ struct StaticRecordTags {
 
 #[derive(Clone, Debug, Default)]
 struct StaticTagFacts {
-    variant: Option<(EnumId, usize)>,
-    record_tags: Option<StaticRecordTags>,
-    payload_tag: Option<StaticValueTag>,
+    value_tag: Option<StaticValueTag>,
 }
 
 #[derive(Clone, Debug)]
@@ -2642,20 +2640,256 @@ impl Analyzer {
         expression: &hir::Expression,
         bindings: &[StaticSummaryBinding],
     ) -> StaticTagFacts {
+        StaticTagFacts {
+            value_tag: self.static_value_tag_for_expression_with_bindings(expression, bindings),
+        }
+    }
+
+    fn static_value_tag_for_expression_with_bindings(
+        &self,
+        expression: &hir::Expression,
+        bindings: &[StaticSummaryBinding],
+    ) -> Option<StaticValueTag> {
         match &expression.ty {
-            Type::Enum(_) => StaticTagFacts {
-                variant: self.static_variant_for_expression_with_bindings(expression, bindings),
-                record_tags: None,
-                payload_tag: self
-                    .static_payload_tag_for_enum_expression_with_bindings(expression, bindings),
+            Type::Enum(expected) => self.static_enum_value_tag_for_expression_with_bindings(
+                expression,
+                expected.id,
+                bindings,
+            ),
+            Type::Record(expected) => self.static_record_value_tag_for_expression_with_bindings(
+                expression,
+                expected.id,
+                bindings,
+            ),
+            _ => None,
+        }
+    }
+
+    fn static_enum_value_tag_for_expression_with_bindings(
+        &self,
+        expression: &hir::Expression,
+        expected_enum: EnumId,
+        bindings: &[StaticSummaryBinding],
+    ) -> Option<StaticValueTag> {
+        let inferred = match &expression.kind {
+            ExpressionKind::EnumConstructor {
+                enumeration,
+                variant_index,
+                payload,
+                ..
+            } if *enumeration == expected_enum => Some(StaticValueTag::Enum {
+                enumeration: *enumeration,
+                variant_index: *variant_index,
+                payload: payload
+                    .as_deref()
+                    .and_then(|payload| {
+                        self.static_value_tag_for_expression_with_bindings(payload, bindings)
+                    })
+                    .map(Box::new),
+            }),
+            ExpressionKind::Binding(reference) => {
+                if let Some(binding) =
+                    Self::resolved_summary_binding(reference, &expression.ty, bindings)
+                {
+                    binding.static_facts.value_tag.clone()
+                } else {
+                    self.resolved_immutable_symbol(reference, &expression.ty)
+                        .and_then(|symbol| symbol.static_facts.value_tag.clone())
+                }
+            }
+            ExpressionKind::FieldAccess {
+                base,
+                record,
+                field_index,
+                ..
+            } => self.static_record_field_value_tag_with_bindings(
+                base,
+                *record,
+                *field_index,
+                bindings,
+            ),
+            ExpressionKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => match crate::constant_condition::evaluate(condition) {
+                Some(true) => {
+                    let selected_bindings =
+                        self.static_summary_bindings_for_block(then_branch, bindings);
+                    then_branch.tail.as_deref().and_then(|tail| {
+                        self.static_value_tag_for_expression_with_bindings(tail, &selected_bindings)
+                    })
+                }
+                Some(false) => {
+                    self.static_value_tag_for_expression_with_bindings(else_branch, bindings)
+                }
+                None => None,
             },
-            Type::Record(_) => StaticTagFacts {
-                variant: None,
-                record_tags: self
-                    .static_record_tags_for_expression_with_bindings(expression, bindings),
-                payload_tag: None,
+            ExpressionKind::Match {
+                scrutinee,
+                enumeration,
+                arms,
+            } => {
+                let scrutinee_tag =
+                    self.static_value_tag_for_expression_with_bindings(scrutinee, bindings);
+                let selected = match scrutinee_tag {
+                    Some(StaticValueTag::Enum {
+                        enumeration: scrutinee_enum,
+                        variant_index,
+                        ..
+                    }) if scrutinee_enum == *enumeration => Some(variant_index),
+                    _ => None,
+                };
+                selected.and_then(|variant_index| {
+                    let mut selected_arms =
+                        arms.iter().filter(|arm| arm.variant_index == variant_index);
+                    let arm = selected_arms.next()?;
+                    if selected_arms.next().is_some() {
+                        return None;
+                    }
+                    let selected_bindings = self
+                        .static_summary_bindings_for_selected_match_payload(
+                            scrutinee, arm, bindings,
+                        );
+                    self.static_value_tag_for_expression_with_bindings(
+                        &arm.value,
+                        &selected_bindings,
+                    )
+                })
+            }
+            ExpressionKind::Block(block) => {
+                let selected_bindings = self.static_summary_bindings_for_block(block, bindings);
+                block.tail.as_deref().and_then(|tail| {
+                    self.static_value_tag_for_expression_with_bindings(tail, &selected_bindings)
+                })
+            }
+            _ => None,
+        };
+
+        if let Some(tag @ StaticValueTag::Enum { enumeration, .. }) = inferred {
+            if enumeration == expected_enum {
+                return Some(tag);
+            }
+            return None;
+        }
+        if inferred.is_some() {
+            return None;
+        }
+
+        let (enumeration, variant_index) =
+            crate::constant_condition::static_match_variant(expression)?;
+        (enumeration == expected_enum).then_some(StaticValueTag::Enum {
+            enumeration,
+            variant_index,
+            payload: None,
+        })
+    }
+
+    fn static_record_value_tag_for_expression_with_bindings(
+        &self,
+        expression: &hir::Expression,
+        expected_record: RecordId,
+        bindings: &[StaticSummaryBinding],
+    ) -> Option<StaticValueTag> {
+        let inferred = match &expression.kind {
+            ExpressionKind::RecordLiteral { record, fields } if *record == expected_record => {
+                let mut tags = BTreeMap::new();
+                for field in fields {
+                    if let Some(tag) =
+                        self.static_value_tag_for_expression_with_bindings(&field.value, bindings)
+                    {
+                        tags.insert(field.field_index, tag);
+                    }
+                }
+                Some(StaticValueTag::Record(StaticRecordTags {
+                    record: *record,
+                    fields: tags,
+                }))
+            }
+            ExpressionKind::Binding(reference) => {
+                if let Some(binding) =
+                    Self::resolved_summary_binding(reference, &expression.ty, bindings)
+                {
+                    binding.static_facts.value_tag.clone()
+                } else {
+                    self.resolved_immutable_symbol(reference, &expression.ty)
+                        .and_then(|symbol| symbol.static_facts.value_tag.clone())
+                }
+            }
+            ExpressionKind::FieldAccess {
+                base,
+                record,
+                field_index,
+                ..
+            } => self.static_record_field_value_tag_with_bindings(
+                base,
+                *record,
+                *field_index,
+                bindings,
+            ),
+            ExpressionKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => match crate::constant_condition::evaluate(condition) {
+                Some(true) => {
+                    let selected_bindings =
+                        self.static_summary_bindings_for_block(then_branch, bindings);
+                    then_branch.tail.as_deref().and_then(|tail| {
+                        self.static_value_tag_for_expression_with_bindings(tail, &selected_bindings)
+                    })
+                }
+                Some(false) => {
+                    self.static_value_tag_for_expression_with_bindings(else_branch, bindings)
+                }
+                None => None,
             },
-            _ => StaticTagFacts::default(),
+            ExpressionKind::Match {
+                scrutinee,
+                enumeration,
+                arms,
+            } => {
+                let scrutinee_tag =
+                    self.static_value_tag_for_expression_with_bindings(scrutinee, bindings);
+                let selected = match scrutinee_tag {
+                    Some(StaticValueTag::Enum {
+                        enumeration: scrutinee_enum,
+                        variant_index,
+                        ..
+                    }) if scrutinee_enum == *enumeration => Some(variant_index),
+                    _ => None,
+                };
+                selected.and_then(|variant_index| {
+                    let mut selected_arms =
+                        arms.iter().filter(|arm| arm.variant_index == variant_index);
+                    let arm = selected_arms.next()?;
+                    if selected_arms.next().is_some() {
+                        return None;
+                    }
+                    let selected_bindings = self
+                        .static_summary_bindings_for_selected_match_payload(
+                            scrutinee, arm, bindings,
+                        );
+                    self.static_value_tag_for_expression_with_bindings(
+                        &arm.value,
+                        &selected_bindings,
+                    )
+                })
+            }
+            ExpressionKind::Block(block) => {
+                let selected_bindings = self.static_summary_bindings_for_block(block, bindings);
+                block.tail.as_deref().and_then(|tail| {
+                    self.static_value_tag_for_expression_with_bindings(tail, &selected_bindings)
+                })
+            }
+            _ => None,
+        };
+
+        match inferred {
+            Some(StaticValueTag::Record(tags)) if tags.record == expected_record => {
+                Some(StaticValueTag::Record(tags))
+            }
+            _ => None,
         }
     }
 
@@ -2671,186 +2905,13 @@ impl Analyzer {
         expression: &hir::Expression,
         bindings: &[StaticSummaryBinding],
     ) -> Option<(EnumId, usize)> {
-        if let Some(variant) = crate::constant_condition::static_match_variant(expression) {
-            return Some(variant);
-        }
-        match &expression.kind {
-            ExpressionKind::Binding(reference) => {
-                if let Some(binding) =
-                    Self::resolved_summary_binding(reference, &expression.ty, bindings)
-                {
-                    return binding.static_facts.variant;
-                }
-                self.resolved_immutable_symbol(reference, &expression.ty)?
-                    .static_facts
-                    .variant
-            }
-            ExpressionKind::FieldAccess {
-                base,
-                record,
-                field_index,
-                ..
-            } => self.static_record_field_variant_with_bindings(
-                base,
-                *record,
-                *field_index,
-                bindings,
-            ),
-            ExpressionKind::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => match crate::constant_condition::evaluate(condition)? {
-                true => self.static_variant_for_block(then_branch, bindings),
-                false => self.static_variant_for_expression_with_bindings(else_branch, bindings),
-            },
-            ExpressionKind::Match {
-                scrutinee,
+        match self.static_value_tag_for_expression_with_bindings(expression, bindings)? {
+            StaticValueTag::Enum {
                 enumeration,
-                arms,
-            } => {
-                let (scrutinee_enum, variant_index) =
-                    self.static_variant_for_expression_with_bindings(scrutinee, bindings)?;
-                if scrutinee_enum != *enumeration {
-                    return None;
-                }
-                let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
-                let arm = selected.next()?;
-                if selected.next().is_some() {
-                    return None;
-                }
-                let selected_bindings = self
-                    .static_summary_bindings_for_selected_match_payload(scrutinee, arm, bindings);
-                self.static_variant_for_expression_with_bindings(&arm.value, &selected_bindings)
-            }
-            ExpressionKind::Block(block) => self.static_variant_for_block(block, bindings),
-            _ => None,
-        }
-    }
-
-    fn static_variant_for_block(
-        &self,
-        block: &hir::Block,
-        bindings: &[StaticSummaryBinding],
-    ) -> Option<(EnumId, usize)> {
-        let bindings = self.static_summary_bindings_for_block(block, bindings);
-        self.static_variant_for_expression_with_bindings(block.tail.as_deref()?, &bindings)
-    }
-
-    fn static_payload_tag_for_enum_expression_with_bindings(
-        &self,
-        expression: &hir::Expression,
-        bindings: &[StaticSummaryBinding],
-    ) -> Option<StaticValueTag> {
-        let Type::Enum(enum_type) = &expression.ty else {
-            return None;
-        };
-        match &expression.kind {
-            ExpressionKind::EnumConstructor {
-                payload: Some(payload),
+                variant_index,
                 ..
-            } => self.static_value_tag_for_expression_with_bindings(payload, bindings),
-            ExpressionKind::Binding(reference) => {
-                if let Some(binding) =
-                    Self::resolved_summary_binding(reference, &expression.ty, bindings)
-                {
-                    return binding.static_facts.payload_tag.clone();
-                }
-                self.resolved_immutable_symbol(reference, &expression.ty)?
-                    .static_facts
-                    .payload_tag
-                    .clone()
-            }
-            ExpressionKind::FieldAccess {
-                base,
-                record,
-                field_index,
-                ..
-            } => match self.static_record_field_value_tag_with_bindings(
-                base,
-                *record,
-                *field_index,
-                bindings,
-            )? {
-                StaticValueTag::Enum {
-                    enumeration,
-                    payload,
-                    ..
-                } if enumeration == enum_type.id => payload.map(|payload| *payload),
-                StaticValueTag::Enum { .. } | StaticValueTag::Record(_) => None,
-            },
-            ExpressionKind::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => match crate::constant_condition::evaluate(condition)? {
-                true => {
-                    let selected_bindings =
-                        self.static_summary_bindings_for_block(then_branch, bindings);
-                    self.static_payload_tag_for_enum_expression_with_bindings(
-                        then_branch.tail.as_deref()?,
-                        &selected_bindings,
-                    )
-                }
-                false => {
-                    self.static_payload_tag_for_enum_expression_with_bindings(else_branch, bindings)
-                }
-            },
-            ExpressionKind::Match {
-                scrutinee,
-                enumeration,
-                arms,
-            } => {
-                let (scrutinee_enum, variant_index) =
-                    self.static_variant_for_expression_with_bindings(scrutinee, bindings)?;
-                if scrutinee_enum != *enumeration {
-                    return None;
-                }
-                let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
-                let arm = selected.next()?;
-                if selected.next().is_some() {
-                    return None;
-                }
-                let selected_bindings = self
-                    .static_summary_bindings_for_selected_match_payload(scrutinee, arm, bindings);
-                self.static_payload_tag_for_enum_expression_with_bindings(
-                    &arm.value,
-                    &selected_bindings,
-                )
-            }
-            ExpressionKind::Block(block) => {
-                let selected_bindings = self.static_summary_bindings_for_block(block, bindings);
-                self.static_payload_tag_for_enum_expression_with_bindings(
-                    block.tail.as_deref()?,
-                    &selected_bindings,
-                )
-            }
-            _ => None,
-        }
-    }
-
-    fn static_value_tag_for_expression_with_bindings(
-        &self,
-        expression: &hir::Expression,
-        bindings: &[StaticSummaryBinding],
-    ) -> Option<StaticValueTag> {
-        match &expression.ty {
-            Type::Enum(_) => {
-                let (enumeration, variant_index) =
-                    self.static_variant_for_expression_with_bindings(expression, bindings)?;
-                let payload = self
-                    .static_payload_tag_for_enum_expression_with_bindings(expression, bindings)
-                    .map(Box::new);
-                Some(StaticValueTag::Enum {
-                    enumeration,
-                    variant_index,
-                    payload,
-                })
-            }
-            Type::Record(_) => self
-                .static_record_tags_for_expression_with_bindings(expression, bindings)
-                .map(StaticValueTag::Record),
-            _ => None,
+            } => Some((enumeration, variant_index)),
+            StaticValueTag::Record(_) => None,
         }
     }
 
@@ -2860,27 +2921,24 @@ impl Analyzer {
         binding_type: &Type,
         bindings: &[StaticSummaryBinding],
     ) -> Option<StaticTagFacts> {
-        let payload_tag =
-            self.static_payload_tag_for_enum_expression_with_bindings(scrutinee, bindings)?;
-        match (binding_type, payload_tag) {
-            (
-                Type::Enum(_),
-                StaticValueTag::Enum {
-                    enumeration,
-                    variant_index,
-                    payload,
-                },
-            ) => Some(StaticTagFacts {
-                variant: Some((enumeration, variant_index)),
-                payload_tag: payload.map(|payload| *payload),
-                ..StaticTagFacts::default()
-            }),
-            (Type::Record(_), StaticValueTag::Record(tags)) => Some(StaticTagFacts {
-                record_tags: Some(tags),
-                ..StaticTagFacts::default()
-            }),
-            _ => None,
-        }
+        let StaticValueTag::Enum {
+            payload: Some(payload),
+            ..
+        } = self.static_value_tag_for_expression_with_bindings(scrutinee, bindings)?
+        else {
+            return None;
+        };
+        let payload_tag = *payload;
+        let compatible = match (binding_type, &payload_tag) {
+            (Type::Enum(expected), StaticValueTag::Enum { enumeration, .. }) => {
+                expected.id == *enumeration
+            }
+            (Type::Record(expected), StaticValueTag::Record(tags)) => expected.id == tags.record,
+            _ => false,
+        };
+        compatible.then_some(StaticTagFacts {
+            value_tag: Some(payload_tag),
+        })
     }
 
     fn static_summary_bindings_for_selected_match_payload(
@@ -2913,28 +2971,6 @@ impl Analyzer {
         selected_bindings
     }
 
-    fn static_record_field_variant_with_bindings(
-        &self,
-        base: &hir::Expression,
-        record: RecordId,
-        field_index: usize,
-        bindings: &[StaticSummaryBinding],
-    ) -> Option<(EnumId, usize)> {
-        match self.static_record_field_value_tag_with_bindings(
-            base,
-            record,
-            field_index,
-            bindings,
-        )? {
-            StaticValueTag::Enum {
-                enumeration,
-                variant_index,
-                ..
-            } => Some((enumeration, variant_index)),
-            StaticValueTag::Record(_) => None,
-        }
-    }
-
     fn static_record_field_value_tag_with_bindings(
         &self,
         base: &hir::Expression,
@@ -2942,102 +2978,15 @@ impl Analyzer {
         field_index: usize,
         bindings: &[StaticSummaryBinding],
     ) -> Option<StaticValueTag> {
-        let facts = self.static_record_tags_for_expression_with_bindings(base, bindings)?;
+        let StaticValueTag::Record(facts) =
+            self.static_value_tag_for_expression_with_bindings(base, bindings)?
+        else {
+            return None;
+        };
         if facts.record != record {
             return None;
         }
         facts.fields.get(&field_index).cloned()
-    }
-
-    fn static_record_tags_for_expression_with_bindings(
-        &self,
-        expression: &hir::Expression,
-        bindings: &[StaticSummaryBinding],
-    ) -> Option<StaticRecordTags> {
-        let Type::Record(record_type) = &expression.ty else {
-            return None;
-        };
-        match &expression.kind {
-            ExpressionKind::RecordLiteral { record, fields } if *record == record_type.id => {
-                let mut tags = BTreeMap::new();
-                for field in fields {
-                    if let Some(tag) =
-                        self.static_value_tag_for_expression_with_bindings(&field.value, bindings)
-                    {
-                        tags.insert(field.field_index, tag);
-                    }
-                }
-                Some(StaticRecordTags {
-                    record: *record,
-                    fields: tags,
-                })
-            }
-            ExpressionKind::Binding(reference) => {
-                if let Some(binding) =
-                    Self::resolved_summary_binding(reference, &expression.ty, bindings)
-                {
-                    return binding.static_facts.record_tags.clone();
-                }
-                self.resolved_immutable_symbol(reference, &expression.ty)?
-                    .static_facts
-                    .record_tags
-                    .clone()
-            }
-            ExpressionKind::FieldAccess {
-                base,
-                record,
-                field_index,
-                ..
-            } => match self.static_record_field_value_tag_with_bindings(
-                base,
-                *record,
-                *field_index,
-                bindings,
-            )? {
-                StaticValueTag::Record(nested) if nested.record == record_type.id => Some(nested),
-                StaticValueTag::Record(_) | StaticValueTag::Enum { .. } => None,
-            },
-            ExpressionKind::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => match crate::constant_condition::evaluate(condition)? {
-                true => self.static_record_tags_for_block(then_branch, bindings),
-                false => {
-                    self.static_record_tags_for_expression_with_bindings(else_branch, bindings)
-                }
-            },
-            ExpressionKind::Match {
-                scrutinee,
-                enumeration,
-                arms,
-            } => {
-                let (scrutinee_enum, variant_index) =
-                    self.static_variant_for_expression_with_bindings(scrutinee, bindings)?;
-                if scrutinee_enum != *enumeration {
-                    return None;
-                }
-                let mut selected = arms.iter().filter(|arm| arm.variant_index == variant_index);
-                let arm = selected.next()?;
-                if selected.next().is_some() {
-                    return None;
-                }
-                let selected_bindings = self
-                    .static_summary_bindings_for_selected_match_payload(scrutinee, arm, bindings);
-                self.static_record_tags_for_expression_with_bindings(&arm.value, &selected_bindings)
-            }
-            ExpressionKind::Block(block) => self.static_record_tags_for_block(block, bindings),
-            _ => None,
-        }
-    }
-
-    fn static_record_tags_for_block(
-        &self,
-        block: &hir::Block,
-        bindings: &[StaticSummaryBinding],
-    ) -> Option<StaticRecordTags> {
-        let bindings = self.static_summary_bindings_for_block(block, bindings);
-        self.static_record_tags_for_expression_with_bindings(block.tail.as_deref()?, &bindings)
     }
 
     fn static_summary_bindings_for_block(
