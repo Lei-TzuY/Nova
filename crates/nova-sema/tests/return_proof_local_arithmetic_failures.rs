@@ -135,6 +135,60 @@ fn proven_unselected_return_does_not_report_failure() {
 }
 
 #[test]
+fn dynamic_if_returns_report_each_potential_failure() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn runtime_bool(value: Bool) -> Bool { value }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    if runtime_bool(true) {
+                        return 1 / x;
+                    } else {
+                        return 2 / x;
+                    }
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 2, "{:?}", output.diagnostics);
+}
+
+#[test]
+fn static_tag_selects_only_the_reachable_return_arm() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+        enum Choice { A(Int), B }
+
+        fn runtime_int(value: Int) -> Int { value }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(zero) => match Choice::A(runtime_int(1)) {
+                    Choice::A(_) => {
+                        return 1 / zero;
+                    },
+                    Choice::B => {
+                        return 2 / zero;
+                    },
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 1, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn return_stops_following_execution_failure_collection() {
     let output = analyze_text(
         r#"
