@@ -1322,6 +1322,17 @@ fn collect_closed_block_arithmetic_failures<'a>(
                     }
                 }
             }
+            StatementKind::Return(value) => {
+                if let Some(value) = value.as_ref() {
+                    collect_closed_value_arithmetic_failures_with_bindings(
+                        value,
+                        &block_bindings,
+                        &block_static_bindings,
+                        failures,
+                    );
+                }
+                return;
+            }
             _ => return,
         }
     }
