@@ -39,6 +39,32 @@ output. Their effect is:
 `--message-format human|json` changes diagnostic presentation only. It does not
 change acceptance, exit status, runtime values, or semantic-inspection JSON.
 
+## `N3031` / `N3032` closed arithmetic failures
+
+Semantic analysis reports an execution failure early when the side-effect-free
+closed-HIR proof establishes that a reachable arithmetic expression must fail:
+
+- `N3031` reports signed-64 `Int` overflow;
+- `N3032` reports division or remainder by zero;
+- the primary label covers the exact arithmetic expression whose checked
+  operation fails, even when the proof reaches it through immutable block-local
+  bindings, a selected `if`/`match`, a payload binding, or a record projection;
+- re-proving that same source failure through enclosing closed composites does
+  not emit duplicate diagnostics, while distinct failing source spans remain
+  distinct diagnostics;
+- one reachable closed block may therefore emit multiple `N3031`/`N3032`
+  diagnostics when it contains multiple independent deterministic failures; and
+- successful proofs validate semantics without folding or replacing the retained
+  HIR.
+
+This is an execution-certainty boundary, not general constant propagation. A
+call, mutable value, or other genuinely dynamic operand stops the proof, leaving
+runtime arithmetic checks (`N4002` overflow and `N4003` zero divisor) responsible
+for failures that cannot be known statically. Likewise, source lowered only for
+diagnostics because control flow proves it cannot execute does not emit
+`N3031`/`N3032`. Static name, type, pattern, and exhaustiveness diagnostics still
+run on such diagnostic-only source under their ordinary policies.
+
 ## `N3033` unreachable code
 
 The first implemented warning is deliberately narrow. After a function CFG has
