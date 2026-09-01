@@ -207,9 +207,7 @@ struct LocalSymbol {
     ty: Type,
     mutable: bool,
     span: Span,
-    static_variant: Option<(EnumId, usize)>,
-    static_record_tags: Option<StaticRecordTags>,
-    static_payload_tag: Option<StaticPayloadTag>,
+    static_facts: StaticTagFacts,
 }
 
 #[derive(Clone, Debug)]
@@ -230,15 +228,20 @@ struct StaticRecordTags {
     fields: BTreeMap<usize, StaticFieldTag>,
 }
 
+#[derive(Clone, Debug, Default)]
+struct StaticTagFacts {
+    variant: Option<(EnumId, usize)>,
+    record_tags: Option<StaticRecordTags>,
+    payload_tag: Option<StaticPayloadTag>,
+}
+
 #[derive(Clone, Debug)]
 struct StaticSummaryBinding {
     id: BindingId,
     name: String,
     ty: Type,
     span: Span,
-    static_variant: Option<(EnumId, usize)>,
-    static_record_tags: Option<StaticRecordTags>,
-    static_payload_tag: Option<StaticPayloadTag>,
+    static_facts: StaticTagFacts,
 }
 
 type Scope = BTreeMap<String, LocalSymbol>;
@@ -763,37 +766,13 @@ impl Analyzer {
                     );
                 }
                 let binding_type = annotation_type.unwrap_or_else(|| initializer.ty.clone());
-                let static_variant = if !*mutable
-                    && initializer.ty == binding_type
-                    && matches!(&binding_type, Type::Enum(_))
-                {
-                    self.static_variant_for_expression(&initializer)
+                let static_facts = if !*mutable && initializer.ty == binding_type {
+                    self.static_tag_facts_for_expression(&initializer)
                 } else {
-                    None
-                };
-                let static_record_tags = if !*mutable
-                    && initializer.ty == binding_type
-                    && matches!(&binding_type, Type::Record(_))
-                {
-                    self.static_record_tags_for_expression(&initializer)
-                } else {
-                    None
-                };
-                let static_payload_tag = if !*mutable
-                    && initializer.ty == binding_type
-                    && matches!(&binding_type, Type::Enum(_))
-                {
-                    self.static_payload_tag_for_enum_expression(&initializer)
-                } else {
-                    None
+                    StaticTagFacts::default()
                 };
                 let binding = self.new_binding(name, binding_type, *mutable);
-                self.insert_local_with_static_facts(
-                    &binding,
-                    static_variant,
-                    static_record_tags,
-                    static_payload_tag,
-                );
+                self.insert_local_with_static_facts(&binding, static_facts);
                 if !initializer.ty.is_never() {
                     self.record_initialization(binding.id, binding.span);
                 }
@@ -2643,6 +2622,32 @@ impl Analyzer {
         binding
     }
 
+    fn static_tag_facts_for_expression(&self, expression: &hir::Expression) -> StaticTagFacts {
+        self.static_tag_facts_for_expression_with_bindings(expression, &[])
+    }
+
+    fn static_tag_facts_for_expression_with_bindings(
+        &self,
+        expression: &hir::Expression,
+        bindings: &[StaticSummaryBinding],
+    ) -> StaticTagFacts {
+        match &expression.ty {
+            Type::Enum(_) => StaticTagFacts {
+                variant: self.static_variant_for_expression_with_bindings(expression, bindings),
+                record_tags: None,
+                payload_tag: self
+                    .static_payload_tag_for_enum_expression_with_bindings(expression, bindings),
+            },
+            Type::Record(_) => StaticTagFacts {
+                variant: None,
+                record_tags: self
+                    .static_record_tags_for_expression_with_bindings(expression, bindings),
+                payload_tag: None,
+            },
+            _ => StaticTagFacts::default(),
+        }
+    }
+
     fn static_variant_for_expression(
         &self,
         expression: &hir::Expression,
@@ -2663,10 +2668,11 @@ impl Analyzer {
                 if let Some(binding) =
                     Self::resolved_summary_binding(reference, &expression.ty, bindings)
                 {
-                    return binding.static_variant;
+                    return binding.static_facts.variant;
                 }
                 self.resolved_immutable_symbol(reference, &expression.ty)?
-                    .static_variant
+                    .static_facts
+                    .variant
             }
             ExpressionKind::FieldAccess {
                 base,
@@ -2720,13 +2726,6 @@ impl Analyzer {
         self.static_variant_for_expression_with_bindings(block.tail.as_deref()?, &bindings)
     }
 
-    fn static_payload_tag_for_enum_expression(
-        &self,
-        expression: &hir::Expression,
-    ) -> Option<StaticPayloadTag> {
-        self.static_payload_tag_for_enum_expression_with_bindings(expression, &[])
-    }
-
     fn static_payload_tag_for_enum_expression_with_bindings(
         &self,
         expression: &hir::Expression,
@@ -2744,10 +2743,11 @@ impl Analyzer {
                 if let Some(binding) =
                     Self::resolved_summary_binding(reference, &expression.ty, bindings)
                 {
-                    return binding.static_payload_tag.clone();
+                    return binding.static_facts.payload_tag.clone();
                 }
                 self.resolved_immutable_symbol(reference, &expression.ty)?
-                    .static_payload_tag
+                    .static_facts
+                    .payload_tag
                     .clone()
             }
             ExpressionKind::If {
@@ -2837,11 +2837,15 @@ impl Analyzer {
             return selected_bindings;
         };
 
-        let (static_variant, static_record_tags) = match (&binding.ty, payload_tag) {
-            (Type::Enum(_), StaticPayloadTag::Enum(enumeration, variant_index)) => {
-                (Some((enumeration, variant_index)), None)
-            }
-            (Type::Record(_), StaticPayloadTag::Record(tags)) => (None, Some(tags)),
+        let static_facts = match (&binding.ty, payload_tag) {
+            (Type::Enum(_), StaticPayloadTag::Enum(enumeration, variant_index)) => StaticTagFacts {
+                variant: Some((enumeration, variant_index)),
+                ..StaticTagFacts::default()
+            },
+            (Type::Record(_), StaticPayloadTag::Record(tags)) => StaticTagFacts {
+                record_tags: Some(tags),
+                ..StaticTagFacts::default()
+            },
             _ => return selected_bindings,
         };
         selected_bindings.push(StaticSummaryBinding {
@@ -2849,9 +2853,7 @@ impl Analyzer {
             name: binding.name.clone(),
             ty: binding.ty.clone(),
             span: binding.span,
-            static_variant,
-            static_record_tags,
-            static_payload_tag: None,
+            static_facts,
         });
         selected_bindings
     }
@@ -2873,13 +2875,6 @@ impl Analyzer {
             }
             StaticFieldTag::Record(_) => None,
         }
-    }
-
-    fn static_record_tags_for_expression(
-        &self,
-        expression: &hir::Expression,
-    ) -> Option<StaticRecordTags> {
-        self.static_record_tags_for_expression_with_bindings(expression, &[])
     }
 
     fn static_record_tags_for_expression_with_bindings(
@@ -2918,10 +2913,11 @@ impl Analyzer {
                 if let Some(binding) =
                     Self::resolved_summary_binding(reference, &expression.ty, bindings)
                 {
-                    return binding.static_record_tags.clone();
+                    return binding.static_facts.record_tags.clone();
                 }
                 self.resolved_immutable_symbol(reference, &expression.ty)?
-                    .static_record_tags
+                    .static_facts
+                    .record_tags
                     .clone()
             }
             ExpressionKind::FieldAccess {
@@ -3006,30 +3002,14 @@ impl Analyzer {
             {
                 continue;
             }
-            let static_variant = matches!(&binding.ty, Type::Enum(_))
-                .then(|| self.static_variant_for_expression_with_bindings(initializer, &bindings))
-                .flatten();
-            let static_record_tags = matches!(&binding.ty, Type::Record(_))
-                .then(|| {
-                    self.static_record_tags_for_expression_with_bindings(initializer, &bindings)
-                })
-                .flatten();
-            let static_payload_tag = matches!(&binding.ty, Type::Enum(_))
-                .then(|| {
-                    self.static_payload_tag_for_enum_expression_with_bindings(
-                        initializer,
-                        &bindings,
-                    )
-                })
-                .flatten();
+            let static_facts =
+                self.static_tag_facts_for_expression_with_bindings(initializer, &bindings);
             bindings.push(StaticSummaryBinding {
                 id: binding.id,
                 name: binding.name.clone(),
                 ty: binding.ty.clone(),
                 span: binding.span,
-                static_variant,
-                static_record_tags,
-                static_payload_tag,
+                static_facts,
             });
         }
         bindings
@@ -3067,15 +3047,13 @@ impl Analyzer {
     }
 
     fn insert_local(&mut self, binding: &hir::Binding) {
-        self.insert_local_with_static_facts(binding, None, None, None);
+        self.insert_local_with_static_facts(binding, StaticTagFacts::default());
     }
 
     fn insert_local_with_static_facts(
         &mut self,
         binding: &hir::Binding,
-        static_variant: Option<(EnumId, usize)>,
-        static_record_tags: Option<StaticRecordTags>,
-        static_payload_tag: Option<StaticPayloadTag>,
+        static_facts: StaticTagFacts,
     ) {
         let scope = self
             .scopes
@@ -3099,9 +3077,7 @@ impl Analyzer {
                 ty: binding.ty.clone(),
                 mutable: binding.mutable,
                 span: binding.span,
-                static_variant,
-                static_record_tags,
-                static_payload_tag,
+                static_facts,
             },
         );
     }
