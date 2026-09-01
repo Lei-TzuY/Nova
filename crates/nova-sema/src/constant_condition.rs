@@ -970,41 +970,59 @@ pub(crate) fn closed_value_arithmetic_failures(
     expression: &Expression,
 ) -> Vec<ClosedConditionArithmeticFailure> {
     let mut failures = Vec::new();
-    collect_closed_value_arithmetic_failures_with_bindings(expression, &[], &mut failures);
+    collect_closed_value_arithmetic_failures_with_bindings(expression, &[], &[], &mut failures);
     failures
 }
 
 fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
+    static_bindings: &[StaticBinding<'a>],
     failures: &mut Vec<ClosedConditionArithmeticFailure>,
 ) {
     match &expression.kind {
         ExpressionKind::Block(block) => {
-            collect_closed_block_arithmetic_failures(block, bindings, failures);
+            collect_closed_block_arithmetic_failures(block, bindings, static_bindings, failures);
         }
         ExpressionKind::If {
             condition,
             then_branch,
             else_branch,
         } => {
-            collect_closed_value_arithmetic_failures_with_bindings(condition, bindings, failures);
+            collect_closed_value_arithmetic_failures_with_bindings(
+                condition,
+                bindings,
+                static_bindings,
+                failures,
+            );
             match evaluate_checked_with_bindings(condition, bindings) {
                 Ok(Some(true)) => {
-                    collect_closed_block_arithmetic_failures(then_branch, bindings, failures);
+                    collect_closed_block_arithmetic_failures(
+                        then_branch,
+                        bindings,
+                        static_bindings,
+                        failures,
+                    );
                 }
                 Ok(Some(false)) => {
                     collect_closed_value_arithmetic_failures_with_bindings(
                         else_branch,
                         bindings,
+                        static_bindings,
                         failures,
                     );
                 }
                 Ok(None) if condition.ty == Type::Bool => {
-                    collect_closed_block_arithmetic_failures(then_branch, bindings, failures);
+                    collect_closed_block_arithmetic_failures(
+                        then_branch,
+                        bindings,
+                        static_bindings,
+                        failures,
+                    );
                     collect_closed_value_arithmetic_failures_with_bindings(
                         else_branch,
                         bindings,
+                        static_bindings,
                         failures,
                     );
                 }
@@ -1017,7 +1035,12 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
             enumeration,
             arms,
         } => {
-            collect_closed_value_arithmetic_failures_with_bindings(scrutinee, bindings, failures);
+            collect_closed_value_arithmetic_failures_with_bindings(
+                scrutinee,
+                bindings,
+                static_bindings,
+                failures,
+            );
             match selected_match_value_checked_with_bindings(
                 scrutinee,
                 *enumeration,
@@ -1028,28 +1051,51 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
                     collect_closed_value_arithmetic_failures_with_bindings(
                         value,
                         &selected_bindings,
+                        static_bindings,
                         failures,
                     );
                 }
-                Ok(None)
-                    if matches!(
+                Ok(None) => {
+                    if let Some((value, selected_bindings, selected_static_bindings)) =
+                        selected_match_value_for_static_tag(
+                            scrutinee,
+                            *enumeration,
+                            arms,
+                            bindings,
+                            static_bindings,
+                        )
+                    {
+                        collect_closed_value_arithmetic_failures_with_bindings(
+                            value,
+                            &selected_bindings,
+                            &selected_static_bindings,
+                            failures,
+                        );
+                    } else if matches!(
                         &scrutinee.ty,
                         Type::Enum(scrutinee_enum) if scrutinee_enum.id == *enumeration
-                    ) =>
-                {
-                    for arm in arms {
-                        collect_closed_value_arithmetic_failures_with_bindings(
-                            &arm.value, bindings, failures,
-                        );
+                    ) {
+                        for arm in arms {
+                            collect_closed_value_arithmetic_failures_with_bindings(
+                                &arm.value,
+                                bindings,
+                                static_bindings,
+                                failures,
+                            );
+                        }
                     }
                 }
-                Ok(None) => {}
                 Err(failure) => failures.push(failure),
             }
         }
         ExpressionKind::Binding(reference) => {
             if let Some(value) = closed_binding_value(reference, &expression.ty, bindings) {
-                collect_closed_value_arithmetic_failures_with_bindings(value, bindings, failures);
+                collect_closed_value_arithmetic_failures_with_bindings(
+                    value,
+                    bindings,
+                    static_bindings,
+                    failures,
+                );
             } else if let Err(failure) =
                 is_closed_total_value_checked_with_bindings(expression, bindings)
             {
@@ -1058,7 +1104,12 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
         }
         ExpressionKind::Unary { operand, .. } => {
             let before = failures.len();
-            collect_closed_value_arithmetic_failures_with_bindings(operand, bindings, failures);
+            collect_closed_value_arithmetic_failures_with_bindings(
+                operand,
+                bindings,
+                static_bindings,
+                failures,
+            );
             if !operand.ty.is_never() && failures.len() == before {
                 if let Err(failure) =
                     is_closed_total_value_checked_with_bindings(expression, bindings)
@@ -1073,7 +1124,12 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
             right,
         } => {
             let before = failures.len();
-            collect_closed_value_arithmetic_failures_with_bindings(left, bindings, failures);
+            collect_closed_value_arithmetic_failures_with_bindings(
+                left,
+                bindings,
+                static_bindings,
+                failures,
+            );
             if left.ty.is_never() {
                 return;
             }
@@ -1083,7 +1139,12 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
                 (BinaryOperator::And, Ok(Some(false))) | (BinaryOperator::Or, Ok(Some(true)))
             );
             if !skips_right {
-                collect_closed_value_arithmetic_failures_with_bindings(right, bindings, failures);
+                collect_closed_value_arithmetic_failures_with_bindings(
+                    right,
+                    bindings,
+                    static_bindings,
+                    failures,
+                );
                 if right.ty.is_never() {
                     return;
                 }
@@ -1098,13 +1159,21 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
             }
         }
         ExpressionKind::Call { callee, arguments } => {
-            collect_closed_value_arithmetic_failures_with_bindings(callee, bindings, failures);
+            collect_closed_value_arithmetic_failures_with_bindings(
+                callee,
+                bindings,
+                static_bindings,
+                failures,
+            );
             if callee.ty.is_never() {
                 return;
             }
             for argument in arguments {
                 collect_closed_value_arithmetic_failures_with_bindings(
-                    argument, bindings, failures,
+                    argument,
+                    bindings,
+                    static_bindings,
+                    failures,
                 );
                 if argument.ty.is_never() {
                     return;
@@ -1116,6 +1185,7 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
                 collect_closed_value_arithmetic_failures_with_bindings(
                     &field.value,
                     bindings,
+                    static_bindings,
                     failures,
                 );
                 if field.value.ty.is_never() {
@@ -1125,12 +1195,22 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
         }
         ExpressionKind::EnumConstructor { payload, .. } => {
             if let Some(payload) = payload.as_deref() {
-                collect_closed_value_arithmetic_failures_with_bindings(payload, bindings, failures);
+                collect_closed_value_arithmetic_failures_with_bindings(
+                    payload,
+                    bindings,
+                    static_bindings,
+                    failures,
+                );
             }
         }
         ExpressionKind::FieldAccess { base, .. } => {
             let before = failures.len();
-            collect_closed_value_arithmetic_failures_with_bindings(base, bindings, failures);
+            collect_closed_value_arithmetic_failures_with_bindings(
+                base,
+                bindings,
+                static_bindings,
+                failures,
+            );
             if !base.ty.is_never() && failures.len() == before {
                 if let Err(failure) =
                     is_closed_total_value_checked_with_bindings(expression, bindings)
@@ -1151,9 +1231,11 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
 fn collect_closed_block_arithmetic_failures<'a>(
     block: &'a Block,
     bindings: &[ClosedBinding<'a>],
+    static_bindings: &[StaticBinding<'a>],
     failures: &mut Vec<ClosedConditionArithmeticFailure>,
 ) {
     let mut block_bindings = bindings.to_vec();
+    let mut block_static_bindings = static_bindings.to_vec();
 
     for statement in &block.statements {
         match &statement.kind {
@@ -1164,6 +1246,7 @@ fn collect_closed_block_arithmetic_failures<'a>(
                 collect_closed_value_arithmetic_failures_with_bindings(
                     initializer,
                     &block_bindings,
+                    &block_static_bindings,
                     failures,
                 );
 
@@ -1171,15 +1254,21 @@ fn collect_closed_block_arithmetic_failures<'a>(
                     return;
                 }
 
-                if !binding.mutable
+                let retains_static_facts = !binding.mutable
                     && binding.ty == initializer.ty
                     && !initializer.ty.is_error()
-                    && matches!(
+                    && !initializer.ty.is_never();
+                if retains_static_facts {
+                    if matches!(
                         is_closed_total_value_checked_with_bindings(initializer, &block_bindings),
                         Ok(true)
-                    )
-                {
-                    block_bindings.push(ClosedBinding {
+                    ) {
+                        block_bindings.push(ClosedBinding {
+                            binding,
+                            value: initializer,
+                        });
+                    }
+                    block_static_bindings.push(StaticBinding {
                         binding,
                         value: initializer,
                     });
@@ -1189,6 +1278,7 @@ fn collect_closed_block_arithmetic_failures<'a>(
                 collect_closed_value_arithmetic_failures_with_bindings(
                     expression,
                     &block_bindings,
+                    &block_static_bindings,
                     failures,
                 );
                 if expression.ty.is_never() {
@@ -1200,7 +1290,12 @@ fn collect_closed_block_arithmetic_failures<'a>(
     }
 
     if let Some(tail) = block.tail.as_deref() {
-        collect_closed_value_arithmetic_failures_with_bindings(tail, &block_bindings, failures);
+        collect_closed_value_arithmetic_failures_with_bindings(
+            tail,
+            &block_bindings,
+            &block_static_bindings,
+            failures,
+        );
     }
 }
 
