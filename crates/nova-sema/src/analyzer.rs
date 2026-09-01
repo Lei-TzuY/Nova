@@ -1462,11 +1462,19 @@ impl Analyzer {
         let mut can_continue = true;
 
         for field in fields {
-            let value = if can_continue {
+            let value_is_reachable = can_continue;
+            let value = if value_is_reachable {
                 self.lower_expression(&field.value, return_type)
             } else {
                 self.lower_expression_for_diagnostics(&field.value, return_type)
             };
+            if value_is_reachable {
+                if let Some(failure) =
+                    crate::constant_condition::closed_value_arithmetic_failure(&value)
+                {
+                    self.constant_int_failure(Some(Err(failure.error)), failure.span);
+                }
+            }
             contains_error |= value.ty.is_error();
             contains_never |= value.ty.is_never();
             if can_continue && value.ty.is_never() {
@@ -1570,6 +1578,13 @@ impl Analyzer {
         let aggregate_entry_state = self.capture_reachable_state();
         let payload =
             payload.map(|expression| Box::new(self.lower_expression(expression, return_type)));
+        if let Some(payload) = payload.as_deref() {
+            if let Some(failure) =
+                crate::constant_condition::closed_value_arithmetic_failure(payload)
+            {
+                self.constant_int_failure(Some(Err(failure.error)), failure.span);
+            }
+        }
         let payload_never = payload
             .as_deref()
             .is_some_and(|expression| expression.ty.is_never());

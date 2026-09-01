@@ -256,15 +256,6 @@ fn int_value_checked<'a>(
     }
 }
 
-fn unit_value_with_bindings<'a>(
-    expression: &'a Expression,
-    bindings: &[ClosedBinding<'a>],
-) -> Option<()> {
-    unit_value_checked_with_bindings(expression, bindings)
-        .ok()
-        .flatten()
-}
-
 fn unit_value_checked_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
@@ -428,15 +419,6 @@ fn enum_identity_tag_checked_with_bindings<'a>(
         }
         _ => Ok(None),
     }
-}
-
-fn function_id_with_bindings<'a>(
-    expression: &'a Expression,
-    bindings: &[ClosedBinding<'a>],
-) -> Option<FunctionId> {
-    function_id_checked_with_bindings(expression, bindings)
-        .ok()
-        .flatten()
 }
 
 fn function_id_checked_with_bindings<'a>(
@@ -889,15 +871,6 @@ pub(crate) fn closed_match_variant_checked(
     Ok(Some((enumeration, variant_index)))
 }
 
-fn match_variant_with_bindings<'a>(
-    expression: &'a Expression,
-    bindings: &[ClosedBinding<'a>],
-) -> Option<ClosedVariantProof<'a>> {
-    match_variant_checked_with_bindings(expression, bindings)
-        .ok()
-        .flatten()
-}
-
 fn match_variant_checked_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
@@ -908,10 +881,12 @@ fn match_variant_checked_with_bindings<'a>(
             variant_index,
             payload,
             ..
-        } if payload
-            .as_deref()
-            .is_none_or(|payload| is_closed_total_value_with_bindings(payload, bindings)) =>
-        {
+        } => {
+            if let Some(payload) = payload.as_deref() {
+                if !is_closed_total_value_checked_with_bindings(payload, bindings)? {
+                    return Ok(None);
+                }
+            }
             Ok(Some((
                 *enumeration,
                 *variant_index,
@@ -991,74 +966,124 @@ fn match_variant_checked_with_bindings<'a>(
     }
 }
 
+pub(crate) fn closed_value_arithmetic_failure(
+    expression: &Expression,
+) -> Option<ClosedConditionArithmeticFailure> {
+    is_closed_total_value_checked_with_bindings(expression, &[]).err()
+}
+
 fn is_closed_total_value_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
 ) -> bool {
+    is_closed_total_value_checked_with_bindings(expression, bindings).unwrap_or(false)
+}
+
+fn is_closed_total_value_checked_with_bindings<'a>(
+    expression: &'a Expression,
+    bindings: &[ClosedBinding<'a>],
+) -> Result<bool, ClosedConditionArithmeticFailure> {
     match &expression.ty {
-        Type::Int => constant_int::evaluate_with_bindings(expression, bindings)
-            .is_some_and(|value| value.is_ok()),
-        Type::Bool => evaluate_with_bindings(expression, bindings).is_some(),
-        Type::Unit => unit_value_with_bindings(expression, bindings).is_some(),
-        Type::Function(_) => function_id_with_bindings(expression, bindings).is_some(),
-        Type::Enum(_) => match_variant_with_bindings(expression, bindings).is_some(),
-        Type::Record(_) => record_value_is_closed_with_bindings(expression, bindings),
-        Type::Never | Type::Error => false,
+        Type::Int => match constant_int::evaluate_checked_with_bindings(expression, bindings)? {
+            Some(Ok(_)) => Ok(true),
+            Some(Err(error)) => Err(ClosedConditionArithmeticFailure {
+                error,
+                span: expression.span,
+            }),
+            None => Ok(false),
+        },
+        Type::Bool => Ok(evaluate_checked_with_bindings(expression, bindings)?.is_some()),
+        Type::Unit => Ok(unit_value_checked_with_bindings(expression, bindings)?.is_some()),
+        Type::Function(_) => Ok(function_id_checked_with_bindings(expression, bindings)?.is_some()),
+        Type::Enum(_) => Ok(match_variant_checked_with_bindings(expression, bindings)?.is_some()),
+        Type::Record(_) => record_value_is_closed_checked_with_bindings(expression, bindings),
+        Type::Never | Type::Error => Ok(false),
     }
 }
 
-fn record_value_is_closed_with_bindings<'a>(
+fn record_value_is_closed_checked_with_bindings<'a>(
     expression: &'a Expression,
     bindings: &[ClosedBinding<'a>],
-) -> bool {
+) -> Result<bool, ClosedConditionArithmeticFailure> {
     match &expression.kind {
-        ExpressionKind::RecordLiteral { fields, .. } => fields
-            .iter()
-            .all(|field| is_closed_total_value_with_bindings(&field.value, bindings)),
+        ExpressionKind::RecordLiteral { fields, .. } => {
+            let mut all_closed = true;
+            for field in fields {
+                let field_closed =
+                    is_closed_total_value_checked_with_bindings(&field.value, bindings)?;
+                all_closed &= field_closed;
+            }
+            Ok(all_closed)
+        }
         ExpressionKind::Binding(reference) => {
-            closed_binding_value(reference, &expression.ty, bindings)
-                .is_some_and(|value| record_value_is_closed_with_bindings(value, bindings))
+            let Some(value) = closed_binding_value(reference, &expression.ty, bindings) else {
+                return Ok(false);
+            };
+            record_value_is_closed_checked_with_bindings(value, bindings)
         }
         ExpressionKind::FieldAccess {
             base,
             record,
             field_index,
             ..
-        } => selected_record_field_value_with_bindings(base, *record, *field_index, bindings)
-            .is_some_and(|(value, selected_bindings)| {
-                is_closed_total_value_with_bindings(value, &selected_bindings)
-            }),
+        } => {
+            let Some((value, selected_bindings)) =
+                selected_record_field_value_checked_with_bindings(
+                    base,
+                    *record,
+                    *field_index,
+                    bindings,
+                )?
+            else {
+                return Ok(false);
+            };
+            is_closed_total_value_checked_with_bindings(value, &selected_bindings)
+        }
         ExpressionKind::If {
             condition,
             then_branch,
             else_branch,
-        } => match evaluate_with_bindings(condition, bindings) {
-            Some(true) => closed_block_tail_with_bindings(then_branch, bindings)
-                .and_then(Result::ok)
-                .is_some_and(|(tail, selected_bindings)| {
-                    tail.is_some_and(|tail| {
-                        is_closed_total_value_with_bindings(tail, &selected_bindings)
-                    })
-                }),
-            Some(false) => is_closed_total_value_with_bindings(else_branch, bindings),
-            None => false,
+        } => match evaluate_checked_with_bindings(condition, bindings)? {
+            Some(true) => {
+                let Some(proof) = closed_block_tail_with_bindings(then_branch, bindings) else {
+                    return Ok(false);
+                };
+                let (tail, selected_bindings) = proof?;
+                let Some(tail) = tail else {
+                    return Ok(false);
+                };
+                is_closed_total_value_checked_with_bindings(tail, &selected_bindings)
+            }
+            Some(false) => is_closed_total_value_checked_with_bindings(else_branch, bindings),
+            None => Ok(false),
         },
         ExpressionKind::Match {
             scrutinee,
             enumeration,
             arms,
-        } => selected_match_value_with_bindings(scrutinee, *enumeration, arms, bindings)
-            .is_some_and(|(value, selected_bindings)| {
-                is_closed_total_value_with_bindings(value, &selected_bindings)
-            }),
-        ExpressionKind::Block(block) => closed_block_tail_with_bindings(block, bindings)
-            .and_then(Result::ok)
-            .is_some_and(|(tail, selected_bindings)| {
-                tail.is_some_and(|tail| {
-                    is_closed_total_value_with_bindings(tail, &selected_bindings)
-                })
-            }),
-        _ => false,
+        } => {
+            let Some((value, selected_bindings)) = selected_match_value_checked_with_bindings(
+                scrutinee,
+                *enumeration,
+                arms,
+                bindings,
+            )?
+            else {
+                return Ok(false);
+            };
+            is_closed_total_value_checked_with_bindings(value, &selected_bindings)
+        }
+        ExpressionKind::Block(block) => {
+            let Some(proof) = closed_block_tail_with_bindings(block, bindings) else {
+                return Ok(false);
+            };
+            let (tail, selected_bindings) = proof?;
+            let Some(tail) = tail else {
+                return Ok(false);
+            };
+            is_closed_total_value_checked_with_bindings(tail, &selected_bindings)
+        }
+        _ => Ok(false),
     }
 }
 
@@ -1107,8 +1132,13 @@ pub(crate) fn closed_block_tail_with_bindings<'a>(
                             span: initializer.span,
                         }));
                     }
-                } else if !is_closed_total_value_with_bindings(initializer, &block_bindings) {
-                    return None;
+                } else {
+                    match is_closed_total_value_checked_with_bindings(initializer, &block_bindings)
+                    {
+                        Ok(true) => {}
+                        Ok(false) => return None,
+                        Err(failure) => return Some(Err(failure)),
+                    }
                 }
                 block_bindings.push(ClosedBinding {
                     binding,
@@ -1131,8 +1161,12 @@ pub(crate) fn closed_block_tail_with_bindings<'a>(
                             span: expression.span,
                         }));
                     }
-                } else if !is_closed_total_value_with_bindings(expression, &block_bindings) {
-                    return None;
+                } else {
+                    match is_closed_total_value_checked_with_bindings(expression, &block_bindings) {
+                        Ok(true) => {}
+                        Ok(false) => return None,
+                        Err(failure) => return Some(Err(failure)),
+                    }
                 }
             }
             _ => return None,
@@ -1140,17 +1174,6 @@ pub(crate) fn closed_block_tail_with_bindings<'a>(
     }
 
     Some(Ok((block.tail.as_deref(), block_bindings)))
-}
-
-pub(crate) fn selected_match_value_with_bindings<'a>(
-    scrutinee: &'a Expression,
-    enumeration: EnumId,
-    arms: &'a [MatchArm],
-    bindings: &[ClosedBinding<'a>],
-) -> Option<ClosedSelectedValue<'a>> {
-    selected_match_value_checked_with_bindings(scrutinee, enumeration, arms, bindings)
-        .ok()
-        .flatten()
 }
 
 pub(crate) fn selected_match_value_checked_with_bindings<'a>(
@@ -1190,17 +1213,6 @@ pub(crate) fn selected_match_value_checked_with_bindings<'a>(
     Ok(Some((&arm.value, selected_bindings)))
 }
 
-pub(crate) fn selected_record_field_value_with_bindings<'a>(
-    base: &'a Expression,
-    record: RecordId,
-    field_index: usize,
-    bindings: &[ClosedBinding<'a>],
-) -> Option<ClosedSelectedValue<'a>> {
-    selected_record_field_value_checked_with_bindings(base, record, field_index, bindings)
-        .ok()
-        .flatten()
-}
-
 pub(crate) fn selected_record_field_value_checked_with_bindings<'a>(
     base: &'a Expression,
     record: RecordId,
@@ -1212,10 +1224,13 @@ pub(crate) fn selected_record_field_value_checked_with_bindings<'a>(
             record: actual_record,
             fields,
         } if *actual_record == record => {
-            if !fields
-                .iter()
-                .all(|field| is_closed_total_value_with_bindings(&field.value, bindings))
-            {
+            let mut all_closed = true;
+            for field in fields {
+                let field_closed =
+                    is_closed_total_value_checked_with_bindings(&field.value, bindings)?;
+                all_closed &= field_closed;
+            }
+            if !all_closed {
                 return Ok(None);
             }
             let mut selected = fields
