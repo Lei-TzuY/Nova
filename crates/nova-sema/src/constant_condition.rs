@@ -979,13 +979,60 @@ fn collect_closed_value_arithmetic_failures_with_bindings<'a>(
     bindings: &[ClosedBinding<'a>],
     failures: &mut Vec<ClosedConditionArithmeticFailure>,
 ) {
-    if let ExpressionKind::Block(block) = &expression.kind {
-        collect_closed_block_arithmetic_failures(block, bindings, failures);
-        return;
-    }
-
-    if let Err(failure) = is_closed_total_value_checked_with_bindings(expression, bindings) {
-        failures.push(failure);
+    match &expression.kind {
+        ExpressionKind::Block(block) => {
+            collect_closed_block_arithmetic_failures(block, bindings, failures);
+        }
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_closed_value_arithmetic_failures_with_bindings(condition, bindings, failures);
+            match evaluate_checked_with_bindings(condition, bindings) {
+                Ok(Some(true)) => {
+                    collect_closed_block_arithmetic_failures(then_branch, bindings, failures);
+                }
+                Ok(Some(false)) => {
+                    collect_closed_value_arithmetic_failures_with_bindings(
+                        else_branch,
+                        bindings,
+                        failures,
+                    );
+                }
+                Ok(None) => {}
+                Err(failure) => failures.push(failure),
+            }
+        }
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => {
+            collect_closed_value_arithmetic_failures_with_bindings(scrutinee, bindings, failures);
+            match selected_match_value_checked_with_bindings(
+                scrutinee,
+                *enumeration,
+                arms,
+                bindings,
+            ) {
+                Ok(Some((value, selected_bindings))) => {
+                    collect_closed_value_arithmetic_failures_with_bindings(
+                        value,
+                        &selected_bindings,
+                        failures,
+                    );
+                }
+                Ok(None) => {}
+                Err(failure) => failures.push(failure),
+            }
+        }
+        _ => {
+            if let Err(failure) = is_closed_total_value_checked_with_bindings(expression, bindings)
+            {
+                failures.push(failure);
+            }
+        }
     }
 }
 
