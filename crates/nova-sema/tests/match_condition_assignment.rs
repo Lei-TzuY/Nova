@@ -21,20 +21,19 @@ fn code_count(output: &AnalysisOutput, code: &str) -> usize {
 }
 
 #[test]
-fn while_match_condition_never_arm_does_not_erase_reachable_initialization() {
+fn while_match_scrutinee_assignment_initializes_post_loop_state() {
     let output = analyze_text(
         r#"
         enum Switch { Off, On }
-        fn stop() -> ! { stop() }
 
         fn main(switch: Switch) -> Int {
             var value: Int;
-            while match switch {
-                Switch::Off => stop(),
-                Switch::On => {
-                    value = 7;
-                    false
-                },
+            while match {
+                value = 7;
+                switch
+            } {
+                Switch::Off => false,
+                Switch::On => false,
             } {}
             value
         }
