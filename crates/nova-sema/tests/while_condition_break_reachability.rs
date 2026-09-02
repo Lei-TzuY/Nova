@@ -149,3 +149,34 @@ fn nested_while_condition_return_does_not_exit_outer_loop() {
 
     assert_eq!(code_count(&output, "N3032"), 0, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn invalid_nested_while_condition_break_does_not_exit_outer_loop() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn runtime_bool(value: Bool) -> Bool { value }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        while if runtime_bool(true) {
+                            break;
+                        } else {
+                            0
+                        } {}
+                    }
+                    let diagnostic_only = 13 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3004"), 1, "{:?}", output.diagnostics);
+    assert_eq!(code_count(&output, "N3032"), 0, "{:?}", output.diagnostics);
+}
