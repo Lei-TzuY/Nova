@@ -54,20 +54,20 @@ fn invalid_compound_self_assignment_does_not_initialize_delayed_binding() {
 }
 
 #[test]
-fn branching_rhs_self_dependency_does_not_initialize_delayed_binding() {
+fn unreachable_rhs_self_read_does_not_block_initialization() {
     let output = analyze_text(
         r#"
-        fn main(flag: Bool) -> Int {
+        fn main() -> Int {
             var value: Int;
             var other: Int = 1;
-            value = if flag { value } else { other };
+            value = if true { other } else { value };
             value;
             0
         }
         "#,
     );
 
-    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
+    assert_eq!(code_count(&output, "N3009"), 0, "{:?}", output.diagnostics);
 }
 
 #[test]
