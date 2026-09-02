@@ -3,7 +3,7 @@
 This document specifies Nova's semantic-introspection schema version 2. It
 preserves every schema-v1 program fact and adds the verified function-level
 control-flow graph (CFG) used by bootstrap definite-initialization analysis.
-It is a tooling protocol for successfully checked, single-file programs, not a
+It is a tooling protocol for successfully checked, single-source programs, not a
 serialization of HIR, MIR, a backend IR, or an ABI.
 
 The normative structural schema is
@@ -15,7 +15,7 @@ files. The v1 file remains checked in and independently supported by the CLI.
 ## Invocation and compatibility
 
 ```text
-nova inspect <file> --format json --schema-version 2 [--message-format human|json] [--fail-on-warnings]
+nova inspect <file|-> --format json --schema-version 2 [--message-format human|json] [--fail-on-warnings]
 ```
 
 Omitting `--schema-version` continues to select v1. Explicit

@@ -36,6 +36,12 @@ output. Their effect is:
 | any error | `1` | diagnostics on stderr | no execution | no document |
 | invalid command line | `2` | usage error | usage error | usage error |
 
+Every source command accepts exactly one filesystem path or `-`. The latter consumes
+standard input to EOF and uses `<stdin>` as the source name in human and JSON diagnostics.
+A standard-input read failure is `N0002`; malformed bytes remain `N0001`, with the first
+invalid byte offset reported against `<stdin>`. Input transport does not otherwise change
+diagnostic ordering, severity, command output, or exit policy.
+
 `--message-format human|json` changes diagnostic presentation only. It does not
 change acceptance, exit status, runtime values, or semantic-inspection JSON.
 

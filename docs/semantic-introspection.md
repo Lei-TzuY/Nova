@@ -2,7 +2,7 @@
 
 This document specifies Nova's first machine-readable semantic-introspection
 contract. It is a bootstrap tooling protocol for successfully checked,
-single-file programs. It is not a serialization of HIR, an execution IR, a
+single-source programs. It is not a serialization of HIR, an execution IR, a
 language ABI, or a claim that the represented semantics are stable for Nova
 1.0.
 
@@ -15,7 +15,7 @@ the documented array ordering remains semantic.
 ## Invocation and failure behavior
 
 ```text
-nova inspect <file> --format json [--schema-version 1] [--message-format human|json] [--fail-on-warnings]
+nova inspect <file|-> --format json [--schema-version 1] [--message-format human|json] [--fail-on-warnings]
 ```
 
 Schema v1 remains the default when `--schema-version` is omitted. Explicit
@@ -68,10 +68,11 @@ support duration and migration tooling have not yet been promised.
 
 ## Sources and spans
 
-The bootstrap accepts one source file, represented as `source:0`. Paths are not
-canonicalized. The CLI stores a UTF-8 display name; non-UTF-8 path bytes are
-represented with the platform's lossy replacement rather than recoverable raw
-path bytes. Source contents are not copied into the document. Every span is a
+The bootstrap accepts one source, represented as `source:0`. A filesystem path is not
+canonicalized. The CLI stores its UTF-8 display name; non-UTF-8 path bytes are represented
+with the platform's lossy replacement rather than recoverable raw path bytes. The exact
+source operand `-` instead reads standard input to EOF and publishes the reserved display
+name `<stdin>`. Source contents are not copied into the document. Every span is a
 source-qualified, half-open UTF-8 byte range:
 
 ```json
@@ -143,7 +144,7 @@ control flow; only `never` lacks a surface spelling.
 
 ## Deliberate v1 limits
 
-The bootstrap is single-file and exposes no module graph, effects, ownership or
+The bootstrap is single-source and exposes no module graph, effects, ownership or
 region facts, unsafe capabilities, lifetimes, generic substitutions, layout,
 ABI, MIR transformations, runtime values, or incremental-compilation keys.
 The compiler's verified bootstrap CFG and definite-initialization events are also

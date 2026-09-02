@@ -14,7 +14,7 @@ schema files together.
 ## Invocation and compatibility
 
 ```text
-nova inspect <file> --format json --schema-version 3 [--message-format human|json] [--fail-on-warnings]
+nova inspect <file|-> --format json --schema-version 3 [--message-format human|json] [--fail-on-warnings]
 ```
 
 Omitting `--schema-version` still selects v1. Explicit v2 still means the exact v2 contract.
