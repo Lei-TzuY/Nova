@@ -37,6 +37,23 @@ fn invalid_self_assignment_does_not_initialize_delayed_binding() {
 }
 
 #[test]
+fn invalid_compound_self_assignment_does_not_initialize_delayed_binding() {
+    let output = analyze_text(
+        r#"
+        fn main() -> Int {
+            var value: Int;
+            var other: Int = 1;
+            value = value + other;
+            value;
+            0
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
