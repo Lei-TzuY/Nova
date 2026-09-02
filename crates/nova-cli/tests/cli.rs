@@ -91,12 +91,7 @@ fn standard_input_preserves_diagnostics_and_strict_warning_policy() {
     assert!(stderr.contains("<stdin>: first invalid byte sequence begins at byte offset 2"));
 
     let warned = nova_with_stdin(
-        &[
-            "run",
-            "-",
-            "--fail-on-warnings",
-            "--message-format=json",
-        ],
+        &["run", "-", "--fail-on-warnings", "--message-format=json"],
         b"fn main() -> Int {\n    return 42;\n    0;\n    1\n}\n",
     );
     assert_eq!(warned.status.code(), Some(1));
