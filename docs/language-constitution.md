@@ -512,8 +512,11 @@ Errors reject the requested operation; warnings describe accepted programs.
 diagnostic-only source immediately following an executable `return`, `break`, or
 `continue`. Warnings are emitted on standard error while `check`, `run`, and
 `inspect` retain status `0` and their ordinary successful outputs. Existing
-errors suppress this warning pass. Warning controls, lint groups, and
-warnings-as-errors policy remain unresolved rather than being approximated.
+errors suppress this warning pass. The opt-in `--fail-on-warnings` CLI policy returns
+status `1` for warning-bearing semantic commands, suppresses `run` execution and
+`inspect` output, and deliberately preserves warning severity. Warning selection,
+lint groups, source suppression, and severity-promoting warnings-as-errors remain
+unresolved rather than being approximated.
 
 The bootstrap exposes semantic-inspection schema v1 for successfully checked
 single-file programs. It projects resolved declarations, bindings, types,

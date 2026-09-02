@@ -1,4 +1,4 @@
-use nova_diagnostics::{Diagnostic, render_human_all, render_json_lines};
+use nova_diagnostics::{Diagnostic, Severity, render_human_all, render_json_lines};
 use nova_inspect::{
     render_json as render_semantic_json, render_json_v2 as render_semantic_json_v2,
     render_json_v3 as render_semantic_json_v3,
@@ -18,16 +18,17 @@ use std::process::ExitCode;
 const USAGE: &str = "Nova bootstrap compiler
 
 Usage:
-  nova check <file> [--message-format human|json]
-  nova run <file> [--message-format human|json]
+  nova check <file> [--message-format human|json] [--fail-on-warnings]
+  nova run <file> [--message-format human|json] [--fail-on-warnings]
   nova ast <file> [--message-format human|json]
-  nova inspect <file> --format json [--schema-version 1|2|3] [--message-format human|json]
+  nova inspect <file> --format json [--schema-version 1|2|3] [--message-format human|json] [--fail-on-warnings]
   nova --help
 
 `check` validates UTF-8, tokens, syntax, names, types, and definite assignment.
 `run` performs the same checks and executes zero-argument `main` in the bootstrap interpreter.
 `ast` prints the parsed syntax tree after lexical and syntactic validation.
-`inspect` emits versioned semantic facts for a successfully checked program.";
+`inspect` emits versioned semantic facts for a successfully checked program.
+`--fail-on-warnings` returns status 1 without promoting warning diagnostics to errors.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {
@@ -63,6 +64,7 @@ struct Options {
     message_format: MessageFormat,
     inspect_format: Option<InspectFormat>,
     inspect_schema_version: Option<InspectSchemaVersion>,
+    fail_on_warnings: bool,
 }
 
 enum ParsedArguments {
@@ -152,6 +154,11 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
 
     let analyzed = analyze(&parsed.program);
     let accepted = analyzed.is_success();
+    let warnings_rejected = options.fail_on_warnings
+        && analyzed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Severity::Warning);
     if !analyzed.diagnostics.is_empty() {
         emit_diagnostics(
             &analyzed.diagnostics,
@@ -160,7 +167,7 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
             stderr,
         )?;
     }
-    if !accepted {
+    if !accepted || warnings_rejected {
         return Ok(1);
     }
 
@@ -234,6 +241,7 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
     let mut message_format = MessageFormat::Human;
     let mut inspect_format = None;
     let mut inspect_schema_version = None;
+    let mut fail_on_warnings = false;
     let mut index = 1;
 
     while index < arguments.len() {
@@ -263,6 +271,8 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
             inspect_schema_version = Some(parse_inspect_schema_version(value)?);
         } else if let Some(value) = text.and_then(|value| value.strip_prefix("--schema-version=")) {
             inspect_schema_version = Some(parse_inspect_schema_version(value)?);
+        } else if text == Some("--fail-on-warnings") {
+            fail_on_warnings = true;
         } else if text.is_some_and(|value| value.starts_with('-')) {
             return Err(format!("unknown option `{}`", argument.to_string_lossy()));
         } else if path.replace(PathBuf::from(argument)).is_some() {
@@ -282,12 +292,16 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
     if command != Command::Inspect && inspect_schema_version.is_some() {
         return Err("`--schema-version` is only valid with `inspect`".to_owned());
     }
+    if command == Command::Ast && fail_on_warnings {
+        return Err("`--fail-on-warnings` is not valid with `ast`".to_owned());
+    }
     Ok(ParsedArguments::Run(Options {
         command,
         path,
         message_format,
         inspect_format,
         inspect_schema_version,
+        fail_on_warnings,
     }))
 }
 
@@ -370,6 +384,7 @@ mod tests {
                 message_format: MessageFormat::Json,
                 inspect_format: None,
                 inspect_schema_version: None,
+                fail_on_warnings: false,
             }) if path.as_path() == Path::new("sample.nv")
         ));
         assert!(matches!(
@@ -380,6 +395,7 @@ mod tests {
                 message_format: MessageFormat::Human,
                 inspect_format: None,
                 inspect_schema_version: None,
+                fail_on_warnings: false,
             }) if path.as_path() == Path::new("sample.nv")
         ));
 
@@ -393,6 +409,7 @@ mod tests {
                 message_format: MessageFormat::Human,
                 inspect_format: Some(InspectFormat::Json),
                 inspect_schema_version: None,
+                fail_on_warnings: false,
             }) if path.as_path() == Path::new("sample.nv")
         ));
 
@@ -411,6 +428,7 @@ mod tests {
                 message_format: MessageFormat::Human,
                 inspect_format: Some(InspectFormat::Json),
                 inspect_schema_version: Some(InspectSchemaVersion::V2),
+                fail_on_warnings: false,
             }) if path.as_path() == Path::new("sample.nv")
         ));
 
@@ -429,6 +447,25 @@ mod tests {
                 message_format: MessageFormat::Human,
                 inspect_format: Some(InspectFormat::Json),
                 inspect_schema_version: Some(InspectSchemaVersion::V3),
+                fail_on_warnings: false,
+            }) if path.as_path() == Path::new("sample.nv")
+        ));
+
+        let strict = parse_arguments(&arguments(&[
+            "check",
+            "--fail-on-warnings",
+            "sample.nv",
+        ]))
+        .expect("valid strict warning arguments");
+        assert!(matches!(
+            strict,
+            ParsedArguments::Run(Options {
+                command: Command::Check,
+                path,
+                message_format: MessageFormat::Human,
+                inspect_format: None,
+                inspect_schema_version: None,
+                fail_on_warnings: true,
             }) if path.as_path() == Path::new("sample.nv")
         ));
     }
@@ -453,6 +490,8 @@ mod tests {
             ],
             vec!["check", "x.nv", "--format", "json"],
             vec!["check", "x.nv", "--schema-version", "2"],
+            vec!["ast", "x.nv", "--fail-on-warnings"],
+            vec!["check", "x.nv", "--fail-on-warnings=true"],
         ] {
             assert!(parse_arguments(&arguments(&values)).is_err(), "{values:?}");
         }

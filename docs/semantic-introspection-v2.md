@@ -15,7 +15,7 @@ files. The v1 file remains checked in and independently supported by the CLI.
 ## Invocation and compatibility
 
 ```text
-nova inspect <file> --format json --schema-version 2 [--message-format human|json]
+nova inspect <file> --format json --schema-version 2 [--message-format human|json] [--fail-on-warnings]
 ```
 
 Omitting `--schema-version` continues to select v1. Explicit
@@ -32,8 +32,10 @@ source receives inspection invariant `N5001` and must be inspected with explicit
 
 Inspection still runs the complete lexical, syntactic, name-resolution, type,
 and definite-initialization pipeline. Rejected source writes diagnostics and no
-document. Non-fatal warnings remain on standard error and do not prevent an
-accepted v2 document. Before v2 serialization, `nova-inspect` also checks that:
+document. By default, non-fatal warnings remain on standard error and do not prevent an
+accepted v2 document. With `--fail-on-warnings`, they retain warning severity while
+inspection returns status `1` without emitting a document. Before v2 serialization,
+`nova-inspect` also checks that:
 
 - there is exactly one CFG for every HIR function, in function order;
 - each CFG and graph-local node identity matches its deterministic slot;

@@ -39,6 +39,14 @@ output. Their effect is:
 `--message-format human|json` changes diagnostic presentation only. It does not
 change acceptance, exit status, runtime values, or semantic-inspection JSON.
 
+`check`, `run`, and `inspect` also accept `--fail-on-warnings` for strict CI
+policy. If otherwise-successful semantic analysis emits a warning, the option
+changes the exit status to `1`; `run` does not execute the program and `inspect`
+does not emit a document. The diagnostics retain severity `warning` in both
+renderers rather than being promoted to errors. Programs with no warnings and
+programs already rejected by errors behave unchanged. `ast` rejects this option
+because it deliberately stops before semantic analysis.
+
 ## `N3031` / `N3032` closed arithmetic failures
 
 Semantic analysis reports an execution failure early when the side-effect-free
@@ -121,8 +129,9 @@ dynamic enum matches.
 
 ## Deliberate limits
 
-Nova has no warning configuration, lint groups, source attributes, command-line
-allow/deny switches, warnings-as-errors mode, cap-lints policy, or cross-package
-diagnostic aggregation yet. `N3033` and `N3034` are narrow implemented proofs, not a
-claim that CFG reachability or pattern usefulness is a general-purpose linter or that the
-current warning set is complete.
+Apart from the whole-program `--fail-on-warnings` exit policy, Nova has no warning
+selection, lint groups, source attributes, command-line allow/deny switches,
+severity-promoting warnings-as-errors mode, cap-lints policy, or cross-package diagnostic
+aggregation yet. `N3033` and `N3034` are narrow implemented proofs, not a claim that CFG
+reachability or pattern usefulness is a general-purpose linter or that the current warning
+set is complete.

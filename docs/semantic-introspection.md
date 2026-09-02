@@ -15,7 +15,7 @@ the documented array ordering remains semantic.
 ## Invocation and failure behavior
 
 ```text
-nova inspect <file> --format json [--schema-version 1] [--message-format human|json]
+nova inspect <file> --format json [--schema-version 1] [--message-format human|json] [--fail-on-warnings]
 ```
 
 Schema v1 remains the default when `--schema-version` is omitted. Explicit
@@ -30,9 +30,11 @@ ordinary structured diagnostics to standard error and writes no partial
 document. `--message-format` controls those diagnostics; it does not change the
 successful inspection document.
 
-A successful analysis may carry non-fatal warnings. They are written to standard
-error and do not prevent the v1 document from being emitted; warning severity and
-code are not copied into this semantic-fact schema.
+A successful analysis may carry non-fatal warnings. By default, they are written
+to standard error and do not prevent the v1 document from being emitted; warning
+severity and code are not copied into this semantic-fact schema. With
+`--fail-on-warnings`, the same warning diagnostics retain their severity while
+inspection returns status `1` and emits no document.
 
 Before serialization, `nova-inspect` independently checks the HIR invariants
 needed by the public document: source ranges, declaration and binding identity
