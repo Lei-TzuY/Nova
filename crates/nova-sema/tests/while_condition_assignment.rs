@@ -4,11 +4,7 @@ use nova_sema::{AnalysisOutput, analyze};
 use nova_source::{SourceFile, SourceId};
 
 fn analyze_text(text: &str) -> AnalysisOutput {
-    let source = SourceFile::new(
-        SourceId::new(0),
-        "while-condition-assignment.nv",
-        text,
-    );
+    let source = SourceFile::new(SourceId::new(0), "while-condition-assignment.nv", text);
     let lexed = lex(&source);
     assert!(lexed.is_success(), "{:?}", lexed.diagnostics);
     let parsed = parse(&source, &lexed.tokens);
@@ -39,16 +35,6 @@ fn valid_while_condition_exports_mandatory_assignment_initialization() {
         "#,
     );
 
-    assert_eq!(
-        code_count(&output, "N3004"),
-        0,
-        "{:?}",
-        output.diagnostics
-    );
-    assert_eq!(
-        code_count(&output, "N3009"),
-        0,
-        "{:?}",
-        output.diagnostics
-    );
+    assert_eq!(code_count(&output, "N3004"), 0, "{:?}", output.diagnostics);
+    assert_eq!(code_count(&output, "N3009"), 0, "{:?}", output.diagnostics);
 }
