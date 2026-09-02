@@ -39,6 +39,16 @@ fn valid_while_condition_exports_mandatory_assignment_initialization() {
         "#,
     );
 
-    assert_eq!(code_count(&output, "N3004"), 0, "{:?}", output.diagnostics);
-    assert_eq!(code_count(&output, "N3009"), 0, "{:?}", output.diagnostics);
+    assert_eq!(
+        code_count(&output, "N3004"),
+        0,
+        "{:?}",
+        output.diagnostics
+    );
+    assert_eq!(
+        code_count(&output, "N3009"),
+        0,
+        "{:?}",
+        output.diagnostics
+    );
 }
