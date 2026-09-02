@@ -350,6 +350,7 @@ fn initialization_reads_target(
     graph: &FunctionControlFlow,
     node: &FlowNode,
     binding: BindingId,
+    inputs: &[BTreeSet<BindingId>],
 ) -> bool {
     let Some(target_span) = node.span else {
         return false;
@@ -371,6 +372,7 @@ fn initialization_reads_target(
             && predecessor.span.is_some_and(|read_span| {
                 read_span.source() == target_span.source() && read_span.start() >= target_span.end()
             })
+            && !inputs[predecessor.id.index()].contains(&binding)
         {
             return true;
         }
@@ -412,7 +414,7 @@ pub(crate) fn definite_initialization_diagnostics(
             };
             let mut outgoing = incoming.clone();
             if let FlowNodeKind::Initialize(binding) = &node.kind {
-                if !initialization_reads_target(graph, node, *binding) {
+                if !initialization_reads_target(graph, node, *binding, &inputs) {
                     outgoing.insert(*binding);
                 }
             }
