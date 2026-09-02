@@ -18,17 +18,17 @@ use std::process::ExitCode;
 const USAGE: &str = "Nova bootstrap compiler
 
 Usage:
-  nova check <file|-> [--message-format human|json] [--fail-on-warnings]
-  nova run <file|-> [--message-format human|json] [--fail-on-warnings]
-  nova ast <file|-> [--message-format human|json]
-  nova inspect <file|-> --format json [--schema-version 1|2|3] [--message-format human|json] [--fail-on-warnings]
+  nova check <file|-> [--source-name name] [--message-format human|json] [--fail-on-warnings]
+  nova run <file|-> [--source-name name] [--message-format human|json] [--fail-on-warnings]
+  nova ast <file|-> [--source-name name] [--message-format human|json]
+  nova inspect <file|-> --format json [--schema-version 1|2|3] [--source-name name] [--message-format human|json] [--fail-on-warnings]
   nova --help
 
 `check` validates UTF-8, tokens, syntax, names, types, and definite assignment.
 `run` performs the same checks and executes zero-argument `main` in the bootstrap interpreter.
 `ast` prints the parsed syntax tree after lexical and syntactic validation.
 `inspect` emits versioned semantic facts for a successfully checked program.
-`-` reads one source from standard input and names it `<stdin>` in diagnostics and inspection.
+`-` reads one source from standard input; `--source-name` overrides its `<stdin>` display name.
 `--fail-on-warnings` returns status 1 without promoting warning diagnostics to errors.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -61,7 +61,7 @@ enum InspectSchemaVersion {
 #[derive(Debug, Eq, PartialEq)]
 enum SourceInput {
     File(PathBuf),
-    Stdin,
+    Stdin { display_name: String },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -119,11 +119,11 @@ fn run(
             "source file is not valid UTF-8",
             fs::read(path),
         ),
-        SourceInput::Stdin => {
+        SourceInput::Stdin { display_name } => {
             let mut bytes = Vec::new();
             let result = stdin.read_to_end(&mut bytes).map(|_| bytes);
             (
-                "<stdin>".to_owned(),
+                display_name.clone(),
                 "could not read standard input",
                 "standard input is not valid UTF-8",
                 result,
@@ -272,6 +272,7 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
     let mut inspect_format = None;
     let mut inspect_schema_version = None;
     let mut fail_on_warnings = false;
+    let mut source_name = None;
     let mut index = 1;
 
     while index < arguments.len() {
@@ -301,10 +302,23 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
             inspect_schema_version = Some(parse_inspect_schema_version(value)?);
         } else if let Some(value) = text.and_then(|value| value.strip_prefix("--schema-version=")) {
             inspect_schema_version = Some(parse_inspect_schema_version(value)?);
+        } else if text == Some("--source-name") {
+            index += 1;
+            let Some(value) = arguments.get(index).and_then(|value| value.to_str()) else {
+                return Err(source_name_requirement());
+            };
+            source_name = Some(parse_source_name(value)?);
+        } else if let Some(value) = text.and_then(|value| value.strip_prefix("--source-name=")) {
+            source_name = Some(parse_source_name(value)?);
         } else if text == Some("--fail-on-warnings") {
             fail_on_warnings = true;
         } else if text == Some("-") {
-            if source.replace(SourceInput::Stdin).is_some() {
+            if source
+                .replace(SourceInput::Stdin {
+                    display_name: "<stdin>".to_owned(),
+                })
+                .is_some()
+            {
                 return Err("expected exactly one source input".to_owned());
             }
         } else if text.is_some_and(|value| value.starts_with('-')) {
@@ -318,9 +332,18 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
         index += 1;
     }
 
-    let Some(source) = source else {
+    let Some(mut source) = source else {
         return Err("missing source input".to_owned());
     };
+    match (&mut source, source_name) {
+        (SourceInput::Stdin { display_name }, Some(source_name)) => {
+            *display_name = source_name;
+        }
+        (SourceInput::File(_), Some(_)) => {
+            return Err("`--source-name` is only valid when the source input is `-`".to_owned());
+        }
+        (_, None) => {}
+    }
     match (command, inspect_format) {
         (Command::Inspect, None) => return Err("`inspect` requires `--format json`".to_owned()),
         (Command::Inspect, Some(_)) | (_, None) => {}
@@ -350,6 +373,17 @@ fn parse_message_format(value: &str) -> Result<MessageFormat, String> {
             "unsupported message format `{value}`; expected `human` or `json`"
         )),
     }
+}
+
+fn parse_source_name(value: &str) -> Result<String, String> {
+    if value.is_empty() || value.contains('\n') || value.contains('\r') {
+        return Err(source_name_requirement());
+    }
+    Ok(value.to_owned())
+}
+
+fn source_name_requirement() -> String {
+    "`--source-name` requires a non-empty, single-line UTF-8 display name".to_owned()
 }
 
 fn parse_inspect_format(value: &str) -> Result<InspectFormat, String> {
@@ -508,13 +542,36 @@ mod tests {
             stdin,
             ParsedArguments::Run(Options {
                 command: Command::Check,
-                source: SourceInput::Stdin,
+                source: SourceInput::Stdin { display_name },
                 message_format: MessageFormat::Human,
                 inspect_format: None,
                 inspect_schema_version: None,
                 fail_on_warnings: false,
-            })
+            }) if display_name == "<stdin>"
         ));
+    }
+
+    #[test]
+    fn parses_explicit_standard_input_display_names() {
+        for (values, expected) in [
+            (
+                vec!["check", "-", "--source-name", "editor:///main.nv"],
+                "editor:///main.nv",
+            ),
+            (
+                vec!["ast", "--source-name=virtual/input.nv", "-"],
+                "virtual/input.nv",
+            ),
+        ] {
+            let parsed = parse_arguments(&arguments(&values)).expect("valid source name");
+            assert!(matches!(
+                parsed,
+                ParsedArguments::Run(Options {
+                    source: SourceInput::Stdin { display_name },
+                    ..
+                }) if display_name == expected
+            ));
+        }
     }
 
     #[test]
@@ -540,9 +597,28 @@ mod tests {
             vec!["check", "x.nv", "--schema-version", "2"],
             vec!["ast", "x.nv", "--fail-on-warnings"],
             vec!["check", "x.nv", "--fail-on-warnings=true"],
+            vec!["check", "x.nv", "--source-name", "virtual/input.nv"],
+            vec!["check", "-", "--source-name"],
+            vec!["check", "-", "--source-name="],
+            vec!["check", "-", "--source-name=line\nbreak"],
         ] {
             assert!(parse_arguments(&arguments(&values)).is_err(), "{values:?}");
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_non_utf8_standard_input_display_names() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let arguments = vec![
+            OsString::from("check"),
+            OsString::from("-"),
+            OsString::from("--source-name"),
+            OsString::from_vec(vec![0xff]),
+        ];
+
+        assert!(parse_arguments(&arguments).is_err());
     }
 
     struct FailingStdin;
@@ -560,7 +636,7 @@ mod tests {
         let mut stderr = Vec::new();
 
         let status = run(
-            &arguments(&["check", "-"]),
+            &arguments(&["check", "-", "--source-name", "pipe/main.nv"]),
             &mut stdin,
             &mut stdout,
             &mut stderr,
@@ -571,6 +647,6 @@ mod tests {
         assert!(stdout.is_empty());
         let stderr = String::from_utf8(stderr).expect("diagnostic is UTF-8");
         assert!(stderr.contains("error[N0002]: could not read standard input"));
-        assert!(stderr.contains("<stdin>: injected stdin failure"));
+        assert!(stderr.contains("pipe/main.nv: injected stdin failure"));
     }
 }

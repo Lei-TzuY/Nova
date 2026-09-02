@@ -59,8 +59,10 @@ literals, `//` line comments, and nested
 `/* ... */` block comments. Keywords are reserved. Files with malformed UTF-8
 are rejected before lexing. Each source-oriented CLI command accepts exactly one
 filesystem path or `-`; the latter consumes standard input to EOF and assigns the stable
-display name `<stdin>`. This changes only source transport and identity presentation—the
-same validation and language pipeline follows. The compact normative details are in
+display name `<stdin>`. Tooling may replace that stdin-only presentation metadata with a
+non-empty, single-line UTF-8 `--source-name`; Nova does not interpret it as a path or URI.
+This changes only source transport and identity presentation—the same validation and
+language pipeline follows. The compact normative details are in
 [`grammar.md`](grammar.md).
 
 **Decided.** Parsers fail closed. A parser may recover to report more errors,

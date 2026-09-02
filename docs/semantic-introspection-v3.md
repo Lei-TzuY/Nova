@@ -14,7 +14,7 @@ schema files together.
 ## Invocation and compatibility
 
 ```text
-nova inspect <file|-> --format json --schema-version 3 [--message-format human|json] [--fail-on-warnings]
+nova inspect <file|-> --format json --schema-version 3 [--source-name name] [--message-format human|json] [--fail-on-warnings]
 ```
 
 Omitting `--schema-version` still selects v1. Explicit v2 still means the exact v2 contract.
@@ -23,6 +23,9 @@ A program containing `Enum::Variant(_)` is valid for `check` and `run`, but v1/v
 fails closed with `N5001` because those schemas cannot distinguish an explicit discard from
 an invalid missing payload binding without changing the meaning of their existing `binding`
 field. Selecting v3 is therefore required for such source.
+
+Source naming remains the v1 contract: stdin defaults to `<stdin>`, and `--source-name`
+changes only that display metadata rather than any schema or source-text semantics.
 
 V3 uses the same schema family `nova.semantic-inspection`, changes `schema_version` to `3`,
 retains `program` and `control_flow`, and adds one required top-level table:
