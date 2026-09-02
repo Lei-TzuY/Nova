@@ -99,7 +99,7 @@ not by adding unrelated syntax.
 
 ## Phase 2 — Semantic core
 
-**Status: fifty-four vertical slices implemented; broader type-system work remains.**
+**Status: fifty-five vertical slices implemented; broader type-system work remains.**
 
 Implemented in the first Phase 2 slice:
 
@@ -725,7 +725,7 @@ Implemented in the thirty-ninth Phase 2 slice:
 - warning roots are span-deduplicated, diagnostic-only transfers cannot cascade nested
   warnings, and any semantic error suppresses the warning pass;
 - `nova check`, `nova run`, and `nova inspect` render warnings to stderr in human or
-  JSON Lines form while retaining status `0` and their ordinary successful stdout;
+  JSON Lines form while by default retaining status `0` and their ordinary successful stdout;
 - semantic-inspection v1 and v2 continue to accept warning-bearing analysis without
   embedding diagnostic presentation into either schema; and
 - semantic, CFG, renderer, and CLI regressions lock severity, spans, deduplication,
@@ -961,6 +961,20 @@ Implemented in the fifty-fourth Phase 2 slice:
   unreachable-warning behavior without new side state; and
 - semantic-inspection v1/v2/v3 naturally publish the existing Return statement with an
   empty expression list, requiring no schema reinterpretation or version bump.
+
+Implemented in the fifty-fifth Phase 2 slice:
+
+- `nova check`, `nova run`, and `nova inspect` accept an opt-in `--fail-on-warnings`
+  policy for strict automation while preserving the default non-fatal warning behavior;
+- a warning-bearing semantic analysis under that policy returns status `1`, prevents
+  interpreter execution, and suppresses semantic-inspection output for every schema;
+- warning diagnostics keep their structured `warning` severity in human and JSON Lines
+  rendering rather than being promoted or assigned parallel error codes;
+- clean programs and existing error paths retain their established output and statuses,
+  while `nova ast` rejects the option because it stops before semantic analysis; and
+- parser and end-to-end CLI regressions lock option scope, status, output suppression,
+  severity preservation, and unchanged default behavior without adding lint selection,
+  source suppression, or a schema change.
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:

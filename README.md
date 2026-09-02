@@ -39,7 +39,7 @@ interpreter slices. The toolchain is written in Rust and can:
   pattern matching, mutation, blocks, conditionals, bounded loops, and structured
   `break`/`continue`;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
-  text or JSON Lines, including non-fatal reachability and match-usefulness warnings;
+  text or JSON Lines, including reachability and match-usefulness warnings;
 - print a deterministic debug representation of the parsed AST; and
 - emit fail-closed semantic-inspection v1 documents with resolved declarations,
   bindings, types, spans, expression relationships, and exhaustive match facts,
@@ -57,7 +57,10 @@ Semantic warnings do not reject an otherwise valid program. The bootstrap report
 `break`, or `continue`, and `N3034` when a direct enum-constructor match scrutinee
 proves that an otherwise-valid concrete variant arm can never be selected. Warnings are
 written to standard error while `check`, `run`, or `inspect` continues normally. Any
-semantic error suppresses these deferred warnings to avoid recovery cascades.
+semantic error suppresses these deferred warnings to avoid recovery cascades. For strict
+CI, `--fail-on-warnings` makes warning-bearing semantic commands return status `1`
+without changing diagnostic severity; it also prevents `run` execution and `inspect`
+document output.
 
 The implemented syntax is intentionally small:
 
@@ -444,10 +447,10 @@ cargo run -p nova-cli -- run examples/broken.nv --message-format json
 The installed binary is named `nova`:
 
 ```text
-nova check <file> [--message-format human|json]
-nova run <file> [--message-format human|json]
+nova check <file> [--message-format human|json] [--fail-on-warnings]
+nova run <file> [--message-format human|json] [--fail-on-warnings]
 nova ast <file> [--message-format human|json]
-nova inspect <file> --format json [--schema-version 1|2] [--message-format human|json]
+nova inspect <file> --format json [--schema-version 1|2|3] [--message-format human|json] [--fail-on-warnings]
 ```
 
 Exit status `0` means the requested operation succeeded, `1` means the source or
@@ -458,7 +461,10 @@ even when `nova check` or `nova run` would reject that program later.
 writes no partial document when source diagnostics or an inspection invariant
 failure occurs. Non-fatal warnings are written to standard error without changing
 status `0`, runtime output, or a successful inspection document. Schema v1 remains
-the default; v2 must be requested explicitly.
+the default; v2 and v3 must be requested explicitly. With `--fail-on-warnings`, semantic
+warnings instead produce status `1` while retaining warning severity; `run` and `inspect`
+suppress their ordinary standard output. The option is invalid with `ast`, which does not
+perform semantic analysis.
 
 ## Bootstrap architecture
 

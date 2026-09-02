@@ -14,7 +14,7 @@ schema files together.
 ## Invocation and compatibility
 
 ```text
-nova inspect <file> --format json --schema-version 3 [--message-format human|json]
+nova inspect <file> --format json --schema-version 3 [--message-format human|json] [--fail-on-warnings]
 ```
 
 Omitting `--schema-version` still selects v1. Explicit v2 still means the exact v2 contract.
@@ -27,6 +27,10 @@ field. Selecting v3 is therefore required for such source.
 V3 uses the same schema family `nova.semantic-inspection`, changes `schema_version` to `3`,
 retains `program` and `control_flow`, and adds one required top-level table:
 `match_patterns`.
+
+Inspection warning policy is schema-independent. By default, warnings remain on standard
+error while the document is emitted. With `--fail-on-warnings`, they retain warning severity
+while inspection returns status `1` without emitting a document.
 
 ## Match-pattern facts
 

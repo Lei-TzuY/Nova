@@ -287,6 +287,80 @@ fn warnings_are_nonfatal_for_check_run_and_inspect() {
 }
 
 #[test]
+fn fail_on_warnings_rejects_warnings_without_promoting_them() {
+    let path = fixture("valid/unreachable-warning.nv");
+    let path = path.to_str().expect("fixture path is UTF-8");
+
+    let checked = nova(&["check", "--fail-on-warnings", path]);
+    assert_eq!(checked.status.code(), Some(1));
+    assert!(checked.stdout.is_empty());
+    let check_stderr = String::from_utf8(checked.stderr).expect("warning is UTF-8");
+    assert!(check_stderr.contains("warning[N3033]: unreachable code"));
+    assert!(!check_stderr.contains("error[N3033]"));
+
+    let run = nova(&["run", path, "--message-format=json", "--fail-on-warnings"]);
+    assert_eq!(run.status.code(), Some(1));
+    assert!(run.stdout.is_empty());
+    let run_stderr = String::from_utf8(run.stderr).expect("warning JSON is UTF-8");
+    assert_eq!(run_stderr.lines().count(), 1);
+    assert!(run_stderr.contains("\"severity\":\"warning\""));
+    assert!(run_stderr.contains("\"code\":\"N3033\""));
+
+    let inspected = nova(&[
+        "inspect",
+        path,
+        "--format=json",
+        "--schema-version=3",
+        "--fail-on-warnings",
+    ]);
+    assert_eq!(inspected.status.code(), Some(1));
+    assert!(inspected.stdout.is_empty());
+    let inspect_stderr = String::from_utf8(inspected.stderr).expect("warning is UTF-8");
+    assert!(inspect_stderr.contains("warning[N3033]: unreachable code"));
+}
+
+#[test]
+fn fail_on_warnings_preserves_clean_success_and_ordinary_errors() {
+    let clean = fixture("valid/basic.nv");
+    let clean = clean.to_str().expect("fixture path is UTF-8");
+
+    let checked = nova(&["check", clean, "--fail-on-warnings"]);
+    assert!(checked.status.success());
+    assert!(checked.stdout.is_empty());
+    assert!(checked.stderr.is_empty());
+
+    let run = nova(&["run", "--fail-on-warnings", clean]);
+    assert!(run.status.success());
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
+    assert!(run.stderr.is_empty());
+
+    let inspected = nova(&[
+        "inspect",
+        clean,
+        "--format=json",
+        "--schema-version=3",
+        "--fail-on-warnings",
+    ]);
+    assert!(inspected.status.success());
+    assert!(String::from_utf8_lossy(&inspected.stdout).contains("\"schema_version\": 3"));
+    assert!(inspected.stderr.is_empty());
+
+    let invalid = fixture("invalid/unknown-name.nv");
+    let invalid = invalid.to_str().expect("fixture path is UTF-8");
+    let rejected = nova(&[
+        "check",
+        invalid,
+        "--message-format=json",
+        "--fail-on-warnings",
+    ]);
+    assert_eq!(rejected.status.code(), Some(1));
+    assert!(rejected.stdout.is_empty());
+    let stderr = String::from_utf8(rejected.stderr).expect("diagnostic JSON is UTF-8");
+    assert!(stderr.contains("\"severity\":\"error\""));
+    assert!(stderr.contains("\"code\":\"N3003\""));
+}
+
+#[test]
 fn inspect_command_matches_the_versioned_golden_document() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let default_output = nova_in(
