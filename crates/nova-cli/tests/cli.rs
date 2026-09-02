@@ -167,6 +167,46 @@ fn source_name_is_rejected_for_file_input() {
 }
 
 #[test]
+fn option_terminator_allows_hyphen_prefixed_source_paths() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time is after the Unix epoch")
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!(
+        "nova-option-terminator-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir(&directory).expect("temporary directory should be creatable");
+    let source = directory.join("--program.nv");
+    fs::write(&source, "fn main() -> Int { 42 }\n")
+        .expect("hyphen-prefixed source should be writable");
+
+    let run = nova_in(
+        &directory,
+        &["run", "--message-format=json", "--", "--program.nv"],
+    );
+    let missing = nova_in(&directory, &["check", "--", "--missing.nv"]);
+    let stdin = nova_with_stdin(&["run", "--", "-"], b"fn main() -> Int { 7 }\n");
+
+    let _ = fs::remove_file(source);
+    let _ = fs::remove_dir(directory);
+
+    assert!(run.status.success());
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
+    assert!(run.stderr.is_empty());
+
+    assert_eq!(missing.status.code(), Some(1));
+    assert!(missing.stdout.is_empty());
+    let stderr = String::from_utf8(missing.stderr).expect("read diagnostic is UTF-8");
+    assert!(stderr.contains("error[N0002]: could not read source file"));
+    assert!(stderr.contains("--missing.nv"));
+
+    assert!(stdin.status.success());
+    assert_eq!(String::from_utf8_lossy(&stdin.stdout), "7\n");
+    assert!(stdin.stderr.is_empty());
+}
+
+#[test]
 fn accepts_positive_fixtures() {
     for relative in [
         "valid/basic.nv",

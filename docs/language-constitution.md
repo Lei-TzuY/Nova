@@ -61,6 +61,9 @@ are rejected before lexing. Each source-oriented CLI command accepts exactly one
 filesystem path or `-`; the latter consumes standard input to EOF and assigns the stable
 display name `<stdin>`. Tooling may replace that stdin-only presentation metadata with a
 non-empty, single-line UTF-8 `--source-name`; Nova does not interpret it as a path or URI.
+The standard `--` terminator permits a filesystem operand whose written name starts with
+`-`; option recognition stops at that boundary, while the exact `-` operand still selects
+standard input.
 This changes only source transport and identity presentation—the same validation and
 language pipeline follows. The compact normative details are in
 [`grammar.md`](grammar.md).

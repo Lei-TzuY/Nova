@@ -45,6 +45,12 @@ remain `N0001`, with the first invalid byte offset reported against the selected
 name. Input transport does not otherwise change diagnostic ordering, severity, command
 output, or exit policy.
 
+The option terminator `--` makes the following token the source operand even when its
+filesystem name begins with `-`. Options are not recognized after the terminator; the exact
+operand `-` remains the standard-input sentinel. Missing or multiple operands remain usage
+errors, while a selected but unreadable hyphen-prefixed file is the ordinary `N0002` source
+read failure.
+
 `--message-format human|json` changes diagnostic presentation only. It does not
 change acceptance, exit status, runtime values, or semantic-inspection JSON.
 
