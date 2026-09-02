@@ -369,8 +369,7 @@ fn initialization_reads_target(
         let predecessor = &graph.nodes[predecessor_id.index()];
         if matches!(predecessor.kind, FlowNodeKind::Read(read) if read == binding)
             && predecessor.span.is_some_and(|read_span| {
-                read_span.source() == target_span.source()
-                    && read_span.start() >= target_span.end()
+                read_span.source() == target_span.source() && read_span.start() >= target_span.end()
             })
         {
             return true;
