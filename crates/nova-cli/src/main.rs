@@ -299,8 +299,7 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
                 return Err("`--format` requires `json`".to_owned());
             };
             inspect_format = Some(parse_inspect_format(value)?);
-        } else if let Some(value) = option_text.and_then(|value| value.strip_prefix("--format="))
-        {
+        } else if let Some(value) = option_text.and_then(|value| value.strip_prefix("--format=")) {
             inspect_format = Some(parse_inspect_format(value)?);
         } else if option_text == Some("--schema-version") {
             index += 1;
@@ -606,9 +605,8 @@ mod tests {
             }) if path.as_path() == Path::new("--program.nv")
         ));
 
-        let option_named_file =
-            parse_arguments(&arguments(&["run", "--", "--fail-on-warnings"]))
-                .expect("options are positional after the terminator");
+        let option_named_file = parse_arguments(&arguments(&["run", "--", "--fail-on-warnings"]))
+            .expect("options are positional after the terminator");
         assert!(matches!(
             option_named_file,
             ParsedArguments::Run(Options {
