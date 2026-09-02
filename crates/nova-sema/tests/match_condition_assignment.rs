@@ -4,7 +4,7 @@ use nova_sema::{AnalysisOutput, analyze};
 use nova_source::{SourceFile, SourceId};
 
 fn analyze_text(text: &str) -> AnalysisOutput {
-    let source = SourceFile::new(SourceId::new(0), "noncontinuing-assignment.nv", text);
+    let source = SourceFile::new(SourceId::new(0), "invalid-assignment-flow.nv", text);
     let lexed = lex(&source);
     assert!(lexed.is_success(), "{:?}", lexed.diagnostics);
     let parsed = parse(&source, &lexed.tokens);
@@ -21,20 +21,17 @@ fn code_count(output: &AnalysisOutput, code: &str) -> usize {
 }
 
 #[test]
-fn never_rhs_assignment_does_not_initialize_unreachable_continuation() {
+fn invalid_self_assignment_does_not_initialize_delayed_binding() {
     let output = analyze_text(
         r#"
-        fn stop() -> ! { stop() }
-
         fn main() -> Int {
             var value: Int;
-            value = stop();
+            value = value;
             value;
             0
         }
         "#,
     );
 
-    assert_eq!(code_count(&output, "N3004"), 0, "{:?}", output.diagnostics);
-    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
+    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
 }
