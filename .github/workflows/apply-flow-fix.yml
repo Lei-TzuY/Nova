@@ -1,0 +1,48 @@
+name: Apply focused flow fix
+
+on:
+  push:
+    branches:
+      - fix/initialized-rhs-self-read
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/initialized-rhs-self-read
+      - name: Apply minimal dataflow fix
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("crates/nova-sema/src/control_flow.rs")
+          text = path.read_text()
+          old_signature = """fn initialization_reads_target(\n    graph: &FunctionControlFlow,\n    node: &FlowNode,\n    binding: BindingId,\n) -> bool {"""
+          new_signature = """fn initialization_reads_target(\n    graph: &FunctionControlFlow,\n    node: &FlowNode,\n    binding: BindingId,\n    inputs: &[BTreeSet<BindingId>],\n) -> bool {"""
+          old_read = """        if matches!(predecessor.kind, FlowNodeKind::Read(read) if read == binding)\n            && predecessor.span.is_some_and(|read_span| {\n                read_span.source() == target_span.source() && read_span.start() >= target_span.end()\n            })\n        {"""
+          new_read = """        if matches!(predecessor.kind, FlowNodeKind::Read(read) if read == binding)\n            && predecessor.span.is_some_and(|read_span| {\n                read_span.source() == target_span.source() && read_span.start() >= target_span.end()\n            })\n            && !inputs[predecessor.id.index()].contains(&binding)\n        {"""
+          old_call = "if !initialization_reads_target(graph, node, *binding) {"
+          new_call = "if !initialization_reads_target(graph, node, *binding, &inputs) {"
+
+          for old in (old_signature, old_read, old_call):
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected exactly one replacement site, found {text.count(old)}")
+          text = text.replace(old_signature, new_signature)
+          text = text.replace(old_read, new_read)
+          text = text.replace(old_call, new_call)
+          path.write_text(text)
+      - name: Commit focused fix
+        shell: bash
+        run: |
+          git config user.name "LeiZ"
+          git config user.email "52287354+Lei-TzuY@users.noreply.github.com"
+          git add crates/nova-sema/src/control_flow.rs
+          git diff --cached --check
+          git commit -m "fix: respect initialized RHS self-reads"
+          git push origin HEAD:fix/initialized-rhs-self-read
