@@ -71,6 +71,23 @@ fn unreachable_rhs_self_read_does_not_block_initialization() {
 }
 
 #[test]
+fn reachable_rhs_self_read_still_blocks_initialization() {
+    let output = analyze_text(
+        r#"
+        fn main(flag: Bool) -> Int {
+            var value: Int;
+            var other: Int = 1;
+            value = if flag { value } else { other };
+            value;
+            0
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
