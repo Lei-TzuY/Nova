@@ -412,10 +412,10 @@ pub(crate) fn definite_initialization_diagnostics(
                 intersect_predecessors(node, &outputs, fallback_span)?
             };
             let mut outgoing = incoming.clone();
-            if let FlowNodeKind::Initialize(binding) = &node.kind
-                && !initialization_reads_target(graph, node, *binding)
-            {
-                outgoing.insert(*binding);
+            if let FlowNodeKind::Initialize(binding) = &node.kind {
+                if !initialization_reads_target(graph, node, *binding) {
+                    outgoing.insert(*binding);
+                }
             }
             let index = node.id.index();
             if inputs[index] != incoming || outputs[index] != outgoing {
