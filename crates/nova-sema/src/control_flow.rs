@@ -346,6 +346,46 @@ impl FunctionFlowBuilder {
     }
 }
 
+fn initialization_reads_target(
+    graph: &FunctionControlFlow,
+    node: &FlowNode,
+    binding: BindingId,
+) -> bool {
+    let Some(target_span) = node.span else {
+        return false;
+    };
+    let mut pending = node
+        .predecessors
+        .iter()
+        .filter(|edge| edge.kind != FlowEdgeKind::Backedge)
+        .map(|edge| edge.from)
+        .collect::<VecDeque<_>>();
+    let mut seen = BTreeSet::new();
+
+    while let Some(predecessor_id) = pending.pop_front() {
+        if !seen.insert(predecessor_id) {
+            continue;
+        }
+        let predecessor = &graph.nodes[predecessor_id.index()];
+        if matches!(predecessor.kind, FlowNodeKind::Read(read) if read == binding)
+            && predecessor.span.is_some_and(|read_span| {
+                read_span.source() == target_span.source() && read_span.start() >= target_span.end()
+            })
+        {
+            return true;
+        }
+        pending.extend(
+            predecessor
+                .predecessors
+                .iter()
+                .filter(|edge| edge.kind != FlowEdgeKind::Backedge)
+                .map(|edge| edge.from),
+        );
+    }
+
+    false
+}
+
 pub(crate) fn definite_initialization_diagnostics(
     graph: &FunctionControlFlow,
     fallback_span: Span,
@@ -372,20 +412,7 @@ pub(crate) fn definite_initialization_diagnostics(
             };
             let mut outgoing = incoming.clone();
             if let FlowNodeKind::Initialize(binding) = &node.kind {
-                let self_dependent = node
-                    .predecessors
-                    .first()
-                    .and_then(|edge| graph.nodes.get(edge.from.index()))
-                    .is_some_and(|predecessor| {
-                        matches!(predecessor.kind, FlowNodeKind::Read(read) if read == *binding)
-                            && predecessor.span.zip(node.span).is_some_and(
-                                |(read_span, target_span)| {
-                                    read_span.source() == target_span.source()
-                                        && read_span.start() >= target_span.end()
-                                },
-                            )
-                    });
-                if !self_dependent {
+                if !initialization_reads_target(graph, node, *binding) {
                     outgoing.insert(*binding);
                 }
             }
