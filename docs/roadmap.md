@@ -19,7 +19,7 @@ Completion of the initial document does not freeze unfinished semantics.
 
 ## Phase 1 — Executable frontend foundation
 
-**Status: eight vertical slices implemented; broader grammar work remains.**
+**Status: nine vertical slices implemented; broader grammar work remains.**
 
 - Rust workspace and official `nova` CLI bootstrap;
 - source identity, exact spans, and locations;
@@ -118,6 +118,17 @@ Implemented in the eighth Phase 1 slice:
   and
 - parser and process regressions cover both option spellings, invalid combinations, custom
   diagnostic identity, malformed stdin, inspection output, and injected read failure.
+
+Implemented in the ninth Phase 1 slice:
+
+- all source-oriented commands recognize the standard `--` option terminator before their
+  one source operand, allowing filesystem names that begin with `-`;
+- every token after the boundary is positional rather than option syntax, while the exact
+  `-` operand deliberately retains its established standard-input meaning;
+- missing and multiple operands remain command-line errors, whereas an unreadable selected
+  file continues through the source pipeline as diagnostic `N0002`; and
+- parser and process regressions cover option-like filenames, options before the boundary,
+  missing files, ambiguous operands, and stdin after the terminator.
 
 Next Phase 1 refinements should be driven by the needs of later semantic work,
 not by adding unrelated syntax.

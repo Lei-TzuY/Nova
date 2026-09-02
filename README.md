@@ -448,10 +448,10 @@ cargo run -p nova-cli -- run examples/broken.nv --message-format json
 The installed binary is named `nova`:
 
 ```text
-nova check <file|-> [--source-name name] [--message-format human|json] [--fail-on-warnings]
-nova run <file|-> [--source-name name] [--message-format human|json] [--fail-on-warnings]
-nova ast <file|-> [--source-name name] [--message-format human|json]
-nova inspect <file|-> --format json [--schema-version 1|2|3] [--source-name name] [--message-format human|json] [--fail-on-warnings]
+nova check [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
+nova run [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
+nova ast [--source-name name] [--message-format human|json] [--] <file|->
+nova inspect --format json [--schema-version 1|2|3] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 ```
 
 Each command accepts exactly one source operand. A filesystem path retains its written
@@ -461,6 +461,10 @@ the same UTF-8 and compiler pipeline. Pipelines and editor integrations may give
 non-empty, single-line UTF-8 display name with `--source-name name` or
 `--source-name=name`. The option is invalid for filesystem input, and the supplied value is
 presentation metadata only: Nova neither reads nor canonicalizes it as a path or URI.
+Before the source operand, `--` ends option parsing. The next token is then interpreted as
+the source even when it begins with `-`, allowing invocations such as
+`nova run -- --program.nv`. No token after the terminator is treated as an option, and the
+exact operand `-` retains its standard-input meaning.
 
 Exit status `0` means the requested operation succeeded, `1` means the source or
 execution was rejected, and `2` means the command line was invalid. `nova ast`

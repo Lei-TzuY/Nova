@@ -18,10 +18,10 @@ use std::process::ExitCode;
 const USAGE: &str = "Nova bootstrap compiler
 
 Usage:
-  nova check <file|-> [--source-name name] [--message-format human|json] [--fail-on-warnings]
-  nova run <file|-> [--source-name name] [--message-format human|json] [--fail-on-warnings]
-  nova ast <file|-> [--source-name name] [--message-format human|json]
-  nova inspect <file|-> --format json [--schema-version 1|2|3] [--source-name name] [--message-format human|json] [--fail-on-warnings]
+  nova check [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
+  nova run [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
+  nova ast [--source-name name] [--message-format human|json] [--] <file|->
+  nova inspect --format json [--schema-version 1|2|3] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
   nova --help
 
 `check` validates UTF-8, tokens, syntax, names, types, and definite assignment.
@@ -29,6 +29,7 @@ Usage:
 `ast` prints the parsed syntax tree after lexical and syntactic validation.
 `inspect` emits versioned semantic facts for a successfully checked program.
 `-` reads one source from standard input; `--source-name` overrides its `<stdin>` display name.
+`--` ends option parsing so the following source path may begin with `-`; exact `-` remains stdin.
 `--fail-on-warnings` returns status 1 without promoting warning diagnostics to errors.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -273,44 +274,55 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
     let mut inspect_schema_version = None;
     let mut fail_on_warnings = false;
     let mut source_name = None;
+    let mut options_enabled = true;
     let mut index = 1;
 
     while index < arguments.len() {
         let argument = &arguments[index];
         let text = argument.to_str();
-        if text == Some("--message-format") {
+        let option_text = if options_enabled { text } else { None };
+        if option_text == Some("--") {
+            options_enabled = false;
+        } else if option_text == Some("--message-format") {
             index += 1;
             let Some(value) = arguments.get(index).and_then(|value| value.to_str()) else {
                 return Err("`--message-format` requires `human` or `json`".to_owned());
             };
             message_format = parse_message_format(value)?;
-        } else if let Some(value) = text.and_then(|value| value.strip_prefix("--message-format=")) {
+        } else if let Some(value) =
+            option_text.and_then(|value| value.strip_prefix("--message-format="))
+        {
             message_format = parse_message_format(value)?;
-        } else if text == Some("--format") {
+        } else if option_text == Some("--format") {
             index += 1;
             let Some(value) = arguments.get(index).and_then(|value| value.to_str()) else {
                 return Err("`--format` requires `json`".to_owned());
             };
             inspect_format = Some(parse_inspect_format(value)?);
-        } else if let Some(value) = text.and_then(|value| value.strip_prefix("--format=")) {
+        } else if let Some(value) = option_text.and_then(|value| value.strip_prefix("--format="))
+        {
             inspect_format = Some(parse_inspect_format(value)?);
-        } else if text == Some("--schema-version") {
+        } else if option_text == Some("--schema-version") {
             index += 1;
             let Some(value) = arguments.get(index).and_then(|value| value.to_str()) else {
                 return Err("`--schema-version` requires `1`, `2`, or `3`".to_owned());
             };
             inspect_schema_version = Some(parse_inspect_schema_version(value)?);
-        } else if let Some(value) = text.and_then(|value| value.strip_prefix("--schema-version=")) {
+        } else if let Some(value) =
+            option_text.and_then(|value| value.strip_prefix("--schema-version="))
+        {
             inspect_schema_version = Some(parse_inspect_schema_version(value)?);
-        } else if text == Some("--source-name") {
+        } else if option_text == Some("--source-name") {
             index += 1;
             let Some(value) = arguments.get(index).and_then(|value| value.to_str()) else {
                 return Err(source_name_requirement());
             };
             source_name = Some(parse_source_name(value)?);
-        } else if let Some(value) = text.and_then(|value| value.strip_prefix("--source-name=")) {
+        } else if let Some(value) =
+            option_text.and_then(|value| value.strip_prefix("--source-name="))
+        {
             source_name = Some(parse_source_name(value)?);
-        } else if text == Some("--fail-on-warnings") {
+        } else if option_text == Some("--fail-on-warnings") {
             fail_on_warnings = true;
         } else if text == Some("-") {
             if source
@@ -321,7 +333,7 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
             {
                 return Err("expected exactly one source input".to_owned());
             }
-        } else if text.is_some_and(|value| value.starts_with('-')) {
+        } else if option_text.is_some_and(|value| value.starts_with('-')) {
             return Err(format!("unknown option `{}`", argument.to_string_lossy()));
         } else if source
             .replace(SourceInput::File(PathBuf::from(argument)))
@@ -575,6 +587,51 @@ mod tests {
     }
 
     #[test]
+    fn option_terminator_preserves_option_like_source_operands() {
+        let checked = parse_arguments(&arguments(&[
+            "check",
+            "--message-format=json",
+            "--",
+            "--program.nv",
+        ]))
+        .expect("option-like source path is valid after the terminator");
+        assert!(matches!(
+            checked,
+            ParsedArguments::Run(Options {
+                command: Command::Check,
+                source: SourceInput::File(path),
+                message_format: MessageFormat::Json,
+                fail_on_warnings: false,
+                ..
+            }) if path.as_path() == Path::new("--program.nv")
+        ));
+
+        let option_named_file =
+            parse_arguments(&arguments(&["run", "--", "--fail-on-warnings"]))
+                .expect("options are positional after the terminator");
+        assert!(matches!(
+            option_named_file,
+            ParsedArguments::Run(Options {
+                command: Command::Run,
+                source: SourceInput::File(path),
+                fail_on_warnings: false,
+                ..
+            }) if path.as_path() == Path::new("--fail-on-warnings")
+        ));
+
+        let stdin = parse_arguments(&arguments(&["ast", "--", "-"]))
+            .expect("the exact stdin operand remains valid after the terminator");
+        assert!(matches!(
+            stdin,
+            ParsedArguments::Run(Options {
+                command: Command::Ast,
+                source: SourceInput::Stdin { display_name },
+                ..
+            }) if display_name == "<stdin>"
+        ));
+    }
+
+    #[test]
     fn rejects_ambiguous_or_incomplete_invocations() {
         for values in [
             vec![],
@@ -601,6 +658,9 @@ mod tests {
             vec!["check", "-", "--source-name"],
             vec!["check", "-", "--source-name="],
             vec!["check", "-", "--source-name=line\nbreak"],
+            vec!["check", "--"],
+            vec!["check", "--", "a.nv", "b.nv"],
+            vec!["check", "a.nv", "--", "--other.nv"],
         ] {
             assert!(parse_arguments(&arguments(&values)).is_err(), "{values:?}");
         }
