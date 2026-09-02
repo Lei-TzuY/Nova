@@ -11,23 +11,24 @@ use nova_source::{SourceFile, SourceId};
 use std::env;
 use std::ffi::OsString;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 const USAGE: &str = "Nova bootstrap compiler
 
 Usage:
-  nova check <file> [--message-format human|json] [--fail-on-warnings]
-  nova run <file> [--message-format human|json] [--fail-on-warnings]
-  nova ast <file> [--message-format human|json]
-  nova inspect <file> --format json [--schema-version 1|2|3] [--message-format human|json] [--fail-on-warnings]
+  nova check <file|-> [--message-format human|json] [--fail-on-warnings]
+  nova run <file|-> [--message-format human|json] [--fail-on-warnings]
+  nova ast <file|-> [--message-format human|json]
+  nova inspect <file|-> --format json [--schema-version 1|2|3] [--message-format human|json] [--fail-on-warnings]
   nova --help
 
 `check` validates UTF-8, tokens, syntax, names, types, and definite assignment.
 `run` performs the same checks and executes zero-argument `main` in the bootstrap interpreter.
 `ast` prints the parsed syntax tree after lexical and syntactic validation.
 `inspect` emits versioned semantic facts for a successfully checked program.
+`-` reads one source from standard input and names it `<stdin>` in diagnostics and inspection.
 `--fail-on-warnings` returns status 1 without promoting warning diagnostics to errors.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,9 +59,15 @@ enum InspectSchemaVersion {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+enum SourceInput {
+    File(PathBuf),
+    Stdin,
+}
+
+#[derive(Debug, Eq, PartialEq)]
 struct Options {
     command: Command,
-    path: PathBuf,
+    source: SourceInput,
     message_format: MessageFormat,
     inspect_format: Option<InspectFormat>,
     inspect_schema_version: Option<InspectSchemaVersion>,
@@ -74,18 +81,25 @@ enum ParsedArguments {
 
 fn main() -> ExitCode {
     let arguments = env::args_os().skip(1).collect::<Vec<_>>();
+    let stdin = io::stdin();
     let stdout = io::stdout();
     let stderr = io::stderr();
+    let mut stdin = stdin.lock();
     let mut stdout = stdout.lock();
     let mut stderr = stderr.lock();
 
-    match run(&arguments, &mut stdout, &mut stderr) {
+    match run(&arguments, &mut stdin, &mut stdout, &mut stderr) {
         Ok(status) => ExitCode::from(status),
         Err(_) => ExitCode::FAILURE,
     }
 }
 
-fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -> io::Result<u8> {
+fn run(
+    arguments: &[OsString],
+    stdin: &mut dyn Read,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> io::Result<u8> {
     let options = match parse_arguments(arguments) {
         Ok(ParsedArguments::Run(options)) => options,
         Ok(ParsedArguments::Help) => {
@@ -98,13 +112,30 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
         }
     };
 
-    let display_name = options.path.to_string_lossy().into_owned();
-    let bytes = match fs::read(&options.path) {
+    let (display_name, read_failure, invalid_utf8, bytes) = match &options.source {
+        SourceInput::File(path) => (
+            path.to_string_lossy().into_owned(),
+            "could not read source file",
+            "source file is not valid UTF-8",
+            fs::read(path),
+        ),
+        SourceInput::Stdin => {
+            let mut bytes = Vec::new();
+            let result = stdin.read_to_end(&mut bytes).map(|_| bytes);
+            (
+                "<stdin>".to_owned(),
+                "could not read standard input",
+                "standard input is not valid UTF-8",
+                result,
+            )
+        }
+    };
+    let bytes = match bytes {
         Ok(bytes) => bytes,
         Err(error) => {
-            let source = SourceFile::new(SourceId::new(0), display_name, "");
-            let diagnostic = Diagnostic::error("N0002", "could not read source file")
-                .with_note(error.to_string());
+            let source = SourceFile::new(SourceId::new(0), display_name.clone(), "");
+            let diagnostic = Diagnostic::error("N0002", read_failure)
+                .with_note(format!("{display_name}: {error}"));
             emit_diagnostics(
                 std::slice::from_ref(&diagnostic),
                 &source,
@@ -120,10 +151,9 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
         Err(error) => {
             let valid_up_to = error.utf8_error().valid_up_to();
             let source = SourceFile::new(SourceId::new(0), display_name.clone(), "");
-            let diagnostic = Diagnostic::error("N0001", "source file is not valid UTF-8")
-                .with_note(format!(
-                    "{display_name}: first invalid byte sequence begins at byte offset {valid_up_to}"
-                ));
+            let diagnostic = Diagnostic::error("N0001", invalid_utf8).with_note(format!(
+                "{display_name}: first invalid byte sequence begins at byte offset {valid_up_to}"
+            ));
             emit_diagnostics(
                 std::slice::from_ref(&diagnostic),
                 &source,
@@ -237,7 +267,7 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
         "inspect" => Command::Inspect,
         unknown => return Err(format!("unknown command `{unknown}`")),
     };
-    let mut path = None;
+    let mut source = None;
     let mut message_format = MessageFormat::Human;
     let mut inspect_format = None;
     let mut inspect_schema_version = None;
@@ -273,16 +303,23 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
             inspect_schema_version = Some(parse_inspect_schema_version(value)?);
         } else if text == Some("--fail-on-warnings") {
             fail_on_warnings = true;
+        } else if text == Some("-") {
+            if source.replace(SourceInput::Stdin).is_some() {
+                return Err("expected exactly one source input".to_owned());
+            }
         } else if text.is_some_and(|value| value.starts_with('-')) {
             return Err(format!("unknown option `{}`", argument.to_string_lossy()));
-        } else if path.replace(PathBuf::from(argument)).is_some() {
-            return Err("expected exactly one source file".to_owned());
+        } else if source
+            .replace(SourceInput::File(PathBuf::from(argument)))
+            .is_some()
+        {
+            return Err("expected exactly one source input".to_owned());
         }
         index += 1;
     }
 
-    let Some(path) = path else {
-        return Err("missing source file".to_owned());
+    let Some(source) = source else {
+        return Err("missing source input".to_owned());
     };
     match (command, inspect_format) {
         (Command::Inspect, None) => return Err("`inspect` requires `--format json`".to_owned()),
@@ -297,7 +334,7 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
     }
     Ok(ParsedArguments::Run(Options {
         command,
-        path,
+        source,
         message_format,
         inspect_format,
         inspect_schema_version,
@@ -355,9 +392,10 @@ fn emit_diagnostics(
 mod tests {
     use super::{
         Command, InspectFormat, InspectSchemaVersion, MessageFormat, Options, ParsedArguments,
-        parse_arguments,
+        SourceInput, parse_arguments, run,
     };
     use std::ffi::OsString;
+    use std::io::{self, Read};
     use std::path::Path;
 
     fn arguments(values: &[&str]) -> Vec<OsString> {
@@ -380,7 +418,7 @@ mod tests {
             spaced,
             ParsedArguments::Run(Options {
                 command: Command::Run,
-                path,
+                source: SourceInput::File(path),
                 message_format: MessageFormat::Json,
                 inspect_format: None,
                 inspect_schema_version: None,
@@ -391,7 +429,7 @@ mod tests {
             joined,
             ParsedArguments::Run(Options {
                 command: Command::Ast,
-                path,
+                source: SourceInput::File(path),
                 message_format: MessageFormat::Human,
                 inspect_format: None,
                 inspect_schema_version: None,
@@ -405,7 +443,7 @@ mod tests {
             inspected,
             ParsedArguments::Run(Options {
                 command: Command::Inspect,
-                path,
+                source: SourceInput::File(path),
                 message_format: MessageFormat::Human,
                 inspect_format: Some(InspectFormat::Json),
                 inspect_schema_version: None,
@@ -424,7 +462,7 @@ mod tests {
             inspected_v2,
             ParsedArguments::Run(Options {
                 command: Command::Inspect,
-                path,
+                source: SourceInput::File(path),
                 message_format: MessageFormat::Human,
                 inspect_format: Some(InspectFormat::Json),
                 inspect_schema_version: Some(InspectSchemaVersion::V2),
@@ -443,7 +481,7 @@ mod tests {
             inspected_v3,
             ParsedArguments::Run(Options {
                 command: Command::Inspect,
-                path,
+                source: SourceInput::File(path),
                 message_format: MessageFormat::Human,
                 inspect_format: Some(InspectFormat::Json),
                 inspect_schema_version: Some(InspectSchemaVersion::V3),
@@ -457,12 +495,25 @@ mod tests {
             strict,
             ParsedArguments::Run(Options {
                 command: Command::Check,
-                path,
+                source: SourceInput::File(path),
                 message_format: MessageFormat::Human,
                 inspect_format: None,
                 inspect_schema_version: None,
                 fail_on_warnings: true,
             }) if path.as_path() == Path::new("sample.nv")
+        ));
+
+        let stdin = parse_arguments(&arguments(&["check", "-"])).expect("valid stdin arguments");
+        assert!(matches!(
+            stdin,
+            ParsedArguments::Run(Options {
+                command: Command::Check,
+                source: SourceInput::Stdin,
+                message_format: MessageFormat::Human,
+                inspect_format: None,
+                inspect_schema_version: None,
+                fail_on_warnings: false,
+            })
         ));
     }
 
@@ -473,6 +524,7 @@ mod tests {
             vec!["check"],
             vec!["execute", "x.nv"],
             vec!["check", "a.nv", "b.nv"],
+            vec!["check", "-", "b.nv"],
             vec!["check", "x.nv", "--message-format", "xml"],
             vec!["inspect", "x.nv"],
             vec!["inspect", "x.nv", "--format", "text"],
@@ -491,5 +543,34 @@ mod tests {
         ] {
             assert!(parse_arguments(&arguments(&values)).is_err(), "{values:?}");
         }
+    }
+
+    struct FailingStdin;
+
+    impl Read for FailingStdin {
+        fn read(&mut self, _buffer: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::other("injected stdin failure"))
+        }
+    }
+
+    #[test]
+    fn reports_standard_input_read_failures_as_source_diagnostics() {
+        let mut stdin = FailingStdin;
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+
+        let status = run(
+            &arguments(&["check", "-"]),
+            &mut stdin,
+            &mut stdout,
+            &mut stderr,
+        )
+        .expect("diagnostic rendering succeeds");
+
+        assert_eq!(status, 1);
+        assert!(stdout.is_empty());
+        let stderr = String::from_utf8(stderr).expect("diagnostic is UTF-8");
+        assert!(stderr.contains("error[N0002]: could not read standard input"));
+        assert!(stderr.contains("<stdin>: injected stdin failure"));
     }
 }

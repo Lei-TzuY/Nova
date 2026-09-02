@@ -1,6 +1,7 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn fixture(relative: &str) -> PathBuf {
@@ -22,6 +23,88 @@ fn nova_in(directory: &Path, arguments: &[&str]) -> Output {
         .args(arguments)
         .output()
         .expect("nova binary should execute")
+}
+
+fn nova_with_stdin(arguments: &[&str], input: &[u8]) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_nova"))
+        .args(arguments)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nova binary should start");
+    let mut stdin = child.stdin.take().expect("stdin pipe should be available");
+    stdin.write_all(input).expect("source should be writable");
+    drop(stdin);
+    child.wait_with_output().expect("nova binary should finish")
+}
+
+#[test]
+fn commands_accept_standard_input_as_the_source() {
+    let source = b"fn main() -> Int { 42 }\n";
+
+    let checked = nova_with_stdin(&["check", "-"], source);
+    assert!(checked.status.success());
+    assert!(checked.stdout.is_empty());
+    assert!(checked.stderr.is_empty());
+
+    let run = nova_with_stdin(&["run", "-"], source);
+    assert!(run.status.success());
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
+    assert!(run.stderr.is_empty());
+
+    let ast = nova_with_stdin(&["ast", "-"], source);
+    assert!(ast.status.success());
+    let ast_stdout = String::from_utf8(ast.stdout).expect("AST output is UTF-8");
+    assert!(ast_stdout.contains("Program {"));
+    assert!(ast_stdout.contains("text: \"main\""));
+    assert!(ast.stderr.is_empty());
+
+    let inspected = nova_with_stdin(
+        &["inspect", "-", "--format=json", "--schema-version=3"],
+        source,
+    );
+    assert!(inspected.status.success());
+    let document = String::from_utf8(inspected.stdout).expect("inspection output is UTF-8");
+    assert!(document.contains("\"schema_version\": 3"));
+    assert!(document.contains("\"name\": \"<stdin>\""));
+    assert!(inspected.stderr.is_empty());
+}
+
+#[test]
+fn standard_input_preserves_diagnostics_and_strict_warning_policy() {
+    let unknown = nova_with_stdin(
+        &["check", "-", "--message-format=json"],
+        b"fn main() -> Int { missing }\n",
+    );
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(unknown.stdout.is_empty());
+    let stderr = String::from_utf8(unknown.stderr).expect("diagnostic JSON is UTF-8");
+    assert!(stderr.contains("\"code\":\"N3003\""));
+    assert!(stderr.contains("\"source\":\"<stdin>\""));
+
+    let malformed = nova_with_stdin(&["check", "-"], &[b'f', b'n', 0xff]);
+    assert_eq!(malformed.status.code(), Some(1));
+    assert!(malformed.stdout.is_empty());
+    let stderr = String::from_utf8(malformed.stderr).expect("diagnostic is UTF-8");
+    assert!(stderr.contains("error[N0001]: standard input is not valid UTF-8"));
+    assert!(stderr.contains("<stdin>: first invalid byte sequence begins at byte offset 2"));
+
+    let warned = nova_with_stdin(
+        &[
+            "run",
+            "-",
+            "--fail-on-warnings",
+            "--message-format=json",
+        ],
+        b"fn main() -> Int {\n    return 42;\n    0;\n    1\n}\n",
+    );
+    assert_eq!(warned.status.code(), Some(1));
+    assert!(warned.stdout.is_empty());
+    let stderr = String::from_utf8(warned.stderr).expect("warning JSON is UTF-8");
+    assert!(stderr.contains("\"severity\":\"warning\""));
+    assert!(stderr.contains("\"code\":\"N3033\""));
+    assert!(stderr.contains("\"source\":\"<stdin>\""));
 }
 
 #[test]

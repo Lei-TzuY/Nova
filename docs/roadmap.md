@@ -19,7 +19,7 @@ Completion of the initial document does not freeze unfinished semantics.
 
 ## Phase 1 — Executable frontend foundation
 
-**Status: six vertical slices implemented; broader grammar work remains.**
+**Status: seven vertical slices implemented; broader grammar work remains.**
 
 - Rust workspace and official `nova` CLI bootstrap;
 - source identity, exact spans, and locations;
@@ -93,6 +93,19 @@ Implemented in the sixth Phase 1 slice:
   the same Unit result after semantic checking; and
 - parser plus CLI regressions cover bare/value-bearing preservation and complete
   check/AST/run/inspection traversal.
+
+Implemented in the seventh Phase 1 slice:
+
+- every source-oriented CLI command accepts either one filesystem path or the exact `-`
+  operand, represented internally as distinct file and standard-input source variants;
+- standard input is consumed to EOF before compilation and then follows the identical
+  UTF-8, lexical, syntax, semantic, execution, and inspection pipeline as file input;
+- stdin-backed diagnostics and semantic-inspection documents use the deterministic
+  `<stdin>` display name without pretending that the stream has a filesystem path;
+- read failures reuse source-input diagnostic `N0002`, malformed bytes remain `N0001`,
+  and command-line parsing still rejects missing or multiple source inputs; and
+- parser, injected-read-failure, and end-to-end process regressions cover all four commands,
+  human/JSON source identity, schema-v3 inspection, and strict warning output suppression.
 
 Next Phase 1 refinements should be driven by the needs of later semantic work,
 not by adding unrelated syntax.

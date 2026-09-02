@@ -18,7 +18,7 @@ The repository contains the Phase 0 constitution, the executable Phase 1
 frontend, Phase 2 semantic-core slices, and executable Phase 3 bootstrap
 interpreter slices. The toolchain is written in Rust and can:
 
-- read a Nova file while rejecting malformed UTF-8;
+- read a Nova file or standard input while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
 - parse functions, recursive explicit function types, nominal records and enums,
   explicit aggregate construction, exhaustive enum matching with payload discard, field projection,
@@ -433,6 +433,7 @@ cargo run -p nova-cli -- run examples/basics.nv
 cargo run -p nova-cli -- ast examples/basics.nv
 cargo run -p nova-cli -- inspect examples/enums.nv --format json
 cargo run -p nova-cli -- inspect examples/enums.nv --format json --schema-version 2
+printf 'fn main() -> Int { 42 }\n' | cargo run -p nova-cli -- check -
 ```
 
 The `run` command prints the returned value from `main`.
@@ -447,11 +448,16 @@ cargo run -p nova-cli -- run examples/broken.nv --message-format json
 The installed binary is named `nova`:
 
 ```text
-nova check <file> [--message-format human|json] [--fail-on-warnings]
-nova run <file> [--message-format human|json] [--fail-on-warnings]
-nova ast <file> [--message-format human|json]
-nova inspect <file> --format json [--schema-version 1|2|3] [--message-format human|json] [--fail-on-warnings]
+nova check <file|-> [--message-format human|json] [--fail-on-warnings]
+nova run <file|-> [--message-format human|json] [--fail-on-warnings]
+nova ast <file|-> [--message-format human|json]
+nova inspect <file|-> --format json [--schema-version 1|2|3] [--message-format human|json] [--fail-on-warnings]
 ```
+
+Each command accepts exactly one source operand. A filesystem path retains its written
+display name; `-` reads standard input to EOF and uses the stable display name `<stdin>` in
+human diagnostics, JSON Lines, and semantic-inspection documents. Both inputs pass through
+the same UTF-8 and compiler pipeline.
 
 Exit status `0` means the requested operation succeeded, `1` means the source or
 execution was rejected, and `2` means the command line was invalid. `nova ast`

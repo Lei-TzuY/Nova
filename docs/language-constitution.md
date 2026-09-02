@@ -57,7 +57,10 @@ the optional value-producing tail expression of a block.
 ASCII identifiers, decimal plus base-prefixed binary/octal/hexadecimal integer
 literals, `//` line comments, and nested
 `/* ... */` block comments. Keywords are reserved. Files with malformed UTF-8
-are rejected before lexing. The compact normative details are in
+are rejected before lexing. Each source-oriented CLI command accepts exactly one
+filesystem path or `-`; the latter consumes standard input to EOF and assigns the stable
+display name `<stdin>`. This changes only source transport and identity presentation—the
+same validation and language pipeline follows. The compact normative details are in
 [`grammar.md`](grammar.md).
 
 **Decided.** Parsers fail closed. A parser may recover to report more errors,
@@ -519,7 +522,7 @@ lint groups, source suppression, and severity-promoting warnings-as-errors remai
 unresolved rather than being approximated.
 
 The bootstrap exposes semantic-inspection schema v1 for successfully checked
-single-file programs. It projects resolved declarations, bindings, types,
+single-source programs. It projects resolved declarations, bindings, types,
 nominal identities, typed blocks/statements/expressions, spans, and exhaustive
 match facts into a tooling-owned JSON model. Explicitly selected schema v2
 preserves that program projection and adds verified function CFG nodes, binding
