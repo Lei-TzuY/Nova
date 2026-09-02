@@ -109,6 +109,30 @@ fn initialized_rhs_self_read_does_not_block_outer_assignment() {
 }
 
 #[test]
+fn selected_match_rhs_ignores_unreachable_self_read_after_initialization() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Selected, Other }
+
+        fn main() -> Int {
+            var value: Int;
+            value = match Choice::Selected {
+                Choice::Selected => {
+                    value = 1;
+                    value
+                },
+                Choice::Other => value,
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3009"), 0, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
