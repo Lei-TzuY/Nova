@@ -4,7 +4,7 @@ use nova_sema::{AnalysisOutput, analyze};
 use nova_source::{SourceFile, SourceId};
 
 fn analyze_text(text: &str) -> AnalysisOutput {
-    let source = SourceFile::new(SourceId::new(0), "match-condition-assignment.nv", text);
+    let source = SourceFile::new(SourceId::new(0), "noncontinuing-assignment.nv", text);
     let lexed = lex(&source);
     assert!(lexed.is_success(), "{:?}", lexed.diagnostics);
     let parsed = parse(&source, &lexed.tokens);
@@ -21,25 +21,20 @@ fn code_count(output: &AnalysisOutput, code: &str) -> usize {
 }
 
 #[test]
-fn while_match_scrutinee_assignment_initializes_post_loop_state() {
+fn never_rhs_assignment_does_not_initialize_unreachable_continuation() {
     let output = analyze_text(
         r#"
-        enum Switch { Off, On }
+        fn stop() -> ! { stop() }
 
-        fn main(switch: Switch) -> Int {
+        fn main() -> Int {
             var value: Int;
-            while match {
-                value = 7;
-                switch
-            } {
-                Switch::Off => false,
-                Switch::On => false,
-            } {}
-            value
+            value = stop();
+            value;
+            0
         }
         "#,
     );
 
     assert_eq!(code_count(&output, "N3004"), 0, "{:?}", output.diagnostics);
-    assert_eq!(code_count(&output, "N3009"), 0, "{:?}", output.diagnostics);
+    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
 }
