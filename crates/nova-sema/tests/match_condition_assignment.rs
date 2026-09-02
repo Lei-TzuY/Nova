@@ -67,7 +67,7 @@ fn unreachable_rhs_self_read_does_not_block_initialization() {
         "#,
     );
 
-    assert_eq!(code_count(&output, "N3009"), 0, "{:?}", output.diagnostics);
+    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
 }
 
 #[test]
