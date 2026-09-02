@@ -298,12 +298,7 @@ fn fail_on_warnings_rejects_warnings_without_promoting_them() {
     assert!(check_stderr.contains("warning[N3033]: unreachable code"));
     assert!(!check_stderr.contains("error[N3033]"));
 
-    let run = nova(&[
-        "run",
-        path,
-        "--message-format=json",
-        "--fail-on-warnings",
-    ]);
+    let run = nova(&["run", path, "--message-format=json", "--fail-on-warnings"]);
     assert_eq!(run.status.code(), Some(1));
     assert!(run.stdout.is_empty());
     let run_stderr = String::from_utf8(run.stderr).expect("warning JSON is UTF-8");

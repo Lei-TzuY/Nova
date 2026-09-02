@@ -451,12 +451,8 @@ mod tests {
             }) if path.as_path() == Path::new("sample.nv")
         ));
 
-        let strict = parse_arguments(&arguments(&[
-            "check",
-            "--fail-on-warnings",
-            "sample.nv",
-        ]))
-        .expect("valid strict warning arguments");
+        let strict = parse_arguments(&arguments(&["check", "--fail-on-warnings", "sample.nv"]))
+            .expect("valid strict warning arguments");
         assert!(matches!(
             strict,
             ParsedArguments::Run(Options {
