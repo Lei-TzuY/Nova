@@ -180,3 +180,34 @@ fn invalid_nested_while_condition_break_does_not_exit_outer_loop() {
     assert_eq!(code_count(&output, "N3004"), 1, "{:?}", output.diagnostics);
     assert_eq!(code_count(&output, "N3032"), 0, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn arithmetic_failure_in_invalid_nested_while_condition_preserves_error_and_rolls_back_break() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn runtime_bool(value: Bool) -> Bool { value }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        while if runtime_bool(true) {
+                            break;
+                        } else {
+                            1 / 0
+                        } {}
+                    }
+                    let diagnostic_only = 14 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 1, "{:?}", output.diagnostics);
+    assert_eq!(code_count(&output, "N3004"), 0, "{:?}", output.diagnostics);
+}
