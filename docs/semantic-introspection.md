@@ -15,7 +15,7 @@ the documented array ordering remains semantic.
 ## Invocation and failure behavior
 
 ```text
-nova inspect <file|-> --format json [--schema-version 1] [--message-format human|json] [--fail-on-warnings]
+nova inspect <file|-> --format json [--schema-version 1] [--source-name name] [--message-format human|json] [--fail-on-warnings]
 ```
 
 Schema v1 remains the default when `--schema-version` is omitted. Explicit
@@ -71,9 +71,11 @@ support duration and migration tooling have not yet been promised.
 The bootstrap accepts one source, represented as `source:0`. A filesystem path is not
 canonicalized. The CLI stores its UTF-8 display name; non-UTF-8 path bytes are represented
 with the platform's lossy replacement rather than recoverable raw path bytes. The exact
-source operand `-` instead reads standard input to EOF and publishes the reserved display
-name `<stdin>`. Source contents are not copied into the document. Every span is a
-source-qualified, half-open UTF-8 byte range:
+source operand `-` instead reads standard input to EOF and publishes the default display
+name `<stdin>`. With stdin only, `--source-name` may replace that default with non-empty,
+single-line UTF-8 display metadata. The value is not interpreted or canonicalized as a path
+or URI. Source contents are not copied into the document. Every span is a source-qualified,
+half-open UTF-8 byte range:
 
 ```json
 { "source": "source:0", "start": 44, "end": 50 }

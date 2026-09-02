@@ -15,12 +15,14 @@ files. The v1 file remains checked in and independently supported by the CLI.
 ## Invocation and compatibility
 
 ```text
-nova inspect <file|-> --format json --schema-version 2 [--message-format human|json] [--fail-on-warnings]
+nova inspect <file|-> --format json --schema-version 2 [--source-name name] [--message-format human|json] [--fail-on-warnings]
 ```
 
 Omitting `--schema-version` continues to select v1. Explicit
 `--schema-version 1` produces the same byte-for-byte v1 output as the default;
 v2 is never selected implicitly. Unsupported versions are command-line errors.
+Source naming follows the v1 contract: stdin defaults to `<stdin>`, and its display metadata
+may be replaced with `--source-name` without changing source text or schema semantics.
 
 Both versions use the schema family `nova.semantic-inspection`. Consumers must
 check `schema_version` before interpreting a document. V2 adds one required top-level field, `control_flow`, and changes the envelope version

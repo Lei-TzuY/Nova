@@ -38,9 +38,12 @@ output. Their effect is:
 
 Every source command accepts exactly one filesystem path or `-`. The latter consumes
 standard input to EOF and uses `<stdin>` as the source name in human and JSON diagnostics.
-A standard-input read failure is `N0002`; malformed bytes remain `N0001`, with the first
-invalid byte offset reported against `<stdin>`. Input transport does not otherwise change
-diagnostic ordering, severity, command output, or exit policy.
+`--source-name name` (or `--source-name=name`) replaces that default with non-empty,
+single-line UTF-8 display metadata; it is rejected for filesystem input and is never read or
+canonicalized as a path or URI. A standard-input read failure is `N0002`; malformed bytes
+remain `N0001`, with the first invalid byte offset reported against the selected display
+name. Input transport does not otherwise change diagnostic ordering, severity, command
+output, or exit policy.
 
 `--message-format human|json` changes diagnostic presentation only. It does not
 change acceptance, exit status, runtime values, or semantic-inspection JSON.

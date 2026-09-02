@@ -433,7 +433,7 @@ cargo run -p nova-cli -- run examples/basics.nv
 cargo run -p nova-cli -- ast examples/basics.nv
 cargo run -p nova-cli -- inspect examples/enums.nv --format json
 cargo run -p nova-cli -- inspect examples/enums.nv --format json --schema-version 2
-printf 'fn main() -> Int { 42 }\n' | cargo run -p nova-cli -- check -
+printf 'fn main() -> Int { 42 }\n' | cargo run -p nova-cli -- check - --source-name scratch/main.nv
 ```
 
 The `run` command prints the returned value from `main`.
@@ -448,16 +448,19 @@ cargo run -p nova-cli -- run examples/broken.nv --message-format json
 The installed binary is named `nova`:
 
 ```text
-nova check <file|-> [--message-format human|json] [--fail-on-warnings]
-nova run <file|-> [--message-format human|json] [--fail-on-warnings]
-nova ast <file|-> [--message-format human|json]
-nova inspect <file|-> --format json [--schema-version 1|2|3] [--message-format human|json] [--fail-on-warnings]
+nova check <file|-> [--source-name name] [--message-format human|json] [--fail-on-warnings]
+nova run <file|-> [--source-name name] [--message-format human|json] [--fail-on-warnings]
+nova ast <file|-> [--source-name name] [--message-format human|json]
+nova inspect <file|-> --format json [--schema-version 1|2|3] [--source-name name] [--message-format human|json] [--fail-on-warnings]
 ```
 
 Each command accepts exactly one source operand. A filesystem path retains its written
 display name; `-` reads standard input to EOF and uses the stable display name `<stdin>` in
 human diagnostics, JSON Lines, and semantic-inspection documents. Both inputs pass through
-the same UTF-8 and compiler pipeline.
+the same UTF-8 and compiler pipeline. Pipelines and editor integrations may give stdin a
+non-empty, single-line UTF-8 display name with `--source-name name` or
+`--source-name=name`. The option is invalid for filesystem input, and the supplied value is
+presentation metadata only: Nova neither reads nor canonicalizes it as a path or URI.
 
 Exit status `0` means the requested operation succeeded, `1` means the source or
 execution was rejected, and `2` means the command line was invalid. `nova ast`

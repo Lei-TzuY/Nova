@@ -103,6 +103,70 @@ fn standard_input_preserves_diagnostics_and_strict_warning_policy() {
 }
 
 #[test]
+fn standard_input_can_publish_an_explicit_source_name() {
+    let display_name = "editor:///workspace/main.nv";
+    let inspected = nova_with_stdin(
+        &[
+            "inspect",
+            "-",
+            "--format=json",
+            "--schema-version=3",
+            "--source-name",
+            display_name,
+        ],
+        b"fn main() -> Int { 42 }\n",
+    );
+    assert!(inspected.status.success());
+    let document = String::from_utf8(inspected.stdout).expect("inspection output is UTF-8");
+    assert!(document.contains("\"schema_version\": 3"));
+    assert!(document.contains(&format!("\"name\": \"{display_name}\"")));
+    assert!(inspected.stderr.is_empty());
+
+    let rejected = nova_with_stdin(
+        &[
+            "check",
+            "-",
+            "--source-name=editor:///workspace/main.nv",
+            "--message-format=json",
+        ],
+        b"fn main() -> Int { missing }\n",
+    );
+    assert_eq!(rejected.status.code(), Some(1));
+    assert!(rejected.stdout.is_empty());
+    let stderr = String::from_utf8(rejected.stderr).expect("diagnostic JSON is UTF-8");
+    assert!(stderr.contains("\"code\":\"N3003\""));
+    assert!(stderr.contains(&format!("\"source\":\"{display_name}\"")));
+
+    let malformed = nova_with_stdin(
+        &["ast", "-", "--source-name", display_name],
+        &[b'f', b'n', 0xff],
+    );
+    assert_eq!(malformed.status.code(), Some(1));
+    assert!(malformed.stdout.is_empty());
+    let stderr = String::from_utf8(malformed.stderr).expect("diagnostic is UTF-8");
+    assert!(stderr.contains("error[N0001]: standard input is not valid UTF-8"));
+    assert!(stderr.contains(&format!(
+        "{display_name}: first invalid byte sequence begins at byte offset 2"
+    )));
+}
+
+#[test]
+fn source_name_is_rejected_for_file_input() {
+    let path = fixture("valid/basic.nv");
+    let output = nova(&[
+        "check",
+        path.to_str().expect("fixture path is UTF-8"),
+        "--source-name",
+        "virtual/main.nv",
+    ]);
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).expect("usage error is UTF-8");
+    assert!(stderr.contains("`--source-name` is only valid when the source input is `-`"));
+}
+
+#[test]
 fn accepts_positive_fixtures() {
     for relative in [
         "valid/basic.nv",

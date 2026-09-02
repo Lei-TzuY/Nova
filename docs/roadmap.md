@@ -19,7 +19,7 @@ Completion of the initial document does not freeze unfinished semantics.
 
 ## Phase 1 — Executable frontend foundation
 
-**Status: seven vertical slices implemented; broader grammar work remains.**
+**Status: eight vertical slices implemented; broader grammar work remains.**
 
 - Rust workspace and official `nova` CLI bootstrap;
 - source identity, exact spans, and locations;
@@ -106,6 +106,18 @@ Implemented in the seventh Phase 1 slice:
   and command-line parsing still rejects missing or multiple source inputs; and
 - parser, injected-read-failure, and end-to-end process regressions cover all four commands,
   human/JSON source identity, schema-v3 inspection, and strict warning output suppression.
+
+Implemented in the eighth Phase 1 slice:
+
+- stdin-backed commands accept `--source-name name` and `--source-name=name` so editors and
+  pipelines can preserve a virtual source identity instead of the default `<stdin>`;
+- the override is non-empty, single-line UTF-8 display metadata and is never treated as a
+  filesystem path or URI, while file-backed input rejects the option as a usage error;
+- the selected name consistently reaches human diagnostics, JSON Lines, UTF-8/read-failure
+  notes, and every semantic-inspection schema without changing their structural contracts;
+  and
+- parser and process regressions cover both option spellings, invalid combinations, custom
+  diagnostic identity, malformed stdin, inspection output, and injected read failure.
 
 Next Phase 1 refinements should be driven by the needs of later semantic work,
 not by adding unrelated syntax.
