@@ -1319,13 +1319,20 @@ fn collect_closed_block_arithmetic_failures<'a>(
             }
             StatementKind::While { condition, body } => {
                 let before = failures.len();
-                reaches_break |= collect_closed_value_arithmetic_failures_with_bindings(
-                    condition,
-                    &block_bindings,
-                    &block_static_bindings,
-                    failures,
-                );
-                if failures.len() != before || condition.ty != Type::Bool {
+                let condition_reaches_break =
+                    collect_closed_value_arithmetic_failures_with_bindings(
+                        condition,
+                        &block_bindings,
+                        &block_static_bindings,
+                        failures,
+                    );
+                if failures.len() != before
+                    || (condition.ty != Type::Bool && !condition.ty.is_never())
+                {
+                    return reaches_break;
+                }
+                reaches_break |= condition_reaches_break;
+                if condition.ty.is_never() {
                     return reaches_break;
                 }
 
