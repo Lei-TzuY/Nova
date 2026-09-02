@@ -372,7 +372,22 @@ pub(crate) fn definite_initialization_diagnostics(
             };
             let mut outgoing = incoming.clone();
             if let FlowNodeKind::Initialize(binding) = &node.kind {
-                outgoing.insert(*binding);
+                let self_dependent = node
+                    .predecessors
+                    .first()
+                    .and_then(|edge| graph.nodes.get(edge.from.index()))
+                    .is_some_and(|predecessor| {
+                        matches!(predecessor.kind, FlowNodeKind::Read(read) if read == *binding)
+                            && predecessor.span.zip(node.span).is_some_and(
+                                |(read_span, target_span)| {
+                                    read_span.source() == target_span.source()
+                                        && read_span.start() >= target_span.end()
+                                },
+                            )
+                    });
+                if !self_dependent {
+                    outgoing.insert(*binding);
+                }
             }
             let index = node.id.index();
             if inputs[index] != incoming || outputs[index] != outgoing {
@@ -1135,7 +1150,7 @@ mod tests {
         let mut out_of_order = graph;
         out_of_order.bindings.swap(0, 1);
         let error = super::verify(&out_of_order, span(0, 20))
-            .expect_err("binding metadata must remain in semantic identity order");
+            .expect_err("binding metadata must remain in strict semantic identity order");
         assert!(error.message().contains("binding metadata"));
     }
 
