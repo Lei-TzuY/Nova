@@ -368,3 +368,85 @@ fn rejected_call_does_not_create_a_loop_exit_for_following_failure() {
 
     assert_eq!(code_count(&output, "N3032"), 0, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn short_circuited_break_does_not_exit_proven_true_loop() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        false && {
+                            break;
+                            true
+                        };
+                    }
+                    let diagnostic_only = 6 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 0, "{:?}", output.diagnostics);
+}
+
+#[test]
+fn forced_short_circuit_break_exits_proven_true_loop() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        true && {
+                            break;
+                            true
+                        };
+                    }
+                    let reachable = 7 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 1, "{:?}", output.diagnostics);
+}
+
+#[test]
+fn statically_unselected_match_break_does_not_exit_proven_true_loop() {
+    let output = analyze_text(
+        r#"
+        enum Wrap { Empty, Value(Int) }
+        enum Choice { Stay, Exit }
+
+        fn main() -> Int {
+            match Wrap::Value(0) {
+                Wrap::Empty => 0,
+                Wrap::Value(x) => {
+                    while true {
+                        match Choice::Stay {
+                            Choice::Stay => (),
+                            Choice::Exit => { break; },
+                        };
+                    }
+                    let diagnostic_only = 8 / x;
+                    0
+                },
+            }
+        }
+        "#,
+    );
+
+    assert_eq!(code_count(&output, "N3032"), 0, "{:?}", output.diagnostics);
+}
