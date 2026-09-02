@@ -357,7 +357,7 @@ fn initialization_reads_target(
     let mut pending = node
         .predecessors
         .iter()
-        .filter(|edge| edge.kind != FlowEdgeKind::Backedge)
+        .filter(|edge| edge.kind == FlowEdgeKind::Execution)
         .map(|edge| edge.from)
         .collect::<VecDeque<_>>();
     let mut seen = BTreeSet::new();
@@ -378,7 +378,7 @@ fn initialization_reads_target(
             predecessor
                 .predecessors
                 .iter()
-                .filter(|edge| edge.kind != FlowEdgeKind::Backedge)
+                .filter(|edge| edge.kind == FlowEdgeKind::Execution)
                 .map(|edge| edge.from),
         );
     }
