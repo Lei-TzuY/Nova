@@ -109,6 +109,33 @@ fn initialized_rhs_self_read_does_not_block_outer_assignment() {
 }
 
 #[test]
+fn selected_match_rhs_unreachable_self_read_does_not_poison_initialization() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Selected, Other }
+
+        fn main() -> Int {
+            var value: Int;
+            value = match Choice::Selected {
+                Choice::Selected => {
+                    value = 1;
+                    value
+                },
+                Choice::Other => value,
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    // The unselected arm is still checked and reports its own N3009. The selected
+    // arm initializes `value`, so neither its read nor the post-assignment read
+    // may add another definite-initialization diagnostic.
+    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
