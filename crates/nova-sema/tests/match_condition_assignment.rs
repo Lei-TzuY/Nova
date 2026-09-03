@@ -186,6 +186,34 @@ fn noncontinuing_match_rhs_self_read_does_not_poison_outer_assignment() {
 }
 
 #[test]
+fn nested_if_noncontinuing_self_read_does_not_poison_match_assignment() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Left, Right }
+
+        fn main(choice: Choice, flag: Bool) -> Int {
+            var value: Int;
+            value = match choice {
+                Choice::Left => if flag {
+                    value;
+                    return 0;
+                } else {
+                    1
+                },
+                Choice::Right => 2,
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    // The nested returning path keeps its local invalid read diagnostic, but it
+    // must not participate in either the enclosing if merge or the match RHS merge.
+    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
