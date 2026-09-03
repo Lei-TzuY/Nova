@@ -1188,7 +1188,8 @@ fn f() -> Int {
         assert!(parsed.diagnostics.iter().any(|diagnostic| {
             diagnostic.code == "N2010" && source.slice(diagnostic.labels[0].span) == Some("nope")
         }));
-        assert!(parsed.program.functions.is_empty());
+        assert_eq!(parsed.program.functions.len(), 1);
+        assert!(parsed.program.functions[0].body.tail.is_none());
     }
 
     #[test]

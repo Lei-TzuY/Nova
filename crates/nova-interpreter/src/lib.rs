@@ -1398,6 +1398,17 @@ fn main() -> String {
             .expect("string equality executes");
         assert_eq!(equal, Value::Bool(true));
 
+        let assigned = execute_text(
+            r#"fn main() -> String {
+                var text: String;
+                text = "first";
+                text = "second";
+                text
+            }"#,
+        )
+        .expect("String slots support delayed initialization and reassignment");
+        assert_eq!(assigned, Value::String("second".to_owned()));
+
         let returned =
             execute_text(r#"fn main() -> String { "evaluated first" == { return "returned"; } }"#)
                 .expect("non-continuing equality operand propagates return");
