@@ -150,14 +150,11 @@
           "minLength": 1
         },
         "declaration": {
-          "anyOf": [
-            {
-              "$ref": "urn:nova:semantic-inspection:v1#/$defs/typeDeclarationId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(?:record|enum):[0-9]+$"
         },
         "parameters": {
           "type": "array",

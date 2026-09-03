@@ -1375,9 +1375,39 @@ Implemented in the twenty-fourth Phase 3 slice:
 - malformed-HIR regressions cover function, selected-branch, and discarded-loop-body type
   drift, while return and break controls prove structured flow remains executable.
 
+Implemented in the twenty-fifth Phase 3 slice:
+
+- `String` becomes an executable immutable UTF-8 bootstrap scalar with one normative literal
+  contract: unescaped non-control Unicode plus `\\`, `\"`, `\n`, `\r`, `\t`, and `\0`;
+  invalid escapes/control characters are `N1006`, and unterminated or multiline literals are
+  `N1005` without consuming the following source line as part of the token;
+- lexer tokens retain exact source spans, parser-owned AST values use the lexer decoder, and a
+  malformed synthetic string token fails closed as `N2010` instead of manufacturing a value;
+- semantic lowering resolves the reserved `String` type and typed-HIR literal, with ordinary
+  function, binding, assignment, branch/match, record-field, and enum-payload compatibility;
+- matching String operands support `==` and `!=` by decoded value; closed String values join the
+  existing side-effect-free condition proof so reachability and definite initialization agree
+  with runtime equality without folding retained HIR;
+- the interpreter carries `Value::String`, accepts zero-argument `main -> String`, evaluates
+  literals and equality, and applies recursive type conformance at frame, aggregate, expression,
+  block, argument, and return boundaries; a forged String-literal HIR type is `N4005`;
+- semantic-inspection schema v4 adds only `string` type/expression categories while retaining v2
+  CFG and v3 match-pattern facts; frozen v1-v3 reject String-bearing programs with `N5001`, and
+  v4 independently rejects literal/type drift rather than inferring a type from expression shape;
+- lexer, parser, semantic, constant-flow, interpreter, malformed-HIR, inspection/schema, and CLI
+  regressions cover Unicode, every escape, bad tokens, aggregates, calls, matching, equality,
+  diagnostics, runtime output, and old-schema failure; and
+- this slice defines no concatenation, indexing, interpolation, library API, allocation, layout,
+  ownership, ABI, native backend, or memory-safety claim.
+
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
 
+- prioritize closures and lexical capture only after binding ownership, captured-environment
+  identity, recursion/self-reference, callable type, flow, and runtime trust-boundary contracts
+  are written together;
+- make name resolution module-ready before adding import syntax, so declaration identity and
+  diagnostics do not depend permanently on a single flat source namespace;
 - consider labelled loops, value-producing loop expressions, or value-carrying
   `break` only after their target identity, type-join, and CFG/dataflow contracts
   are explicit rather than extending the current nearest-`while` rule ad hoc;

@@ -1332,7 +1332,10 @@ mod tests {
     use super::{Value, execute};
     use nova_lexer::lex;
     use nova_parser::parse;
-    use nova_sema::{analyze, hir::ExpressionKind};
+    use nova_sema::{
+        analyze,
+        hir::{ExpressionKind, Type},
+    };
     use nova_source::{SourceFile, SourceId};
 
     fn execute_text(text: &str) -> Result<Value, nova_diagnostics::Diagnostic> {
@@ -1394,6 +1397,12 @@ fn main() -> String {
         let equal = execute_text(r#"fn main() -> Bool { "same" == "same" }"#)
             .expect("string equality executes");
         assert_eq!(equal, Value::Bool(true));
+
+        let returned = execute_text(
+            r#"fn main() -> String { "evaluated first" == { return "returned"; } }"#,
+        )
+        .expect("non-continuing equality operand propagates return");
+        assert_eq!(returned, Value::String("returned".to_owned()));
     }
 
     #[test]
@@ -1416,9 +1425,11 @@ fn main() -> String {
 
         let diagnostic = execute(&analyzed.program).expect_err("malformed HIR must fail closed");
         assert_eq!(diagnostic.code, "N4005");
-        assert!(diagnostic.labels[0]
-            .message
-            .contains("does not conform to HIR type Bool"));
+        assert!(
+            diagnostic.labels[0]
+                .message
+                .contains("does not conform to HIR type Bool")
+        );
     }
 
     #[test]

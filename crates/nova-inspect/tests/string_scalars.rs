@@ -32,23 +32,26 @@ fn schema_v4_projects_string_types_and_literals_while_older_schemas_fail_closed(
 
     let document = build_document_v4(&analyzed, &source).expect("v4 represents String");
     assert_eq!(document.schema_version, 4);
-    assert!(document
-        .program
-        .types
-        .iter()
-        .any(|ty| ty.kind == TypeKind::String && ty.display == "String"));
-    assert!(document
-        .program
-        .expressions
-        .iter()
-        .any(|expression| expression.kind == ExpressionKind::String));
+    assert!(
+        document
+            .program
+            .types
+            .iter()
+            .any(|ty| ty.kind == TypeKind::String && ty.display == "String")
+    );
+    assert!(
+        document
+            .program
+            .expressions
+            .iter()
+            .any(|expression| expression.kind == ExpressionKind::String)
+    );
     assert_eq!(document.control_flow.len(), 1);
 }
 
 #[test]
 fn schema_v4_rejects_a_string_literal_with_a_forged_hir_type() {
-    let (source, mut analyzed) =
-        checked_analysis(r#"fn main() -> String { "Nova" }"#);
+    let (source, mut analyzed) = checked_analysis(r#"fn main() -> String { "Nova" }"#);
     analyzed.program.functions[0]
         .body
         .tail
@@ -57,9 +60,11 @@ fn schema_v4_rejects_a_string_literal_with_a_forged_hir_type() {
         .ty = hir::Type::Bool;
 
     let error = build_document_v4(&analyzed, &source).expect_err("forged HIR must fail closed");
-    assert!(error
-        .message()
-        .contains("string literal expression has HIR type Bool instead of String"));
+    assert!(
+        error
+            .message()
+            .contains("string literal expression has HIR type Bool instead of String")
+    );
 }
 
 #[test]
@@ -72,14 +77,18 @@ fn published_v4_schema_names_only_the_new_string_categories() {
     assert_eq!(schema["$id"], "urn:nova:semantic-inspection:v4");
     assert_eq!(schema["properties"]["schema_version"]["const"], 4);
     assert_eq!(schema["properties"]["program"]["$ref"], "#/$defs/program");
-    assert!(schema["$defs"]["type"]["properties"]["kind"]["enum"]
-        .as_array()
-        .expect("type kinds")
-        .iter()
-        .any(|kind| kind == "string"));
-    assert!(schema["$defs"]["expression"]["properties"]["kind"]["enum"]
-        .as_array()
-        .expect("expression kinds")
-        .iter()
-        .any(|kind| kind == "string"));
+    assert!(
+        schema["$defs"]["type"]["properties"]["kind"]["enum"]
+            .as_array()
+            .expect("type kinds")
+            .iter()
+            .any(|kind| kind == "string")
+    );
+    assert!(
+        schema["$defs"]["expression"]["properties"]["kind"]["enum"]
+            .as_array()
+            .expect("expression kinds")
+            .iter()
+            .any(|kind| kind == "string")
+    );
 }

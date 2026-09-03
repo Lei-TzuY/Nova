@@ -23,6 +23,9 @@ A program containing `Enum::Variant(_)` is valid for `check` and `run`, but v1/v
 fails closed with `N5001` because those schemas cannot distinguish an explicit discard from
 an invalid missing payload binding without changing the meaning of their existing `binding`
 field. Selecting v3 is therefore required for such source.
+V3 still reuses the frozen v1 program projection, so it cannot represent the later `String`
+type or literal category. String-bearing source fails v3 inspection with `N5001`; explicit
+schema v4 preserves this payload-mode table while extending those closed category sets.
 
 Source naming remains the v1 contract: stdin defaults to `<stdin>`, and `--source-name`
 changes only that display metadata rather than any schema or source-text semantics.

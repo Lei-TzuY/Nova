@@ -216,7 +216,7 @@ pub fn decode_string_literal(source: &SourceFile, span: Span) -> Option<String> 
                 _ => return None,
             };
             decoded.push(escaped);
-        } else if character.is_control() {
+        } else if character == '"' || character.is_control() {
             return None;
         } else {
             decoded.push(character);
@@ -711,11 +711,26 @@ mod tests {
             control_source.slice(control.diagnostics[0].labels[0].span),
             Some("\t")
         );
+
+        let synthetic_source = source(r#""first"second""#);
+        assert_eq!(
+            decode_string_literal(
+                &synthetic_source,
+                synthetic_source
+                    .span(0, synthetic_source.len())
+                    .expect("whole-source span"),
+            ),
+            None
+        );
     }
 
     #[test]
     fn rejects_unterminated_strings_at_the_opening_quote_without_eating_the_next_line() {
-        for text in ["\"end of file", "\"first line\ntrue", "\"continued\\\nfalse"] {
+        for text in [
+            "\"end of file",
+            "\"first line\ntrue",
+            "\"continued\\\nfalse",
+        ] {
             let source = source(text);
             let output = lex(&source);
             assert_eq!(output.diagnostics.len(), 1, "source: {text:?}");
@@ -724,7 +739,12 @@ mod tests {
                 source.slice(output.diagnostics[0].labels[0].span),
                 Some("\"")
             );
-            assert!(!output.tokens.iter().any(|token| token.kind == TokenKind::String));
+            assert!(
+                !output
+                    .tokens
+                    .iter()
+                    .any(|token| token.kind == TokenKind::String)
+            );
         }
     }
 

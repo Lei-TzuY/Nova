@@ -7,7 +7,11 @@ use nova_source::{SourceFile, SourceId};
 fn analyze_text(text: &str) -> AnalysisOutput {
     let source = SourceFile::new(SourceId::new(0), "strings.nv", text);
     let lexed = lex(&source);
-    assert!(lexed.is_success(), "lex diagnostics: {:?}", lexed.diagnostics);
+    assert!(
+        lexed.is_success(),
+        "lex diagnostics: {:?}",
+        lexed.diagnostics
+    );
     let parsed = parse(&source, &lexed.tokens);
     assert!(
         parsed.is_success(),
@@ -89,18 +93,42 @@ fn closed_string_equality_drives_definite_initialization_without_folding_hir() {
 #[test]
 fn rejects_mixed_string_equality_and_redefinition_of_the_builtin_type() {
     let mismatch = analyze_text(r#"fn main() -> Bool { "1" == 1 }"#);
-    assert!(mismatch
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.code == "N3004"
-            && diagnostic.message == "type mismatch"));
+    assert!(
+        mismatch
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "N3004" && diagnostic.message == "type mismatch")
+    );
     assert!(!mismatch.is_success());
 
     let duplicate = analyze_text("record String { value: Int } fn main() -> Unit {}");
-    assert!(duplicate
+    assert!(
+        duplicate
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "N3002"
+                && diagnostic.message == "duplicate type definition")
+    );
+    assert!(!duplicate.is_success());
+}
+
+#[test]
+fn rejected_mixed_equality_does_not_leak_rhs_initialization() {
+    let output = analyze_text(
+        r#"fn main() -> Int {
+            var answer: Int;
+            "Nova" == { answer = 42; 42 };
+            answer
+        }"#,
+    );
+
+    assert!(output
         .diagnostics
         .iter()
-        .any(|diagnostic| diagnostic.code == "N3002"
-            && diagnostic.message == "duplicate type definition"));
-    assert!(!duplicate.is_success());
+        .any(|diagnostic| diagnostic.code == "N3004"));
+    assert!(output
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "N3009"));
+    assert!(!output.is_success());
 }

@@ -679,7 +679,10 @@ fn string_scalars_run_and_require_inspection_schema_v4() {
         "{}",
         String::from_utf8_lossy(&run.stderr)
     );
-    assert_eq!(String::from_utf8(run.stdout).expect("string output"), "Nova 🦀\nready\n");
+    assert_eq!(
+        String::from_utf8(run.stdout).expect("string output"),
+        "Nova 🦀\nready\n"
+    );
 
     for version in ["1", "2", "3"] {
         let output = nova(&[
@@ -711,7 +714,10 @@ fn string_scalars_run_and_require_inspection_schema_v4() {
 #[test]
 fn string_lexical_failures_have_structured_cli_diagnostics() {
     for (source, code) in [
-        (b"fn main() -> String { \"unterminated }\n".as_slice(), "N1005"),
+        (
+            b"fn main() -> String { \"unterminated }\n".as_slice(),
+            "N1005",
+        ),
         (b"fn main() -> String { \"bad\\q\" }\n".as_slice(), "N1006"),
     ] {
         let output = nova_with_stdin(&["check", "-", "--message-format=json"], source);

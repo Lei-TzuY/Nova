@@ -1186,8 +1186,7 @@ fn f() -> Int {
 
         let parsed = parse(&source, &tokens);
         assert!(parsed.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code == "N2010"
-                && source.slice(diagnostic.labels[0].span) == Some("nope")
+            diagnostic.code == "N2010" && source.slice(diagnostic.labels[0].span) == Some("nope")
         }));
         assert!(parsed.program.functions.is_empty());
     }
