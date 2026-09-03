@@ -88,3 +88,34 @@ fn inner_break_initialization_does_not_leak_into_outer_continue_backedge() {
     // so the post-loop read is definitely initialized.
     assert_eq!(n3009_count, 1, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn loop_carried_initialization_does_not_retroactively_initialize_first_iteration() {
+    let output = analyze_text(
+        "fn f(looping: Bool, initialize: Bool) -> Int {\n\
+             var value: Int;\n\
+             while looping {\n\
+                 if initialize {\n\
+                     value = 7;\n\
+                     continue;\n\
+                 } else {\n\
+                     value;\n\
+                     break;\n\
+                 };\n\
+             }\n\
+             0\n\
+         }",
+    );
+
+    let n3009_count = output
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "N3009")
+        .count();
+
+    // A later iteration may receive `value` initialized from the continue backedge,
+    // but the first iteration can take the sibling break branch before that backedge
+    // ever executes. Fixed-point loop analysis must not feed the carried state back
+    // into the loop entry and erase this real first-iteration diagnostic.
+    assert_eq!(n3009_count, 1, "{:?}", output.diagnostics);
+}
