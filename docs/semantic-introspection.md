@@ -22,6 +22,10 @@ Schema v1 remains the default when `--schema-version` is omitted. Explicit
 `--schema-version 1` produces the same v1 document. Schema v2 is a separately
 selected contract that preserves this program projection and adds verified CFG
 facts; see [`semantic-introspection-v2.md`](semantic-introspection-v2.md).
+Schema v3 adds explicit match-payload modes, while schema v4 is the first
+contract that represents the `String` type and literal category. V1 rejects
+source using either unrepresentable feature with `N5001` rather than changing
+its frozen enums or fields.
 
 `inspect` runs the same UTF-8, lexical, syntactic, name-resolution, type, and
 definite-assignment checks as `nova check`. It writes exactly one JSON document

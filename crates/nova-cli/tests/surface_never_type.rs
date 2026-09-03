@@ -28,7 +28,7 @@ fn check_run_and_all_inspection_versions_accept_surface_never() {
         String::from_utf8_lossy(&run.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
-    for version in ["1", "2", "3"] {
+    for version in ["1", "2", "3", "4"] {
         let inspected = Command::new(env!("CARGO_BIN_EXE_nova"))
             .args([
                 "inspect",

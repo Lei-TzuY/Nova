@@ -6,6 +6,7 @@
 pub mod v1;
 pub mod v2;
 pub mod v3;
+pub mod v4;
 
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::AnalysisOutput;
@@ -146,6 +147,48 @@ pub fn render_json_v3(
         .map_err(|error| InspectionError::invalid(format!("could not encode schema v3: {error}")))
 }
 
+/// Builds a schema-v4 document from one successful semantic analysis.
+///
+/// Version 4 is the first tooling contract that can represent the `String`
+/// scalar and string-literal expressions. It also retains v2 CFG facts and v3
+/// match payload modes. Older schemas reject programs containing `String`.
+pub fn build_document_v4(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<v4::Document, InspectionError> {
+    if !analysis.is_success() {
+        return Err(InspectionError::invalid(
+            "schema v4 requires a successful semantic analysis",
+        ));
+    }
+
+    let (program_document, match_patterns) = Builder::new(&analysis.program, source)
+        .with_payload_discard()
+        .with_string()
+        .build_parts()?;
+    let control_flow =
+        project_control_flow(&analysis.control_flow, &program_document.program, source)?;
+    Ok(v4::Document {
+        schema: v4::SCHEMA_NAME.to_owned(),
+        schema_version: v4::SCHEMA_VERSION,
+        producer: program_document.producer,
+        source: program_document.source,
+        program: program_document.program,
+        control_flow,
+        match_patterns,
+    })
+}
+
+/// Renders one successful analysis as deterministic, pretty-printed schema-v4 JSON.
+pub fn render_json_v4(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<String, InspectionError> {
+    let document = build_document_v4(analysis, source)?;
+    serde_json::to_string_pretty(&document)
+        .map_err(|error| InspectionError::invalid(format!("could not encode schema v4: {error}")))
+}
+
 struct Builder<'a> {
     program: &'a hir::Program,
     source: &'a SourceFile,
@@ -157,6 +200,7 @@ struct Builder<'a> {
     matches: Vec<Option<v1::Match>>,
     match_patterns: Vec<v3::MatchPattern>,
     allow_payload_discard: bool,
+    allow_string: bool,
     active_scopes: Vec<String>,
     loop_depth: usize,
 }
@@ -174,6 +218,7 @@ impl<'a> Builder<'a> {
             matches: Vec::new(),
             match_patterns: Vec::new(),
             allow_payload_discard: false,
+            allow_string: false,
             active_scopes: Vec::new(),
             loop_depth: 0,
         }
@@ -181,6 +226,11 @@ impl<'a> Builder<'a> {
 
     fn with_payload_discard(mut self) -> Self {
         self.allow_payload_discard = true;
+        self
+    }
+
+    fn with_string(mut self) -> Self {
+        self.allow_string = true;
         self
     }
 
@@ -240,7 +290,13 @@ impl<'a> Builder<'a> {
     }
 
     fn prepare_type_order(&mut self) -> Result<(), InspectionError> {
-        for ty in [Type::Int, Type::Bool, Type::Unit, Type::Never] {
+        for ty in [Type::Int, Type::Bool] {
+            self.intern_type(&ty)?;
+        }
+        if self.allow_string {
+            self.intern_type(&Type::String)?;
+        }
+        for ty in [Type::Unit, Type::Never] {
             self.intern_type(&ty)?;
         }
 
@@ -518,6 +574,20 @@ impl<'a> Builder<'a> {
 
         let kind = match &expression.kind {
             hir::ExpressionKind::Integer(_) => v1::ExpressionKind::Integer,
+            hir::ExpressionKind::String(_) => {
+                if expression.ty != Type::String {
+                    return Err(InspectionError::invalid(format!(
+                        "string literal expression has HIR type {} instead of String",
+                        expression.ty
+                    )));
+                }
+                if !self.allow_string {
+                    return Err(InspectionError::invalid(
+                        "semantic-inspection schema v1/v2/v3 cannot represent `String`; select schema v4",
+                    ));
+                }
+                v1::ExpressionKind::String
+            }
             hir::ExpressionKind::Boolean(_) => v1::ExpressionKind::Boolean,
             hir::ExpressionKind::Unit => v1::ExpressionKind::Unit,
             hir::ExpressionKind::Binding(resolved) => {
@@ -1032,7 +1102,17 @@ impl<'a> Builder<'a> {
                     "accepted program contains the semantic error type",
                 ));
             }
-            Type::Int | Type::Bool | Type::Unit | Type::Never | Type::Function(_) => {}
+            Type::String if !self.allow_string => {
+                return Err(InspectionError::invalid(
+                    "semantic-inspection schema v1/v2/v3 cannot represent `String`; select schema v4",
+                ));
+            }
+            Type::Int
+            | Type::Bool
+            | Type::String
+            | Type::Unit
+            | Type::Never
+            | Type::Function(_) => {}
         }
         Ok(())
     }
@@ -1045,6 +1125,7 @@ impl<'a> Builder<'a> {
                 let (kind, declaration, parameters, return_type) = match ty {
                     Type::Int => (v1::TypeKind::Int, None, Vec::new(), None),
                     Type::Bool => (v1::TypeKind::Bool, None, Vec::new(), None),
+                    Type::String => (v1::TypeKind::String, None, Vec::new(), None),
                     Type::Record(record) => (
                         v1::TypeKind::Record,
                         Some(record_id(record.id.index())),

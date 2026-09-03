@@ -21,7 +21,7 @@ interpreter slices. The toolchain is written in Rust and can:
 - read a Nova file or standard input while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
 - parse functions, recursive explicit function types, nominal records and enums,
-  explicit aggregate construction, exhaustive enum matching with payload discard, field projection,
+  UTF-8 string literals, explicit aggregate construction, exhaustive enum matching with payload discard, field projection,
   initialized bindings, typed delayed `var` initialization, narrow assignments,
   expressions, blocks, calls, `if` expressions, pre-test `while` loops, bare Unit
   returns, and statement-only `break`/`continue`;
@@ -29,14 +29,14 @@ interpreter slices. The toolchain is written in Rust and can:
   binding, record, and enum identities, plus a verified function-level CFG;
 - resolve top-level functions and nominal types, parameters, lexical local
   bindings, record-field and enum-variant name/slot identities, and match payload bindings;
-- check bootstrap `Int`, `Bool`, `Unit`, the uninhabited `!` bottom type, and nominal aggregate types, function
+- check bootstrap `Int`, `Bool`, `String`, `Unit`, the uninhabited `!` bottom type, and nominal aggregate types, function
   signatures, local inference and annotations, calls, operators, block tails, branches,
   returns, loop conditions, loop-control legality, record construction/projection,
   enum construction, match exhaustiveness and arm types, direct-constructor arm
   usefulness, assignment mutability/type constraints, and CFG-based definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
   interpreter with function calls, recursion, Unit-valued procedures, records, enums,
-  pattern matching, mutation, blocks, conditionals, bounded loops, and structured
+  UTF-8 strings, pattern matching, mutation, blocks, conditionals, bounded loops, and structured
   `break`/`continue`;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
   text or JSON Lines, including reachability and match-usefulness warnings;
@@ -44,7 +44,8 @@ interpreter slices. The toolchain is written in Rust and can:
 - emit fail-closed semantic-inspection v1 documents with resolved declarations,
   bindings, types, spans, expression relationships, and exhaustive match facts,
   plus explicitly selected v2 documents that add the verified CFG and v3 documents
-  that additionally expose explicit match payload modes without reinterpreting v1/v2 fields.
+  that additionally expose explicit match payload modes without reinterpreting v1/v2 fields,
+  and v4 documents that extend the program projection with String type/literal categories.
 
 `nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
 definite-assignment validation. `nova run` performs those same checks and then
@@ -86,7 +87,8 @@ aggregate slice's semantic contract,
 behavior,
 [the semantic-introspection v1 contract](docs/semantic-introspection.md),
 [v2 CFG extension](docs/semantic-introspection-v2.md), and
-[v3 pattern extension](docs/semantic-introspection-v3.md) for the machine-readable
+[v3 pattern extension](docs/semantic-introspection-v3.md), and
+[v4 String extension](docs/semantic-introspection-v4.md) for the machine-readable
 tooling boundary,
 [the bootstrap control-flow contract](docs/control-flow.md) for CFG verification
 and definite-initialization dataflow, and
@@ -110,14 +112,23 @@ through those values. For example, a parameter `transform: fn(Int) -> Int` can b
 like any other function value. This slice deliberately does not add lambda expressions,
 closures, captured environments, methods, or implicit callable conversions.
 
+`String` is an immutable UTF-8 bootstrap scalar. Literals admit unescaped non-control
+Unicode scalar values and the exact escapes `\\`, `\"`, `\n`, `\r`, `\t`, and `\0`;
+invalid escapes, raw control characters, and unterminated or multiline literals fail in
+the lexer. String values work in annotations and inference, calls and returns, records and
+enums, branches and matches, mutable slots, and `==` / `!=`. Equality compares decoded
+scalar sequences after left-to-right evaluation, and closed String values may refine
+control-flow proofs without folding retained HIR. Concatenation, indexing, interpolation,
+methods, standard-library APIs, allocation, layout, ownership, and ABI remain unspecified.
+
 The surface type `!` exposes the semantic core's existing uninhabited bottom type. A
 `fn forever() -> !` signature states that the function has no continuing return path; calls
 to such a function therefore fit any expected value position without manufacturing a value.
 `!` may appear in any type-reference position, including nested function types, but no
 ordinary runtime `Value` can inhabit it. A `-> !` body that falls through or produces a
 continuing tail is rejected, while proven non-continuation such as `while true {}` with no
-reachable `break` satisfies the contract. Semantic-inspection v1/v2/v3 already represent
-Never, so exposing the spelling does not change any inspection schema.
+reachable `break` satisfies the contract. Every published semantic-inspection schema
+represents Never, so exposing the spelling did not change an inspection schema.
 
 A `Unit`-returning function may now write `return;` as the compact explicit form of
 returning Unit. Semantic analysis checks the bare form as `Unit` against the declared
@@ -125,7 +136,7 @@ return type, so non-Unit functions receive the same `N3004` mismatch used for an
 wrongly typed return expression. AST and HIR retain a bare return separately from
 `return ();`; the interpreter produces the ordinary `Value::Unit`, and the existing
 function-boundary conformance check still rejects malformed HIR that claims a different
-return type. Semantic-inspection v1/v2/v3 already model a return statement with zero child
+return type. Every published semantic-inspection schema models a return statement with zero child
 expressions, so this source distinction needs no schema version bump.
 
 Rejected calls are fail-closed for continuing flow recovery. Callees and arguments
@@ -145,7 +156,7 @@ a continuing rejected operator are rolled back. Non-continuation from an operand
 must be evaluated keeps `!` precedence; short-circuit operators retain their existing
 conditional right-hand evaluation rules.
 
-Matching `Int`, `Bool`, and `Unit` values support `==` and `!=`. `Unit` has a
+Matching `Int`, `Bool`, `String`, and `Unit` values support `==` and `!=`. `Unit` has a
 single runtime value, so Unit equality is always true and Unit inequality is always false
 once both operands have evaluated normally. A nominal enum also supports equality when
 every declared variant is payload-free; operands must have the same enum identity and
@@ -157,7 +168,8 @@ cannot silently retarget a reference to a same-signature sibling declaration. Va
 aliases still carry only runtime declaration identity rather than source spelling. Enums with
 any payload variant and records remain non-comparable. Closed-condition analysis can prove
 literal Unit, direct payload-free enum-constructor, and direct function-reference
-comparisons, while locals and calls remain dynamic and are still evaluated at runtime.
+comparisons; closed String literals and immutable aliases participate as well, while calls
+and mutable values remain dynamic and are still evaluated at runtime.
 
 Invalid continuing control conditions are fail-closed too. A non-Bool or erroneous
 `if` condition makes the expression Error-typed and discards condition/branch flow
@@ -271,12 +283,12 @@ iteration and re-evaluates that same loop's condition. Neither carries a value
 or acts as an expression. Labelled loops and value-carrying breaks are not part
 of the bootstrap subset.
 
-`Int`, `Bool`, `Unit`, and declared nominal records and enums are recognized
+`Int`, `Bool`, `String`, `Unit`, and declared nominal records and enums are recognized
 surface types today. `()` is the sole Unit literal, and a block with no tail also
 produces Unit. A function declared `-> Unit` may fall through such a body or use
 the explicit `return ();` form; non-Unit functions still need a compatible tail or
 an explicit return on every continuing path. Arithmetic and ordered comparisons
-require `Int`; boolean operators require `Bool`; equality accepts matching `Int`, `Bool`, `Unit`, the same function signature, or
+require `Int`; boolean operators require `Bool`; equality accepts matching `Int`, `Bool`, `String`, `Unit`, the same function signature, or
 the same nominal payload-free enum type; function equality compares declaration
 identity rather than addresses or code layout, and calls require matching arity and
 argument types.
@@ -289,7 +301,7 @@ mutation, control-flow, aggregate, and shadowing policies are frozen.
 ## Bootstrap execution rules
 
 `nova run` requires one top-level `main` with no parameters and an `Int`, `Bool`,
-or `Unit` return type. A Unit-valued `main` prints `()` like any other returned
+`String`, or `Unit` return type. A Unit-valued `main` prints `()` like any other returned
 bootstrap value. Execution evaluates expressions left to
 right. Record initializer
 expressions follow the same rule even when named fields are written out of
@@ -434,9 +446,11 @@ Rust in CI. With Rust and Cargo installed:
 cargo build --workspace
 cargo run -p nova-cli -- check examples/basics.nv
 cargo run -p nova-cli -- run examples/basics.nv
+cargo run -p nova-cli -- run examples/strings.nv
 cargo run -p nova-cli -- ast examples/basics.nv
 cargo run -p nova-cli -- inspect examples/enums.nv --format json
 cargo run -p nova-cli -- inspect examples/enums.nv --format json --schema-version 2
+cargo run -p nova-cli -- inspect examples/strings.nv --format json --schema-version 4
 printf 'fn main() -> Int { 42 }\n' | cargo run -p nova-cli -- check - --source-name scratch/main.nv
 ```
 
@@ -455,7 +469,7 @@ The installed binary is named `nova`:
 nova check [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 nova run [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 nova ast [--source-name name] [--message-format human|json] [--] <file|->
-nova inspect --format json [--schema-version 1|2|3] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
+nova inspect --format json [--schema-version 1|2|3|4] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 ```
 
 Each command accepts exactly one source operand. A filesystem path retains its written
@@ -478,7 +492,7 @@ even when `nova check` or `nova run` would reject that program later.
 writes no partial document when source diagnostics or an inspection invariant
 failure occurs. Non-fatal warnings are written to standard error without changing
 status `0`, runtime output, or a successful inspection document. Schema v1 remains
-the default; v2 and v3 must be requested explicitly. With `--fail-on-warnings`, semantic
+the default; v2, v3, and v4 must be requested explicitly. With `--fail-on-warnings`, semantic
 warnings instead produce status `1` while retaining warning severity; `run` and `inspect`
 suppress their ordinary standard output. The option is invalid with `ast`, which does not
 perform semantic analysis.

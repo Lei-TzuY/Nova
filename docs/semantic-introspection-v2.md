@@ -31,6 +31,8 @@ The `program` member is the same strict v1 fact table, including its determinist
 and prohibition on unknown fields. Consequently v2 also refuses to reinterpret a
 payload-bearing arm with `binding: null` as the later `Variant(_)` discard feature; such
 source receives inspection invariant `N5001` and must be inspected with explicit schema v3.
+The same frozen v1 program projection cannot represent the later `String` type or literal
+category; String-bearing source receives `N5001` and requires explicit schema v4.
 
 Inspection still runs the complete lexical, syntactic, name-resolution, type,
 and definite-initialization pipeline. Rejected source writes diagnostics and no

@@ -1,0 +1,9 @@
+record Greeting { text: String }
+
+fn choose(enabled: Bool, greeting: Greeting) -> String {
+    if enabled { greeting.text } else { "disabled" }
+}
+
+fn main() -> String {
+    choose(true, new Greeting { text: "Hello, Nova 🦀!" })
+}

@@ -1,7 +1,7 @@
 # Nova Language Constitution
 
 Status: **design constitution for Nova v0.1**
-Last revised: 2026-08-28
+Last revised: 2026-09-03
 
 This document records durable design constraints for Nova. It is not a claim
 that every described property has been implemented, and it is not a substitute
@@ -55,7 +55,7 @@ the optional value-producing tail expression of a block.
 
 **Provisional bootstrap decisions.** The implemented subset uses UTF-8 source,
 ASCII identifiers, decimal plus base-prefixed binary/octal/hexadecimal integer
-literals, `//` line comments, and nested
+literals, UTF-8 string literals with a closed escape set, `//` line comments, and nested
 `/* ... */` block comments. Keywords are reserved. Files with malformed UTF-8
 are rejected before lexing. Each source-oriented CLI command accepts exactly one
 filesystem path or `-`; the latter consumes standard input to EOF and assigns the stable
@@ -82,7 +82,7 @@ reference-like type. Algebraic data types and exhaustive pattern matching are
 core language directions, not library conventions.
 
 **Provisional bootstrap decisions.** The current semantic core recognizes the
-surface types `Int`, `Bool`, `Unit`, the uninhabited bottom type `!`, and declared nominal record and enum types.
+surface types `Int`, `Bool`, `String`, `Unit`, the uninhabited bottom type `!`, and declared nominal record and enum types.
 The sole Unit literal is `()`, and a value-less block also produces Unit. Aggregate
 identity comes from the declaration rather than shape: separately declared
 types remain different even when their fields or variants have identical names
@@ -97,8 +97,16 @@ return category; functions with other return types therefore reject it through t
 return-type compatibility rule that governs explicit expressions. AST/HIR retain the
 source distinction instead of synthesizing a Unit expression. Functions with other return
 types still require a compatible value on every continuing path.
-`Unit` is reserved alongside `Int` and `Bool` and cannot be redefined as a nominal
-record or enum.
+`String` and `Unit` are reserved alongside `Int` and `Bool` and cannot be redefined as
+nominal records or enums.
+
+The bootstrap `String` scalar contains immutable UTF-8 text. Source literals preserve
+unescaped non-control Unicode scalar values and decode only `\\`, `\"`, `\n`, `\r`,
+`\t`, and `\0`; malformed escapes, raw control characters, and unterminated or multiline
+literals fail lexically. `String` participates in ordinary explicit types, local inference,
+functions, records, enums, branch/match joins, assignment, and equality. This executable
+value contract deliberately does not settle concatenation, indexing, interpolation,
+encoding conversion, standard-library APIs, allocation, layout, ownership, or ABI.
 
 The bootstrap surface also admits explicit recursive function types written
 `fn(T1, T2) -> U`. These lower directly to the existing resolved `FunctionType`, so a
@@ -139,15 +147,16 @@ catch-all variant wildcard, so these rules extend the executable algebraic-data-
 without selecting default-arm, guard, nested-pattern, usefulness, layout, or ownership
 semantics prematurely.
 
-Matching `Int`, `Bool`, and `Unit` values are equality-comparable with `==` and
+Matching `Int`, `Bool`, `String`, and `Unit` values are equality-comparable with `==` and
 `!=`. Unit has exactly one bootstrap value, so two normally evaluated Unit values compare
-equal. A nominal enum is also equality-comparable when every one of its declared variants
+equal. String equality compares decoded Unicode scalar sequences after ordinary
+left-to-right operand evaluation. A nominal enum is also equality-comparable when every one of its declared variants
 is payload-free; both operands must have that same nominal enum identity, and equality
 compares the resolved variant identity after ordinary left-to-right evaluation. Enums with
 any payload variant and nominal records remain non-comparable. Function values are
 comparable only when their fully resolved signatures match, and equality compares top-level
 declaration identity rather than code addresses or bodies. Closed-condition reasoning may
-prove equality for literal Unit values, direct payload-free enum constructors, and direct
+prove equality for closed String and literal Unit values, direct payload-free enum constructors, and direct
 top-level function references; it does not erase evaluation of calls, local aliases,
 parameters, or other dynamic values.
 
@@ -465,13 +474,13 @@ definite-assignment gate consumes that graph before HIR can reach execution.
 The interpreter consumes typed HIR directly and supports the implemented
 function, call, record construction/projection, enum construction/matching,
 block, `if`, `while`, `break`, `continue`, return, binding, assignment, Unit,
-Boolean, and integer subset. Unit helpers may return explicit `()` or fall through
-a value-less body. Evaluation order is left-to-right; named record initializers
-do not reorder their expressions when resolved to declaration slots. A match
+Boolean, String, and integer subset. Unit helpers may return explicit `()` or
+fall through a value-less body. Evaluation order is left-to-right; named record
+initializers do not reorder their expressions when resolved to declaration slots. A match
 evaluates its scrutinee once and only its selected arm. `&&` and `||`
 short-circuit, and semantic dataflow models that same conditional RHS execution
 rather than granting facts from code the interpreter may skip. The entry point
-is a zero-argument top-level `main` returning `Int`, `Bool`, or `Unit`.
+is a zero-argument top-level `main` returning `Int`, `Bool`, `String`, or `Unit`.
 
 The interpreter propagates `return`, `break`, and `continue` as structured
 control flow through nested expressions and selected match arms. A `while`
@@ -539,16 +548,19 @@ nominal identities, typed blocks/statements/expressions, spans, and exhaustive
 match facts into a tooling-owned JSON model. Explicitly selected schema v2
 preserves that program projection and adds verified function CFG nodes, binding
 events, structured transfers, normal exits, and execution/diagnostic/backedge
-classes. Document-local IDs and deterministic ordering are specified
+classes. Schema v3 adds explicit enum-pattern payload modes without reinterpreting
+the older program projection. Schema v4 is the first contract whose program type
+and expression categories include `string`; v1-v3 reject String-bearing programs
+with `N5001` rather than silently broadening their frozen enums. Document-local IDs and deterministic ordering are specified
 independently of Rust HIR and CFG layouts. Rejected source or an inspection
 invariant failure produces diagnostics and no partial document. Compiler debug
 text is not this protocol.
 
 Effects, ownership facts, module graphs, transformations, and incremental keys
-cannot appear until the corresponding compiler semantics exist. Both schemas
+cannot appear until the corresponding compiler semantics exist. All schemas
 are provisional before Nova 1.0 and are versioned independently from the
-language, diagnostics, packages, and future IRs. V1 remains unchanged and the
-CLI never selects v2 implicitly.
+language, diagnostics, packages, and future IRs. V1 remains the default and the
+CLI never selects v2, v3, or v4 implicitly.
 
 ## 13. Compatibility and versioning
 

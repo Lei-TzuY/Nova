@@ -235,6 +235,8 @@ pub struct Expression {
 pub enum ExpressionKind {
     /// Checked decimal integer magnitude. Signed Int meaning is assigned semantically.
     Integer(u64),
+    /// Decoded UTF-8 string value.
+    String(String),
     /// Boolean value.
     Boolean(bool),
     /// Unit value written as `()`.
