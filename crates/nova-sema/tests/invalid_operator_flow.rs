@@ -70,6 +70,15 @@ fn arithmetic_mismatch_is_error_and_does_not_initialize_outer_binding() {
 }
 
 #[test]
+fn string_arithmetic_mismatch_rolls_back_rhs_initialization() {
+    let output = analyze_text("fn f() -> Int { var x: Int; \"left\" + { x = 1; \"right\" }; x }");
+    let actual = codes(&output);
+    assert!(actual.contains(&"N3004"), "{actual:?}");
+    assert!(actual.contains(&"N3009"), "{actual:?}");
+    assert_eq!(expression_statement_type(&output, "f", 1), &Type::Error);
+}
+
+#[test]
 fn comparison_mismatch_is_error_and_does_not_initialize_outer_binding() {
     let output = analyze_text("fn f() -> Int { var x: Int; ({ x = 1; true }) < 1; x }");
     let actual = codes(&output);
