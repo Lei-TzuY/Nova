@@ -98,8 +98,7 @@ fn boolean_mismatch_is_error_and_does_not_initialize_outer_binding() {
 
 #[test]
 fn string_short_circuit_mismatch_rolls_back_rhs_initialization() {
-    let output =
-        analyze_text("fn f() -> Int { var x: Int; \"left\" && { x = 1; true }; x }");
+    let output = analyze_text("fn f() -> Int { var x: Int; \"left\" && { x = 1; true }; x }");
     let actual = codes(&output);
     assert!(actual.contains(&"N3004"), "{actual:?}");
     assert!(actual.contains(&"N3009"), "{actual:?}");
