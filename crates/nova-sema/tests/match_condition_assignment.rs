@@ -159,6 +159,33 @@ fn dynamic_match_rhs_self_read_keeps_outer_assignment_uninitialized() {
 }
 
 #[test]
+fn noncontinuing_match_rhs_self_read_does_not_poison_outer_assignment() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Left, Right }
+
+        fn main(choice: Choice) -> Int {
+            var value: Int;
+            value = match choice {
+                Choice::Left => {
+                    value;
+                    return 0;
+                },
+                Choice::Right => 1,
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    // The returning arm still reports its local invalid read, but because it does
+    // not continue to the assignment merge, only the valid Right arm determines
+    // post-match initialization.
+    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
