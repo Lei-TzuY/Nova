@@ -84,3 +84,37 @@ fn nested_match_returning_initialization_does_not_leak_into_continuing_flow() {
     // outer match intersections. The post-match `probe` read remains invalid.
     assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn if_match_returning_initialization_does_not_leak_into_continuing_flow() {
+    let output = analyze_text(
+        r#"
+        enum Detail { First, Second }
+
+        fn main(flag: Bool, detail: Detail) -> Int {
+            var value: Int;
+            var probe: Int;
+            value = if flag {
+                match detail {
+                    Detail::First => {
+                        probe = 7;
+                        probe;
+                        return 0;
+                    },
+                    Detail::Second => 1,
+                }
+            } else {
+                2
+            };
+            value;
+            probe;
+            0
+        }
+        "#,
+    );
+
+    // Initialization that exists only on the returning inner match arm must not
+    // leak through the inner match continuation or the enclosing dynamic `if`.
+    // The outer assignment still initializes `value`, while `probe` remains invalid.
+    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
+}
