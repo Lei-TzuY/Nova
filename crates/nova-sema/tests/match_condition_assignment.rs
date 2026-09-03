@@ -272,6 +272,37 @@ fn nested_if_mixed_self_read_keeps_match_assignment_uninitialized() {
 }
 
 #[test]
+fn nested_match_mixed_self_read_keeps_outer_assignment_uninitialized() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Left, Right }
+        enum Detail { First, Second }
+
+        fn main(choice: Choice, detail: Detail) -> Int {
+            var value: Int;
+            value = match choice {
+                Choice::Left => match detail {
+                    Detail::First => {
+                        value = 1;
+                        value
+                    },
+                    Detail::Second => value,
+                },
+                Choice::Right => 3,
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    // The valid inner arm initializes before reading, while its sibling continuing
+    // arm still performs an uninitialized self-read. The inner match intersection
+    // must preserve that invalid dependency through the outer match assignment.
+    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
