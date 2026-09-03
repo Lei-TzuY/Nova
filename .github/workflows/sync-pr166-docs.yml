@@ -1,0 +1,91 @@
+name: PR166 documentation sync
+
+on:
+  push:
+    branches:
+      - feat/closures-lexical-capture
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/closures-lexical-capture
+      - name: Synchronize README and roadmap with implemented closures
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          readme = Path('README.md')
+          text = readme.read_text()
+
+          replacements = [
+              (
+                  "- parse functions, recursive explicit function types, nominal records and enums,\n  UTF-8 string literals, explicit aggregate construction, exhaustive enum matching with payload discard, field projection,",
+                  "- parse functions, explicitly typed anonymous function expressions, recursive explicit function types,\n  nominal records and enums, UTF-8 string literals, explicit aggregate construction, exhaustive enum matching with payload discard, field projection,"
+              ),
+              (
+                  "- lower accepted syntax into a resolved, typed HIR with stable function,\n  binding, record, and enum identities, plus a verified function-level CFG;",
+                  "- lower accepted syntax into a resolved, typed HIR with stable function, closure,\n  binding, record, and enum identities, explicit closure capture metadata, plus verified callable CFGs;"
+              ),
+              (
+                  "- execute semantically accepted programs through a deterministic bootstrap\n  interpreter with function calls, recursion, Unit-valued procedures, records, enums,\n  UTF-8 strings, pattern matching, mutation, blocks, conditionals, bounded loops, and structured\n  `break`/`continue`;",
+                  "- execute semantically accepted programs through a deterministic bootstrap\n  interpreter with named functions, typed closures and immutable capture-by-value environments,\n  recursion, Unit-valued procedures, records, enums, UTF-8 strings, pattern matching, mutation,\n  blocks, conditionals, bounded loops, and structured `break`/`continue`;"
+              ),
+              (
+                  "  and v4 documents that extend the program projection with String type/literal categories.",
+                  "  v4 documents that extend the program projection with String type/literal categories,\n  and v5 documents that add closure definitions, captures, callable ownership, and verified closure CFGs."
+              ),
+              (
+                  "[v4 String extension](docs/semantic-introspection-v4.md) for the machine-readable\ntooling boundary,",
+                  "[v4 String extension](docs/semantic-introspection-v4.md), and\n[v5 closure extension](docs/semantic-introspection-v5.md) for the machine-readable\ntooling boundary,"
+              ),
+              (
+                  "Explicit function types use `fn(T1, T2) -> U` and may nest recursively in any type\nposition. They expose the callable signatures the HIR/runtime already use internally, so\nnamed top-level functions can now be passed, returned, stored in typed locals, and invoked\nthrough those values. For example, a parameter `transform: fn(Int) -> Int` can be called\nlike any other function value. This slice deliberately does not add lambda expressions,\nclosures, captured environments, methods, or implicit callable conversions.",
+                  "Explicit function types use `fn(T1, T2) -> U` and may nest recursively in any type\nposition. Named top-level functions and explicitly typed anonymous functions share those\nstructural callable signatures, so either can be passed, returned, stored in typed locals,\nand invoked through values. Anonymous functions use `fn(name: Type, ...) -> Type { ... }`\nand capture outer immutable `let` bindings and parameters by value in first lexical-use order.\nCapturing a mutable `var` fails closed as `N3035`; no shared-cell or by-reference mutation\nsemantics are inferred. Each anonymous-function evaluation creates a distinct closure instance,\nwhile aliases retain that instance identity. Methods and implicit callable conversions remain\noutside the bootstrap subset."
+              ),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'README expected exactly one match for: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+          readme.write_text(text)
+
+          roadmap = Path('docs/roadmap.md')
+          text = roadmap.read_text()
+          old_status = '**Status: twenty-four vertical slices implemented; execution surface remains small.**'
+          if text.count(old_status) != 1:
+              raise SystemExit('roadmap Phase 3 status count not uniquely found')
+          text = text.replace(
+              old_status,
+              '**Status: twenty-six vertical slices implemented; execution surface remains small.**',
+              1,
+          )
+
+          marker = 'Next Phase 3 slices should deepen executable semantics without bypassing Phase 2\ncontracts:\n'
+          if text.count(marker) != 1:
+              raise SystemExit('roadmap Phase 3 next-slices marker not uniquely found')
+          closure_slice = '''Implemented in the twenty-sixth Phase 3 slice:\n\n- explicitly typed anonymous functions use `fn(name: Type, ...) -> Type { ... }` and share\n  the existing structural callable types used by named functions;\n- semantic analysis assigns stable closure/callable ownership, captures outer immutable\n  `let` bindings and parameters by value in first lexical-use order, rejects mutable `var`\n  capture as `N3035`, and keeps initializer-before-binding self-reference fail closed;\n- closure bodies own their `return`, `break`, and `continue` boundaries, with dedicated\n  verified CFGs and capture-aware HIR validation rather than leaking control or bindings\n  across callable ownership;\n- the interpreter materializes per-evaluation closure environments, preserves instance\n  identity through aliases, distinguishes separately evaluated closures and named functions,\n  and rechecks capture/type/call-boundary invariants under the existing `N4005` policy;\n- semantic-inspection v5 adds closure definitions, captures, callable ownership, and verified\n  closure CFGs while v1-v4 fail closed with `N5001` instead of reinterpreting older schemas;\n- parser recursion guarding is tightened to fail with `N2008` before host-stack exhaustion as\n  anonymous-function parsing increases expression-frame size; and\n- parser, semantic, CFG, interpreter, inspection, CLI, lexical-shadowing, nested-capture,\n  malformed-HIR, and recursion-budget regressions lock the vertical slice end to end.\n\n'''
+          text = text.replace(marker, closure_slice + marker, 1)
+
+          old_future = '''- prioritize closures and lexical capture only after binding ownership, captured-environment\n  identity, recursion/self-reference, callable type, flow, and runtime trust-boundary contracts\n  are written together;\n'''
+          if text.count(old_future) != 1:
+              raise SystemExit('roadmap stale closure future bullet not uniquely found')
+          text = text.replace(old_future, '', 1)
+          roadmap.write_text(text)
+          PY
+          git rm .github/workflows/sync-pr166-docs.yml
+          git diff --check
+      - name: Commit synchronized documentation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "docs: document implemented closure semantics"
+          git push origin HEAD:feat/closures-lexical-capture
