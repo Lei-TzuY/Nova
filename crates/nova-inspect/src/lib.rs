@@ -2289,7 +2289,11 @@ mod tests {
         });
         let error =
             build_document(&cross_owner, &source).expect_err("cross-owner use must fail closed");
-        assert!(error.message().contains("crosses function ownership"));
+        assert!(
+            error
+                .message()
+                .contains("crosses callable ownership without a capture")
+        );
 
         let (source, mut escaped_scope) = checked(
             "fn main() -> Int {\n\
