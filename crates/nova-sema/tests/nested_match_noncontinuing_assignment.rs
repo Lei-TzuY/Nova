@@ -50,3 +50,37 @@ fn nested_match_noncontinuing_self_read_does_not_poison_outer_assignment() {
     // assignment merge. The post-assignment read therefore remains initialized.
     assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn nested_match_returning_initialization_does_not_leak_into_continuing_flow() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Left, Right }
+        enum Detail { First, Second }
+
+        fn main(choice: Choice, detail: Detail) -> Int {
+            var value: Int;
+            var probe: Int;
+            value = match choice {
+                Choice::Left => match detail {
+                    Detail::First => {
+                        probe = 7;
+                        probe;
+                        return 0;
+                    },
+                    Detail::Second => 1,
+                },
+                Choice::Right => 2,
+            };
+            value;
+            probe;
+            0
+        }
+        "#,
+    );
+
+    // The returning arm may initialize and read `probe` locally, but because that
+    // path cannot continue, its initialization must not flow into the inner or
+    // outer match intersections. The post-match `probe` read remains invalid.
+    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
+}
