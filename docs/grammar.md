@@ -114,6 +114,7 @@ primary             = integer
                     | record_literal
                     | enum_constructor
                     | unit_literal
+                    | lambda_expression
                     | "(" , expression , ")"
                     | block
                     | if_expression
@@ -122,6 +123,8 @@ record_literal      = "new" , identifier , "{" , [ record_initializers ] , "}" ;
 record_initializers = record_initializer , { "," , record_initializer } , [ "," ] ;
 record_initializer  = identifier , ":" , expression ;
 unit_literal        = "(" , ")" ;
+lambda_expression   = "fn" , "(" , [ parameters ] , ")" ,
+                      "->" , type_ref , block ;
 enum_constructor    = identifier , "::" , identifier ,
                       [ "(" , expression , [ "," ] , ")" ] ;
 if_expression       = "if" , expression , block , "else" ,
@@ -163,10 +166,22 @@ Function types use the recursive surface form `fn(T1, T2) -> U`; zero parameters
 a trailing comma are allowed, and parameter/return positions may themselves be function
 types. The form is accepted anywhere a type reference is accepted, including function
 signatures, local annotations, record fields, and enum payloads. This enables named
-top-level function values to be passed, returned, stored, and invoked through explicit
-signatures. It does not introduce lambdas, closures, captured environments, methods, or
-implicit callable coercions. Recursive type parsing has its own finite nesting budget and
-reports `N2009` rather than recursing without bound.
+top-level functions and explicitly typed anonymous functions to be passed, returned,
+stored, and invoked through the same structural signature. Recursive type parsing has
+its own finite nesting budget and reports `N2009` rather than recursing without bound.
+
+An anonymous function expression is written `fn(name: Type, ...) -> Type { ... }`; every
+parameter and the return type are explicit. Evaluating it produces a closure and copies
+each referenced outer immutable `let` or parameter value into an environment in first
+lexical-use order. Captures are by value: a closure may escape its creating call, and
+aliases of the same closure value retain one runtime instance identity. Evaluating the
+same anonymous-function expression again creates a distinct identity. Capturing a `var`
+is `N3035`; Nova does not silently choose snapshot, shared-cell, or by-reference mutation
+semantics. A local initializer is still checked before its binding enters scope, so a
+closure cannot recursively refer to the binding being initialized. `return` targets the
+closure itself, and an outer loop does not make `break` or `continue` legal inside the
+closure. Methods, implicit callable conversions, capture lists, mutable/shared captures,
+closure layout, allocation, ownership, and ABI remain unspecified.
 
 `!` is the surface spelling of Nova's uninhabited bottom type. It is accepted anywhere a
 type reference is accepted, including nested function signatures. A continuing expression

@@ -241,6 +241,15 @@ pub enum ExpressionKind {
     Boolean(bool),
     /// Unit value written as `()`.
     Unit,
+    /// Explicitly typed anonymous function expression.
+    Lambda {
+        /// Lambda parameters in source order.
+        parameters: Vec<Parameter>,
+        /// Explicit lambda return type.
+        return_type: TypeRef,
+        /// Lexical body evaluated when the resulting closure is called.
+        body: Block,
+    },
     /// Unresolved name reference.
     Name(Name),
     /// Nominal record construction with named fields.

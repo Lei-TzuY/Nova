@@ -2,6 +2,7 @@ use nova_diagnostics::{Diagnostic, Severity, render_human_all, render_json_lines
 use nova_inspect::{
     render_json as render_semantic_json, render_json_v2 as render_semantic_json_v2,
     render_json_v3 as render_semantic_json_v3, render_json_v4 as render_semantic_json_v4,
+    render_json_v5 as render_semantic_json_v5,
 };
 use nova_interpreter::execute;
 use nova_lexer::lex;
@@ -21,7 +22,7 @@ Usage:
   nova check [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
   nova run [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
   nova ast [--source-name name] [--message-format human|json] [--] <file|->
-  nova inspect --format json [--schema-version 1|2|3|4] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
+  nova inspect --format json [--schema-version 1|2|3|4|5] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
   nova --help
 
 `check` validates UTF-8, tokens, syntax, names, types, and definite assignment.
@@ -58,6 +59,7 @@ enum InspectSchemaVersion {
     V2,
     V3,
     V4,
+    V5,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -215,6 +217,7 @@ fn run(
             InspectSchemaVersion::V2 => render_semantic_json_v2(&analyzed, &source),
             InspectSchemaVersion::V3 => render_semantic_json_v3(&analyzed, &source),
             InspectSchemaVersion::V4 => render_semantic_json_v4(&analyzed, &source),
+            InspectSchemaVersion::V5 => render_semantic_json_v5(&analyzed, &source),
         };
         match rendered {
             Ok(document) => writeln!(stdout, "{document}")?,
@@ -306,7 +309,7 @@ fn parse_arguments(arguments: &[OsString]) -> Result<ParsedArguments, String> {
         } else if option_text == Some("--schema-version") {
             index += 1;
             let Some(value) = arguments.get(index).and_then(|value| value.to_str()) else {
-                return Err("`--schema-version` requires `1`, `2`, `3`, or `4`".to_owned());
+                return Err("`--schema-version` requires `1`, `2`, `3`, `4`, or `5`".to_owned());
             };
             inspect_schema_version = Some(parse_inspect_schema_version(value)?);
         } else if let Some(value) =
@@ -414,8 +417,9 @@ fn parse_inspect_schema_version(value: &str) -> Result<InspectSchemaVersion, Str
         "2" => Ok(InspectSchemaVersion::V2),
         "3" => Ok(InspectSchemaVersion::V3),
         "4" => Ok(InspectSchemaVersion::V4),
+        "5" => Ok(InspectSchemaVersion::V5),
         _ => Err(format!(
-            "unsupported inspection schema version `{value}`; expected `1`, `2`, `3`, or `4`"
+            "unsupported inspection schema version `{value}`; expected `1`, `2`, `3`, `4`, or `5`"
         )),
     }
 }

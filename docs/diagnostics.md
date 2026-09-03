@@ -142,6 +142,17 @@ This is the first narrow usefulness diagnostic, not a general pattern-usefulness
 There is still no catch-all arm, guard usefulness, nested-pattern coverage, or warning for
 dynamic enum matches.
 
+## `N3035` mutable lexical capture
+
+The bootstrap closure model captures immutable outer `let` and parameter values by value.
+If an anonymous function reads or assigns a lexically enclosing `var`, semantic analysis
+reports `N3035` at the first attempted capture and points back to the mutable declaration.
+The rejected reference lowers as Error HIR and cannot create a capture entry or export
+definite-initialization facts. This diagnostic is intentionally fail closed: until Nova has
+ownership, lifetime, and shared-cell rules, the compiler does not guess whether mutable
+capture should mean a creation-time snapshot, a private mutable copy, or shared by-reference
+state.
+
 ## Deliberate limits
 
 Apart from the whole-program `--fail-on-warnings` exit policy, Nova has no warning

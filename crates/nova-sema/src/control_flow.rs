@@ -3,7 +3,7 @@
 //! The bootstrap analyzer builds these graphs while lowering source so recovery-only
 //! paths remain visible without being allowed to export facts into reachable code.
 
-use crate::hir::{Binding, BindingId, FunctionId};
+use crate::hir::{Binding, BindingId, ClosureId, FunctionId};
 use nova_diagnostics::Diagnostic;
 use nova_source::Span;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -12,17 +12,73 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ControlFlowProgram {
     functions: Vec<FunctionControlFlow>,
+    closures: Vec<ClosureControlFlow>,
 }
 
 impl ControlFlowProgram {
-    pub(crate) fn new(functions: Vec<FunctionControlFlow>) -> Self {
-        Self { functions }
+    pub(crate) fn new(
+        functions: Vec<FunctionControlFlow>,
+        closures: Vec<ClosureControlFlow>,
+    ) -> Self {
+        Self {
+            functions,
+            closures,
+        }
     }
 
     /// Returns verified graphs in HIR function order.
     #[must_use]
     pub fn functions(&self) -> &[FunctionControlFlow] {
         &self.functions
+    }
+
+    /// Returns verified graphs in closure semantic-traversal order.
+    #[must_use]
+    pub fn closures(&self) -> &[ClosureControlFlow] {
+        &self.closures
+    }
+}
+
+/// One verified closure-level control-flow graph.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClosureControlFlow {
+    closure: ClosureId,
+    graph: FunctionControlFlow,
+}
+
+impl ClosureControlFlow {
+    /// Returns the HIR closure represented by this graph.
+    #[must_use]
+    pub const fn closure(&self) -> ClosureId {
+        self.closure
+    }
+
+    /// Returns the unique graph entry.
+    #[must_use]
+    pub const fn entry(&self) -> FlowNodeId {
+        self.graph.entry()
+    }
+
+    /// Returns nodes in deterministic semantic-lowering order.
+    #[must_use]
+    pub fn nodes(&self) -> &[FlowNode] {
+        self.graph.nodes()
+    }
+
+    /// Returns closure bindings and captures in semantic identity order.
+    #[must_use]
+    pub fn bindings(&self) -> &[FlowBinding] {
+        self.graph.bindings()
+    }
+
+    /// Returns exits that complete the closure body normally.
+    #[must_use]
+    pub fn normal_exits(&self) -> &[FlowNodeId] {
+        self.graph.normal_exits()
+    }
+
+    pub(crate) const fn graph(&self) -> &FunctionControlFlow {
+        &self.graph
     }
 }
 
@@ -206,6 +262,10 @@ impl FunctionFlowBuilder {
         }
     }
 
+    pub(crate) fn new_closure(closure: ClosureId, span: Span) -> Self {
+        Self::new(FunctionId::new(closure.index()), span)
+    }
+
     pub(crate) const fn cursor(&self) -> FlowNodeId {
         self.cursor
     }
@@ -327,6 +387,15 @@ impl FunctionFlowBuilder {
         };
         verify(&graph, self.span)?;
         Ok(graph)
+    }
+
+    pub(crate) fn finish_closure(
+        self,
+        closure: ClosureId,
+        normal_exit: Option<FlowNodeId>,
+    ) -> Result<ClosureControlFlow, FlowError> {
+        self.finish(normal_exit)
+            .map(|graph| ClosureControlFlow { closure, graph })
     }
 
     fn push_node(
