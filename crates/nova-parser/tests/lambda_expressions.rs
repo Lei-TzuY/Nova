@@ -44,9 +44,8 @@ fn rejects_a_lambda_without_the_required_parameter_parentheses() {
         parsed.diagnostics.iter().any(|diagnostic| {
             diagnostic.code == "N2001"
                 && diagnostic
-                    .labels
-                    .iter()
-                    .any(|label| label.message.contains("after `fn`"))
+                    .message
+                    .contains("after `fn` in an anonymous function")
         }),
         "{:?}",
         parsed.diagnostics
