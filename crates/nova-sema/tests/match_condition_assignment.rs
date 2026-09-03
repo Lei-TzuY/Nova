@@ -136,6 +136,29 @@ fn selected_match_rhs_unreachable_self_read_does_not_poison_initialization() {
 }
 
 #[test]
+fn dynamic_match_rhs_self_read_keeps_outer_assignment_uninitialized() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Left, Right }
+
+        fn main(choice: Choice) -> Int {
+            var value: Int;
+            value = match choice {
+                Choice::Left => value,
+                Choice::Right => 1,
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    // The reachable self-read reports one N3009, and because that continuing arm
+    // participates in the dynamic match intersection, the later read reports one too.
+    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
