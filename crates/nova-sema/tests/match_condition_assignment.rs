@@ -153,9 +153,9 @@ fn dynamic_match_rhs_self_read_keeps_outer_assignment_uninitialized() {
         "#,
     );
 
-    // Probe the merge boundary first: if the self-reading arm participates in the
-    // dynamic join, the post-assignment read must remain uninitialized too.
-    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
+    // The reachable self-read reports one N3009, and because that continuing arm
+    // participates in the dynamic match intersection, the later read reports one too.
+    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
 }
 
 #[test]
