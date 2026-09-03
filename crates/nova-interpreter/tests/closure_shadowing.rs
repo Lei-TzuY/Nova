@@ -41,3 +41,18 @@ fn closure_created_inside_shadowing_scope_captures_the_inner_binding() {
     );
     assert_eq!(execute(&analyzed.program), Ok(Value::Int(2)));
 }
+
+#[test]
+fn nested_closure_preserves_the_shadowed_binding_captured_by_its_creator() {
+    let analyzed = accepted(
+        "fn main() -> Int {\n\
+             let value = 1;\n\
+             let make = fn() -> fn() -> Int {\n\
+                 let value = 2;\n\
+                 fn() -> Int { value }\n\
+             };\n\
+             make()()\n\
+         }",
+    );
+    assert_eq!(execute(&analyzed.program), Ok(Value::Int(2)));
+}
