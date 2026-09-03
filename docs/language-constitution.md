@@ -480,6 +480,13 @@ calls consume returns but may not become an implicit target for loop control.
 Malformed HIR that lets loop control escape its lexical loop or function fails
 closed with runtime invariant diagnostic `N4005`.
 
+Every executed block and expression that completes with an ordinary runtime value
+must recursively conform to its own typed-HIR result type. The block boundary applies
+equally to function bodies, selected conditional branches, and loop bodies whose value
+is discarded. Structured `return`, `break`, and `continue` flows bypass value-only
+postconditions until their owning function or loop consumes them, preserving control-flow
+semantics while ordinary malformed-HIR type drift fails closed with `N4005`.
+
 Runtime record values carry nominal identity and declaration-order field slots;
 runtime enum values carry nominal identity, a declaration-order variant slot,
 and an optional boxed payload. Top-level function values carry declaration identity.
