@@ -209,3 +209,32 @@ fn returning_loop_branch_initialization_does_not_mask_break_path_self_read() {
     // break path or the loop exit. Both reachable reads therefore remain invalid.
     assert_eq!(n3009_count, 2, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn returning_loop_branch_initialization_does_not_mask_continue_backedge_self_read() {
+    let output = analyze_text(
+        "fn f(looping: Bool, stop: Bool) -> Int {\n\
+             var value: Int;\n\
+             while looping {\n\
+                 if stop {\n\
+                     value = 7;\n\
+                     return 0;\n\
+                 } else {\n\
+                     value;\n\
+                     continue;\n\
+                 };\n\
+             }\n\
+             0\n\
+         }",
+    );
+
+    let n3009_count = output
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "N3009")
+        .count();
+
+    // Initialization on the returning path cannot contribute to the loop backedge.
+    // The sibling continuing path must therefore self-read `value` as uninitialized.
+    assert_eq!(n3009_count, 1, "{:?}", output.diagnostics);
+}
