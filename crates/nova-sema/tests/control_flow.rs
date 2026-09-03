@@ -179,3 +179,33 @@ fn analyzed_graphs_expose_only_in_range_verified_references() {
         }));
     }
 }
+
+#[test]
+fn returning_loop_branch_initialization_does_not_mask_break_path_self_read() {
+    let output = analyze_text(
+        "fn f(flag: Bool) -> Int {\n\
+             var value: Int;\n\
+             while true {\n\
+                 if flag {\n\
+                     value = 7;\n\
+                     return 0;\n\
+                 } else {\n\
+                     value;\n\
+                     break;\n\
+                 };\n\
+             }\n\
+             value;\n\
+             0\n\
+         }",
+    );
+
+    let n3009_count = output
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "N3009")
+        .count();
+
+    // Initialization on the returning branch cannot reach either the sibling
+    // break path or the loop exit. Both reachable reads therefore remain invalid.
+    assert_eq!(n3009_count, 2, "{:?}", output.diagnostics);
+}
