@@ -7,7 +7,7 @@ use nova_diagnostics::Diagnostic;
 use nova_lexer::{Token, TokenKind, decode_string_literal};
 use nova_source::{SourceFile, Span};
 
-const MAX_EXPRESSION_DEPTH: usize = 256;
+const MAX_EXPRESSION_DEPTH: usize = 128;
 const MAX_TYPE_DEPTH: usize = 128;
 const OR_BINDING_POWER: (u8, u8) = (1, 2);
 const AND_BINDING_POWER: (u8, u8) = (3, 4);
