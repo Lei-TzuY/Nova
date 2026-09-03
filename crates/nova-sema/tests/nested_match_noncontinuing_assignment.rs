@@ -118,3 +118,35 @@ fn if_match_returning_initialization_does_not_leak_into_continuing_flow() {
     // The outer assignment still initializes `value`, while `probe` remains invalid.
     assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn match_if_returning_initialization_does_not_leak_into_continuing_flow() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Left, Right }
+
+        fn main(choice: Choice, flag: Bool) -> Int {
+            var value: Int;
+            var probe: Int;
+            value = match choice {
+                Choice::Left => if flag {
+                    probe = 7;
+                    probe;
+                    return 0;
+                } else {
+                    1
+                },
+                Choice::Right => 2,
+            };
+            value;
+            probe;
+            0
+        }
+        "#,
+    );
+
+    // Initialization that exists only on the returning inner `if` branch must not
+    // leak through the `if` continuation or the enclosing dynamic match. The outer
+    // assignment still initializes `value`, while `probe` remains invalid.
+    assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
+}
