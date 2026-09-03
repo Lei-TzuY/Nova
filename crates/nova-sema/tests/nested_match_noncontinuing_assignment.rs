@@ -150,3 +150,34 @@ fn match_if_returning_initialization_does_not_leak_into_continuing_flow() {
     // assignment still initializes `value`, while `probe` remains invalid.
     assert_eq!(code_count(&output, "N3009"), 1, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn returning_target_initialization_does_not_mask_continuing_self_read() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Left, Right }
+
+        fn main(choice: Choice, flag: Bool) -> Int {
+            var value: Int;
+            value = match choice {
+                Choice::Left => if flag {
+                    value = 7;
+                    value;
+                    return 0;
+                } else {
+                    value
+                },
+                Choice::Right => 2,
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    // Initializing the assignment target on the returning branch must remain local
+    // to that non-continuing path. The sibling continuing branch still self-reads
+    // `value` uninitialized, which also prevents the outer assignment from making
+    // `value` definitely initialized afterward.
+    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
+}
