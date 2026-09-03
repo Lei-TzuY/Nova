@@ -7,11 +7,13 @@ pub mod v1;
 pub mod v2;
 pub mod v3;
 pub mod v4;
+pub mod v5;
 
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::AnalysisOutput;
 use nova_sema::control_flow::{
-    ControlFlowProgram, FlowEdgeKind, FlowNodeKind, FlowTransfer, FunctionControlFlow,
+    ClosureControlFlow, ControlFlowProgram, FlowEdgeKind, FlowNodeKind, FlowTransfer,
+    FunctionControlFlow,
 };
 use nova_sema::hir::{self, Type};
 use nova_source::{SourceFile, Span};
@@ -121,7 +123,7 @@ pub fn build_document_v3(
         ));
     }
 
-    let (program_document, match_patterns) = Builder::new(&analysis.program, source)
+    let (program_document, match_patterns, _) = Builder::new(&analysis.program, source)
         .with_payload_discard()
         .build_parts()?;
     let control_flow =
@@ -162,7 +164,7 @@ pub fn build_document_v4(
         ));
     }
 
-    let (program_document, match_patterns) = Builder::new(&analysis.program, source)
+    let (program_document, match_patterns, _) = Builder::new(&analysis.program, source)
         .with_payload_discard()
         .with_string()
         .build_parts()?;
@@ -189,6 +191,57 @@ pub fn render_json_v4(
         .map_err(|error| InspectionError::invalid(format!("could not encode schema v4: {error}")))
 }
 
+/// Builds a schema-v5 document from one successful semantic analysis.
+///
+/// Version 5 is the first tooling contract that represents anonymous closures,
+/// immutable lexical captures, and closure-owned CFGs. Older schemas reject any
+/// closure expression rather than silently dropping its callable body or environment.
+pub fn build_document_v5(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<v5::Document, InspectionError> {
+    if !analysis.is_success() {
+        return Err(InspectionError::invalid(
+            "schema v5 requires a successful semantic analysis",
+        ));
+    }
+
+    let (program_document, match_patterns, closures) = Builder::new(&analysis.program, source)
+        .with_payload_discard()
+        .with_string()
+        .with_closures()
+        .build_parts()?;
+    let control_flow =
+        project_control_flow(&analysis.control_flow, &program_document.program, source)?;
+    let closure_control_flow = project_closure_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        &closures,
+        source,
+    )?;
+    Ok(v5::Document {
+        schema: v5::SCHEMA_NAME.to_owned(),
+        schema_version: v5::SCHEMA_VERSION,
+        producer: program_document.producer,
+        source: program_document.source,
+        program: program_document.program,
+        control_flow,
+        match_patterns,
+        closures,
+        closure_control_flow,
+    })
+}
+
+/// Renders one successful analysis as deterministic, pretty-printed schema-v5 JSON.
+pub fn render_json_v5(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<String, InspectionError> {
+    let document = build_document_v5(analysis, source)?;
+    serde_json::to_string_pretty(&document)
+        .map_err(|error| InspectionError::invalid(format!("could not encode schema v5: {error}")))
+}
+
 struct Builder<'a> {
     program: &'a hir::Program,
     source: &'a SourceFile,
@@ -199,9 +252,13 @@ struct Builder<'a> {
     expressions: Vec<Option<v1::Expression>>,
     matches: Vec<Option<v1::Match>>,
     match_patterns: Vec<v3::MatchPattern>,
+    closures: Vec<Option<v5::Closure>>,
     allow_payload_discard: bool,
     allow_string: bool,
+    allow_closures: bool,
     active_scopes: Vec<String>,
+    active_capture_bindings: Vec<BTreeSet<hir::BindingId>>,
+    active_capture_uses: Vec<BTreeSet<hir::BindingId>>,
     loop_depth: usize,
 }
 
@@ -217,9 +274,13 @@ impl<'a> Builder<'a> {
             expressions: Vec::new(),
             matches: Vec::new(),
             match_patterns: Vec::new(),
+            closures: Vec::new(),
             allow_payload_discard: false,
             allow_string: false,
+            allow_closures: false,
             active_scopes: Vec::new(),
+            active_capture_bindings: Vec::new(),
+            active_capture_uses: Vec::new(),
             loop_depth: 0,
         }
     }
@@ -234,11 +295,21 @@ impl<'a> Builder<'a> {
         self
     }
 
-    fn build(self) -> Result<v1::Document, InspectionError> {
-        self.build_parts().map(|(document, _)| document)
+    fn with_closures(mut self) -> Self {
+        self.allow_closures = true;
+        self
     }
 
-    fn build_parts(mut self) -> Result<(v1::Document, Vec<v3::MatchPattern>), InspectionError> {
+    fn build(self) -> Result<v1::Document, InspectionError> {
+        self.build_parts().map(|(document, _, _)| document)
+    }
+
+    fn build_parts(
+        mut self,
+    ) -> Result<
+        (v1::Document, Vec<v3::MatchPattern>, Vec<v5::Closure>),
+        InspectionError,
+    > {
         let program_span = self.span(self.program.span)?;
         if self.program.span.start() != 0 || self.program.span.end() != self.source.len() {
             return Err(InspectionError::invalid(format!(
@@ -259,6 +330,7 @@ impl<'a> Builder<'a> {
         let statements = take_complete("statement", self.statements)?;
         let expressions = take_complete("expression", self.expressions)?;
         let matches = take_complete("match", self.matches)?;
+        let closures = take_complete("closure", self.closures)?;
 
         let match_patterns = self.match_patterns;
         let document = v1::Document {
@@ -286,7 +358,7 @@ impl<'a> Builder<'a> {
                 matches,
             },
         };
-        Ok((document, match_patterns))
+        Ok((document, match_patterns, closures))
     }
 
     fn prepare_type_order(&mut self) -> Result<(), InspectionError> {
@@ -590,6 +662,124 @@ impl<'a> Builder<'a> {
             }
             hir::ExpressionKind::Boolean(_) => v1::ExpressionKind::Boolean,
             hir::ExpressionKind::Unit => v1::ExpressionKind::Unit,
+            hir::ExpressionKind::Closure(closure) => {
+                if !self.allow_closures {
+                    return Err(InspectionError::invalid(
+                        "semantic-inspection schema v1/v2/v3/v4 cannot represent closures; select schema v5",
+                    ));
+                }
+                let closure_index = self.closures.len();
+                if closure.id.index() != closure_index {
+                    return Err(InspectionError::invalid(format!(
+                        "closure identities must follow semantic traversal order: expected closure:{closure_index}, found closure:{}",
+                        closure.id.index()
+                    )));
+                }
+                self.closures.push(None);
+                let closure_owner = closure_id(closure_index);
+                let expected_type = Type::Function(closure.function_type());
+                if expression.ty != expected_type {
+                    return Err(InspectionError::invalid(format!(
+                        "{} expression type {} does not match closure signature {}",
+                        closure_owner, expression.ty, expected_type
+                    )));
+                }
+                if closure.span != expression.span {
+                    return Err(InspectionError::invalid(format!(
+                        "{} span does not match its creating expression",
+                        closure_owner
+                    )));
+                }
+
+                let mut capture_ids = BTreeSet::new();
+                let mut captures = Vec::with_capacity(closure.captures.len());
+                let mut previous_first_use = None;
+                for capture in &closure.captures {
+                    let binding = self.require_binding_reference(&capture.reference, owner)?;
+                    if binding.mutable {
+                        return Err(InspectionError::invalid(format!(
+                            "{} captures mutable {}",
+                            closure_owner, binding.id
+                        )));
+                    }
+                    if !capture_ids.insert(capture.reference.binding) {
+                        return Err(InspectionError::invalid(format!(
+                            "{} repeats capture {}",
+                            closure_owner, binding.id
+                        )));
+                    }
+                    let capture_type = self.intern_type(&capture.ty)?;
+                    if capture_type != binding.type_id {
+                        return Err(InspectionError::invalid(format!(
+                            "{} capture type does not match {}",
+                            closure_owner, binding.id
+                        )));
+                    }
+                    let first_use = self.span(capture.first_use)?;
+                    if capture.first_use.start() < closure.body.span.start()
+                        || capture.first_use.end() > closure.body.span.end()
+                    {
+                        return Err(InspectionError::invalid(format!(
+                            "{} capture first use lies outside its body",
+                            closure_owner
+                        )));
+                    }
+                    if previous_first_use.is_some_and(|start| start >= capture.first_use.start()) {
+                        return Err(InspectionError::invalid(format!(
+                            "{} captures are not in first-lexical-use order",
+                            closure_owner
+                        )));
+                    }
+                    previous_first_use = Some(capture.first_use.start());
+                    captures.push(v5::ClosureCapture {
+                        binding: binding.id,
+                        type_id: capture_type,
+                        first_use,
+                    });
+                }
+
+                let mut parameters = Vec::with_capacity(closure.parameters.len());
+                for parameter in &closure.parameters {
+                    parameters.push(self.add_binding(
+                        parameter,
+                        v1::BindingRole::Parameter,
+                        &closure_owner,
+                        &closure_owner,
+                    )?);
+                }
+
+                self.active_capture_bindings.push(capture_ids.clone());
+                self.active_capture_uses.push(BTreeSet::new());
+                let outer_loop_depth = std::mem::replace(&mut self.loop_depth, 0);
+                let body_result = self.collect_block(&closure.body, &closure_owner);
+                self.loop_depth = outer_loop_depth;
+                let used_captures = self
+                    .active_capture_uses
+                    .pop()
+                    .expect("closure inspection must own one capture-use set");
+                self.active_capture_bindings.pop();
+                let body = body_result?;
+                if used_captures != capture_ids {
+                    return Err(InspectionError::invalid(format!(
+                        "{} capture table does not exactly match its free binding references",
+                        closure_owner
+                    )));
+                }
+                let type_id = self.intern_type(&expected_type)?;
+                let return_type = self.intern_type(&closure.return_type)?;
+                self.closures[closure_index] = Some(v5::Closure {
+                    id: closure_owner.clone(),
+                    expression: id.clone(),
+                    type_id,
+                    return_type,
+                    parameters,
+                    captures,
+                    body,
+                    span: span.clone(),
+                });
+                target = Some(closure_owner);
+                v1::ExpressionKind::Closure
+            }
             hir::ExpressionKind::Binding(resolved) => {
                 self.require_binding_reference(resolved, owner)?;
                 target = Some(binding_id(resolved.binding.index()));
@@ -935,10 +1125,10 @@ impl<'a> Builder<'a> {
     }
 
     fn require_binding_reference(
-        &self,
+        &mut self,
         reference: &hir::BindingReference,
         owner: &str,
-    ) -> Result<&v1::Binding, InspectionError> {
+    ) -> Result<v1::Binding, InspectionError> {
         let binding = self.require_known_binding(reference.binding, owner)?;
         if binding.name != reference.binding_name {
             return Err(InspectionError::invalid(format!(
@@ -960,20 +1150,32 @@ impl<'a> Builder<'a> {
     }
 
     fn require_known_binding(
-        &self,
+        &mut self,
         id: hir::BindingId,
         owner: &str,
-    ) -> Result<&v1::Binding, InspectionError> {
-        let binding = self.bindings.get(id.index()).ok_or_else(|| {
+    ) -> Result<v1::Binding, InspectionError> {
+        let binding = self.bindings.get(id.index()).cloned().ok_or_else(|| {
             InspectionError::invalid(format!("reference to unknown {}", binding_id(id.index())))
         })?;
-        if binding.owner != owner {
-            return Err(InspectionError::invalid(format!(
-                "reference to {} crosses function ownership",
-                binding_id(id.index())
-            )));
+        let crosses_owner = binding.owner != owner;
+        if crosses_owner {
+            let permitted = self
+                .active_capture_bindings
+                .last()
+                .is_some_and(|captures| captures.contains(&id));
+            if !permitted {
+                return Err(InspectionError::invalid(format!(
+                    "reference to {} crosses callable ownership without a capture",
+                    binding_id(id.index())
+                )));
+            }
+            self.active_capture_uses
+                .last_mut()
+                .expect("an active capture table requires a use set")
+                .insert(id);
         }
-        if binding.scope != owner
+        if !crosses_owner
+            && binding.scope != owner
             && !self
                 .active_scopes
                 .iter()
@@ -1211,6 +1413,217 @@ fn project_control_flow(
         .collect()
 }
 
+fn project_closure_control_flow(
+    control_flow: &ControlFlowProgram,
+    program: &v1::Program,
+    closures: &[v5::Closure],
+    source: &SourceFile,
+) -> Result<Vec<v5::ClosureControlFlowGraph>, InspectionError> {
+    if control_flow.closures().len() != closures.len() {
+        return Err(InspectionError::invalid(format!(
+            "schema v5 requires one CFG per closure: found {} graphs for {} closures",
+            control_flow.closures().len(),
+            closures.len()
+        )));
+    }
+    let bindings_by_id = program
+        .bindings
+        .iter()
+        .map(|binding| (binding.id.as_str(), binding))
+        .collect::<BTreeMap<_, _>>();
+    control_flow
+        .closures()
+        .iter()
+        .enumerate()
+        .map(|(index, graph)| {
+            project_one_closure_control_flow(
+                graph,
+                index,
+                program,
+                closures,
+                &bindings_by_id,
+                source,
+            )
+        })
+        .collect()
+}
+
+fn project_one_closure_control_flow(
+    graph: &ClosureControlFlow,
+    index: usize,
+    program: &v1::Program,
+    closures: &[v5::Closure],
+    bindings_by_id: &BTreeMap<&str, &v1::Binding>,
+    source: &SourceFile,
+) -> Result<v5::ClosureControlFlowGraph, InspectionError> {
+    let closure = closures.get(index).ok_or_else(|| {
+        InspectionError::invalid(format!("closure CFG at slot {index} has no closure fact"))
+    })?;
+    if graph.closure().index() != index || closure.id != closure_id(index) {
+        return Err(InspectionError::invalid(format!(
+            "closure CFG identity at slot {index} does not match {}",
+            closure.id
+        )));
+    }
+
+    let allowed_captures = closure
+        .captures
+        .iter()
+        .map(|capture| capture.binding.clone())
+        .collect::<BTreeSet<_>>();
+    let expected_bindings = program
+        .bindings
+        .iter()
+        .filter(|binding| {
+            binding.owner == closure.id || allowed_captures.contains(&binding.id)
+        })
+        .collect::<Vec<_>>();
+    if graph.bindings().len() != expected_bindings.len() {
+        return Err(InspectionError::invalid(format!(
+            "{} CFG binding table has {} entries, expected {}",
+            closure.id,
+            graph.bindings().len(),
+            expected_bindings.len()
+        )));
+    }
+    let mut binding_ids = Vec::with_capacity(graph.bindings().len());
+    for (flow_binding, expected) in graph.bindings().iter().zip(expected_bindings) {
+        let id = binding_id(flow_binding.id.index());
+        if id != expected.id
+            || flow_binding.name != expected.name
+            || document_span(source, flow_binding.span)? != expected.span
+        {
+            return Err(InspectionError::invalid(format!(
+                "{} CFG metadata does not match its HIR binding",
+                expected.id
+            )));
+        }
+        binding_ids.push(id);
+    }
+
+    let entry = graph.entry();
+    let entry_node = graph.nodes().get(entry.index()).ok_or_else(|| {
+        InspectionError::invalid(format!("{} CFG entry is out of range", closure.id))
+    })?;
+    if !matches!(entry_node.kind, FlowNodeKind::Entry) {
+        return Err(InspectionError::invalid(format!(
+            "{} CFG entry is not an entry node",
+            closure.id
+        )));
+    }
+    if graph
+        .nodes()
+        .iter()
+        .filter(|node| matches!(node.kind, FlowNodeKind::Entry))
+        .count()
+        != 1
+    {
+        return Err(InspectionError::invalid(format!(
+            "{} CFG does not contain exactly one entry node",
+            closure.id
+        )));
+    }
+
+    let mut nodes = Vec::with_capacity(graph.nodes().len());
+    for (node_index, node) in graph.nodes().iter().enumerate() {
+        if node.id.index() != node_index {
+            return Err(InspectionError::invalid(format!(
+                "{} CFG node identity at slot {node_index} is {}",
+                closure.id,
+                node.id.index()
+            )));
+        }
+        if node.id == entry {
+            if !node.predecessors.is_empty() {
+                return Err(InspectionError::invalid(format!(
+                    "{} CFG entry has a predecessor",
+                    closure.id
+                )));
+            }
+        } else if node.predecessors.is_empty() {
+            return Err(InspectionError::invalid(format!(
+                "{} has no predecessor",
+                closure_control_flow_node_id(index, node_index)
+            )));
+        }
+
+        let (kind, binding) = project_flow_node_kind(
+            &node.kind,
+            &closure.id,
+            &binding_ids,
+            bindings_by_id,
+            &allowed_captures,
+        )?;
+        let mut incoming = node.predecessors.iter().collect::<Vec<_>>();
+        incoming.sort_by_key(|edge| (edge.from.index(), flow_edge_rank(edge.kind)));
+        if incoming
+            .windows(2)
+            .any(|edges| edges[0].from == edges[1].from && edges[0].kind == edges[1].kind)
+        {
+            return Err(InspectionError::invalid(format!(
+                "{} contains a duplicate predecessor edge",
+                closure_control_flow_node_id(index, node_index)
+            )));
+        }
+        let predecessors = incoming
+            .into_iter()
+            .map(|edge| {
+                if edge.from.index() >= graph.nodes().len() {
+                    return Err(InspectionError::invalid(format!(
+                        "{} has an out-of-range predecessor",
+                        closure_control_flow_node_id(index, node_index)
+                    )));
+                }
+                Ok(v2::FlowEdge {
+                    from: closure_control_flow_node_id(index, edge.from.index()),
+                    kind: project_flow_edge_kind(edge.kind),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        nodes.push(v2::FlowNode {
+            id: closure_control_flow_node_id(index, node_index),
+            kind,
+            binding,
+            predecessors,
+            span: node
+                .span
+                .map(|span| document_span(source, span))
+                .transpose()?,
+        });
+    }
+
+    let actual_exits = graph
+        .nodes()
+        .iter()
+        .filter_map(|node| matches!(node.kind, FlowNodeKind::Exit).then_some(node.id.index()))
+        .collect::<BTreeSet<_>>();
+    let declared_exits = graph
+        .normal_exits()
+        .iter()
+        .map(|exit| exit.index())
+        .collect::<BTreeSet<_>>();
+    if declared_exits.len() != graph.normal_exits().len() || declared_exits != actual_exits {
+        return Err(InspectionError::invalid(format!(
+            "{} CFG normal exits do not exactly match exit nodes",
+            closure.id
+        )));
+    }
+    let normal_exits = declared_exits
+        .into_iter()
+        .map(|exit| closure_control_flow_node_id(index, exit))
+        .collect();
+
+    Ok(v5::ClosureControlFlowGraph {
+        id: closure_control_flow_id(index),
+        closure: closure.id.clone(),
+        entry: closure_control_flow_node_id(index, entry.index()),
+        bindings: binding_ids,
+        normal_exits,
+        nodes,
+    })
+}
+
 fn project_function_control_flow(
     graph: &FunctionControlFlow,
     index: usize,
@@ -1280,6 +1693,7 @@ fn project_function_control_flow(
     }
 
     let graph_id = control_flow_id(index);
+    let allowed_cross_owner = BTreeSet::new();
     let mut nodes = Vec::with_capacity(graph.nodes().len());
     for (node_index, node) in graph.nodes().iter().enumerate() {
         if node.id.index() != node_index {
@@ -1304,7 +1718,13 @@ fn project_function_control_flow(
         }
 
         let (kind, binding) =
-            project_flow_node_kind(&node.kind, &function.id, &binding_ids, bindings_by_id)?;
+            project_flow_node_kind(
+                &node.kind,
+                &function.id,
+                &binding_ids,
+                bindings_by_id,
+                &allowed_cross_owner,
+            )?;
         let mut incoming = node.predecessors.iter().collect::<Vec<_>>();
         incoming.sort_by_key(|edge| (edge.from.index(), flow_edge_rank(edge.kind)));
         if incoming
@@ -1380,6 +1800,7 @@ fn project_flow_node_kind(
     owner: &str,
     flow_bindings: &[String],
     bindings_by_id: &BTreeMap<&str, &v1::Binding>,
+    allowed_cross_owner: &BTreeSet<String>,
 ) -> Result<(v2::FlowNodeKind, Option<String>), InspectionError> {
     let (kind, binding) = match kind {
         FlowNodeKind::Entry => (v2::FlowNodeKind::Entry, None),
@@ -1399,9 +1820,11 @@ fn project_flow_node_kind(
         let declaration = bindings_by_id
             .get(binding.as_str())
             .ok_or_else(|| InspectionError::invalid(format!("CFG references unknown {binding}")))?;
-        if declaration.owner != owner || !flow_bindings.contains(binding) {
+        if (declaration.owner != owner && !allowed_cross_owner.contains(binding))
+            || !flow_bindings.contains(binding)
+        {
             return Err(InspectionError::invalid(format!(
-                "CFG reference to {binding} crosses function ownership"
+                "CFG reference to {binding} crosses callable ownership"
             )));
         }
     }
@@ -1511,6 +1934,10 @@ fn function_id(index: usize) -> String {
     format!("function:{index}")
 }
 
+fn closure_id(index: usize) -> String {
+    format!("closure:{index}")
+}
+
 fn binding_id(index: usize) -> String {
     format!("binding:{index}")
 }
@@ -1521,6 +1948,14 @@ fn control_flow_id(function: usize) -> String {
 
 fn control_flow_node_id(function: usize, node: usize) -> String {
     format!("cfg:function:{function}.node:{node}")
+}
+
+fn closure_control_flow_id(closure: usize) -> String {
+    format!("cfg:closure:{closure}")
+}
+
+fn closure_control_flow_node_id(closure: usize, node: usize) -> String {
+    format!("cfg:closure:{closure}.node:{node}")
 }
 
 fn block_id(index: usize) -> String {

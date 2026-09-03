@@ -6,10 +6,10 @@ use nova_int_semantics::IntArithmeticError;
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::equality_rules::matching_equality_types;
 use nova_sema::hir::{
-    BindingId, BindingReference, Block, EnumId, Expression, ExpressionKind, Function, FunctionId,
-    Program, RecordId, Statement, StatementKind, Type,
+    Binding, BindingId, BindingReference, Block, Closure, EnumId, Expression, ExpressionKind,
+    Function, FunctionId, Program, RecordId, Statement, StatementKind, Type,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 const MAX_CALL_DEPTH: usize = 64;
@@ -42,6 +42,15 @@ pub enum Value {
     },
     /// First-class reference to a top-level function.
     Function(FunctionId),
+    /// One evaluated anonymous function and its immutable captured values.
+    Closure {
+        /// Deterministic runtime instance identity.
+        instance: usize,
+        /// Typed callable body and capture contract.
+        closure: Box<Closure>,
+        /// Captured values aligned with `closure.captures`.
+        captures: Vec<Value>,
+    },
     /// Unit value produced by `()` or a value-less block.
     Unit,
 }
@@ -59,6 +68,9 @@ impl fmt::Display for Value {
                 ..
             } => write!(formatter, "<enum:{}:{variant_index}>", enumeration.index()),
             Self::Function(id) => write!(formatter, "<function:{}>", id.index()),
+            Self::Closure {
+                instance, closure, ..
+            } => write!(formatter, "<closure:{}:{instance}>", closure.id.index()),
             Self::Unit => formatter.write_str("()"),
         }
     }
@@ -95,6 +107,7 @@ struct Interpreter<'program> {
     program: &'program Program,
     call_depth: usize,
     steps: usize,
+    next_closure_instance: usize,
 }
 
 impl<'program> Interpreter<'program> {
@@ -103,6 +116,7 @@ impl<'program> Interpreter<'program> {
             program,
             call_depth: 0,
             steps: 0,
+            next_closure_instance: 0,
         }
     }
 
@@ -212,6 +226,111 @@ impl<'program> Interpreter<'program> {
                 format!(
                     "function `{}` returned a runtime value that does not conform to declared type {}",
                     function.name, function.return_type
+                ),
+            ));
+        }
+        Ok(value)
+    }
+
+    fn call_closure(
+        &mut self,
+        closure: &Closure,
+        captured_values: Vec<Value>,
+        arguments: Vec<Value>,
+    ) -> Result<Value, Diagnostic> {
+        if closure.parameters.len() != arguments.len() {
+            return Err(self.invariant(
+                closure.span,
+                format!(
+                    "resolved closure call supplied {} argument(s) to {} parameter(s)",
+                    arguments.len(),
+                    closure.parameters.len()
+                ),
+            ));
+        }
+        if closure.captures.len() != captured_values.len() {
+            return Err(self.invariant(
+                closure.span,
+                "closure runtime environment does not match its resolved capture table",
+            ));
+        }
+        let mut seen = BTreeSet::new();
+        for (capture, value) in closure.captures.iter().zip(&captured_values) {
+            if !seen.insert(capture.reference.binding) {
+                return Err(self.invariant(
+                    capture.first_use,
+                    "closure capture table repeats one binding identity",
+                ));
+            }
+            if !self.value_conforms_to_type(value, &capture.ty) {
+                return Err(self.invariant(
+                    capture.first_use,
+                    format!(
+                        "captured `{}` value does not conform to resolved type {}",
+                        capture.reference.binding_name, capture.ty
+                    ),
+                ));
+            }
+        }
+        for (index, (parameter, argument)) in
+            closure.parameters.iter().zip(&arguments).enumerate()
+        {
+            if !self.value_conforms_to_type(argument, &parameter.ty) {
+                return Err(self.invariant(
+                    closure.span,
+                    format!(
+                        "argument {index} for closure parameter `{}` does not conform to declared runtime type {}",
+                        parameter.name, parameter.ty
+                    ),
+                ));
+            }
+        }
+        if self.call_depth >= MAX_CALL_DEPTH {
+            return Err(
+                Diagnostic::error("N4004", "execution call-depth limit exceeded")
+                    .with_primary(
+                        closure.span,
+                        format!(
+                            "the bootstrap interpreter allows at most {MAX_CALL_DEPTH} active callable invocations"
+                        ),
+                    )
+                    .with_note("this guard prevents uncontrolled host-stack recursion"),
+            );
+        }
+
+        let mut frame = Frame::new();
+        for (capture, value) in closure.captures.iter().zip(captured_values) {
+            let binding = Binding {
+                id: capture.reference.binding,
+                name: capture.reference.binding_name.clone(),
+                ty: capture.ty.clone(),
+                mutable: false,
+                span: capture.reference.declaration_span,
+            };
+            self.bind_runtime_slot(&mut frame, &binding, Some(value), capture.first_use)?;
+        }
+        for (parameter, argument) in closure.parameters.iter().zip(arguments) {
+            self.bind_runtime_slot(&mut frame, parameter, Some(argument), closure.span)?;
+        }
+
+        self.call_depth += 1;
+        let result = self.eval_block(&closure.body, &mut frame);
+        self.call_depth -= 1;
+        let value = match result? {
+            Flow::Value(value) | Flow::Return(value) => value,
+            Flow::Break | Flow::Continue => {
+                return Err(self.invariant(
+                    closure.span,
+                    "loop control escaped the closure that owns its lexical loop",
+                ));
+            }
+        };
+        if !self.value_conforms_to_type(&value, &closure.return_type) {
+            return Err(self.invariant(
+                closure.span,
+                format!(
+                    "closure returned a runtime value that does not conform to declared type {}",
+                    closure.return_type
                 ),
             ));
         }
@@ -407,6 +526,68 @@ impl<'program> Interpreter<'program> {
             ExpressionKind::String(value) => Ok(Flow::Value(Value::String(value.clone()))),
             ExpressionKind::Boolean(value) => Ok(Flow::Value(Value::Bool(*value))),
             ExpressionKind::Unit => Ok(Flow::Value(Value::Unit)),
+            ExpressionKind::Closure(closure) => {
+                let mut identities = BTreeSet::new();
+                let mut captured_values = Vec::with_capacity(closure.captures.len());
+                for capture in &closure.captures {
+                    if !identities.insert(capture.reference.binding) {
+                        return Err(self.invariant(
+                            capture.first_use,
+                            "closure capture table repeats one binding identity",
+                        ));
+                    }
+                    self.validate_binding_reference(frame, &capture.reference, capture.first_use)?;
+                    let slot = frame
+                        .get(&capture.reference.binding)
+                        .expect("validated capture must have a runtime slot");
+                    if slot.mutable {
+                        return Err(self.invariant(
+                            capture.first_use,
+                            "closure capture resolved to a mutable runtime slot",
+                        ));
+                    }
+                    if slot.ty != capture.ty {
+                        return Err(self.invariant(
+                            capture.first_use,
+                            format!(
+                                "closure capture `{}` type {} does not match runtime slot type {}",
+                                capture.reference.binding_name, capture.ty, slot.ty
+                            ),
+                        ));
+                    }
+                    let Some(value) = slot.value.as_ref() else {
+                        return Err(self.invariant(
+                            capture.first_use,
+                            "closure captured a runtime slot before initialization",
+                        ));
+                    };
+                    if !self.value_conforms_to_type(value, &capture.ty) {
+                        return Err(self.invariant(
+                            capture.first_use,
+                            "closure capture value does not conform to its resolved type",
+                        ));
+                    }
+                    captured_values.push(value.clone());
+                }
+                for parameter in &closure.parameters {
+                    if parameter.mutable || !identities.insert(parameter.id) {
+                        return Err(self.invariant(
+                            parameter.span,
+                            "closure parameter identity overlaps another environment binding",
+                        ));
+                    }
+                }
+                let instance = self.next_closure_instance;
+                self.next_closure_instance = self
+                    .next_closure_instance
+                    .checked_add(1)
+                    .ok_or_else(|| self.invariant(closure.span, "closure instance identity overflow"))?;
+                Ok(Flow::Value(Value::Closure {
+                    instance,
+                    closure: closure.clone(),
+                    captures: captured_values,
+                }))
+            }
             ExpressionKind::Binding(reference) => {
                 self.validate_binding_reference(frame, reference, expression.span)?;
                 let slot = frame
@@ -636,12 +817,6 @@ impl<'program> Interpreter<'program> {
                     Flow::Value(value) => value,
                     flow => return Ok(flow),
                 };
-                let Value::Function(function) = callee else {
-                    return Err(self.invariant(
-                        expression.span,
-                        "semantically accepted call did not evaluate to a function",
-                    ));
-                };
                 let mut values = Vec::with_capacity(arguments.len());
                 for argument in arguments {
                     match self.eval_expression(argument, frame)? {
@@ -649,7 +824,17 @@ impl<'program> Interpreter<'program> {
                         flow => return Ok(flow),
                     }
                 }
-                self.call_function(function, values).map(Flow::Value)
+                match callee {
+                    Value::Function(function) => self.call_function(function, values),
+                    Value::Closure {
+                        closure, captures, ..
+                    } => self.call_closure(&closure, captures, values),
+                    _ => Err(self.invariant(
+                        expression.span,
+                        "semantically accepted call did not evaluate to a callable value",
+                    )),
+                }
+                .map(Flow::Value)
             }
             ExpressionKind::Block(block) => self.eval_block(block, frame),
             ExpressionKind::If {
@@ -916,6 +1101,68 @@ impl<'program> Interpreter<'program> {
                 }
                 Ok(Value::Bool(left != right))
             }
+            (
+                BinaryOperator::Equal,
+                Value::Closure {
+                    instance: left,
+                    closure: left_closure,
+                    ..
+                },
+                Value::Closure {
+                    instance: right,
+                    closure: right_closure,
+                    ..
+                },
+            ) => {
+                if left_closure.function_type() != right_closure.function_type() {
+                    return Err(self.invariant(
+                        expression.span,
+                        "closure equality received runtime closures with different signatures",
+                    ));
+                }
+                Ok(Value::Bool(left == right))
+            }
+            (
+                BinaryOperator::NotEqual,
+                Value::Closure {
+                    instance: left,
+                    closure: left_closure,
+                    ..
+                },
+                Value::Closure {
+                    instance: right,
+                    closure: right_closure,
+                    ..
+                },
+            ) => {
+                if left_closure.function_type() != right_closure.function_type() {
+                    return Err(self.invariant(
+                        expression.span,
+                        "closure equality received runtime closures with different signatures",
+                    ));
+                }
+                Ok(Value::Bool(left != right))
+            }
+            (
+                BinaryOperator::Equal,
+                Value::Function(_),
+                Value::Closure { .. },
+            )
+            | (
+                BinaryOperator::Equal,
+                Value::Closure { .. },
+                Value::Function(_),
+            ) => Ok(Value::Bool(false)),
+            (
+                BinaryOperator::NotEqual,
+                Value::Function(_),
+                Value::Closure { .. },
+            )
+            | (
+                BinaryOperator::NotEqual,
+                Value::Closure { .. },
+                Value::Function(_),
+            ) => Ok(Value::Bool(true)),
             (
                 BinaryOperator::Equal,
                 Value::Enum {
@@ -1275,6 +1522,20 @@ impl<'program> Interpreter<'program> {
                         .zip(&expected.parameters)
                         .all(|(parameter, expected_type)| &parameter.ty == expected_type)
                     && &function.return_type == expected.return_type.as_ref()
+            }
+            (
+                Value::Closure {
+                    closure, captures, ..
+                },
+                Type::Function(expected),
+            ) => {
+                &closure.function_type() == expected
+                    && closure.captures.len() == captures.len()
+                    && closure
+                        .captures
+                        .iter()
+                        .zip(captures)
+                        .all(|(capture, value)| self.value_conforms_to_type(value, &capture.ty))
             }
             _ => false,
         }

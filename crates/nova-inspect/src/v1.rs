@@ -334,6 +334,8 @@ pub enum ExpressionKind {
     Boolean,
     /// Unit literal.
     Unit,
+    /// Anonymous closure expression; emitted only by schema v5 and later.
+    Closure,
     /// Resolved local or parameter reference.
     BindingReference,
     /// Resolved top-level function reference.

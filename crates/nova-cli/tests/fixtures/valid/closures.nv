@@ -1,0 +1,8 @@
+fn make_adder(base: Int) -> fn(Int) -> Int {
+    fn(value: Int) -> Int { base + value }
+}
+
+fn main() -> Int {
+    let add_two = make_adder(2);
+    add_two(40)
+}

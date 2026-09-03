@@ -1,12 +1,13 @@
 use crate::constant_int::{self, ConstantIntError};
 use crate::control_flow::{
-    ControlFlowProgram, FlowEdgeKind, FlowNodeId, FlowNodeKind, FlowTransfer, FunctionControlFlow,
-    FunctionFlowBuilder, definite_initialization_diagnostics, unreachable_code_diagnostics,
+    ClosureControlFlow, ControlFlowProgram, FlowEdgeKind, FlowNodeId, FlowNodeKind, FlowTransfer,
+    FunctionControlFlow, FunctionFlowBuilder, definite_initialization_diagnostics,
+    unreachable_code_diagnostics,
 };
 use crate::equality_rules::is_equality_comparable as type_is_equality_comparable;
 use crate::hir::{
-    self, BindingId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType, MatchArm,
-    RecordFieldValue, RecordId, RecordType, StatementKind, Type,
+    self, BindingId, ClosureId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType,
+    MatchArm, RecordFieldValue, RecordId, RecordType, StatementKind, Type,
 };
 use crate::type_rules::{
     JoinObservation, TypeJoin, expected_type_compatible, strict_binary_result_type,
@@ -14,7 +15,7 @@ use crate::type_rules::{
 use nova_diagnostics::{Diagnostic, LabelStyle, Severity};
 use nova_parser::ast::{self, BinaryOperator, UnaryOperator};
 use nova_source::Span;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Complete deterministic result of semantic analysis.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -67,15 +68,26 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
 
     if !diagnostics_have_errors(&analyzer.diagnostics) {
         analyzer.diagnostics.append(&mut analyzer.deferred_warnings);
-        let warnings = analyzer
+        let function_warnings = analyzer
             .control_flow
             .iter()
             .zip(&program.functions)
             .map(|(graph, function)| unreachable_code_diagnostics(graph, function.span))
             .collect::<Result<Vec<_>, _>>();
-        match warnings {
-            Ok(warnings) => analyzer.diagnostics.extend(warnings.into_iter().flatten()),
-            Err(error) => analyzer.diagnostics.push(
+        let closure_warnings = analyzer
+            .closure_control_flow
+            .iter()
+            .flatten()
+            .map(|graph| unreachable_code_diagnostics(graph.graph(), program.span))
+            .collect::<Result<Vec<_>, _>>();
+        match (function_warnings, closure_warnings) {
+            (Ok(function_warnings), Ok(closure_warnings)) => analyzer.diagnostics.extend(
+                function_warnings
+                    .into_iter()
+                    .chain(closure_warnings)
+                    .flatten(),
+            ),
+            (Err(error), _) | (_, Err(error)) => analyzer.diagnostics.push(
                 Diagnostic::error("N3999", "invalid semantic control-flow graph")
                     .with_primary(error.span(), error.message())
                     .with_note("the compiler rejected an invalid internal graph"),
@@ -84,6 +96,11 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
     }
 
     analyzer.diagnostics.sort_by_key(diagnostic_sort_key);
+    let closure_control_flow = analyzer
+        .closure_control_flow
+        .into_iter()
+        .flatten()
+        .collect();
     AnalysisOutput {
         program: hir::Program {
             records,
@@ -91,7 +108,7 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
             functions,
             span: program.span,
         },
-        control_flow: ControlFlowProgram::new(analyzer.control_flow),
+        control_flow: ControlFlowProgram::new(analyzer.control_flow, closure_control_flow),
         diagnostics: analyzer.diagnostics,
     }
 }
@@ -263,6 +280,13 @@ struct ReachableState {
     flow_cursor: FlowNodeId,
 }
 
+#[derive(Clone, Debug)]
+struct ClosureContext {
+    scope_base: usize,
+    captures: Vec<hir::Capture>,
+    captured_bindings: BTreeSet<BindingId>,
+}
+
 const SIGNED_INT_MIN_MAGNITUDE: u64 = 1_u64 << 63;
 
 struct Analyzer {
@@ -278,7 +302,10 @@ struct Analyzer {
     loop_stack: Vec<LoopContext>,
     diagnostic_only_depth: usize,
     control_flow: Vec<FunctionControlFlow>,
+    closure_control_flow: Vec<Option<ClosureControlFlow>>,
     flow: Option<FunctionFlowBuilder>,
+    next_closure: usize,
+    closure_stack: Vec<ClosureContext>,
 }
 
 impl Analyzer {
@@ -296,7 +323,10 @@ impl Analyzer {
             loop_stack: Vec::new(),
             diagnostic_only_depth: 0,
             control_flow: Vec::new(),
+            closure_control_flow: Vec::new(),
             flow: None,
+            next_closure: 0,
+            closure_stack: Vec::new(),
         }
     }
 
@@ -610,6 +640,7 @@ impl Analyzer {
     fn lower_function(&mut self, id: FunctionId, function: &ast::Function) -> hir::Function {
         let signature = self.signatures[id.index()].clone();
         debug_assert!(self.flow.is_none());
+        debug_assert!(self.closure_stack.is_empty());
         self.flow = Some(FunctionFlowBuilder::new(id, function.span));
         self.scopes.clear();
         self.scopes.push(BTreeMap::new());
@@ -625,6 +656,7 @@ impl Analyzer {
 
         let body = self.lower_block(&function.body, &signature.return_type, false);
         debug_assert!(self.loop_stack.is_empty());
+        debug_assert!(self.closure_stack.is_empty());
         if !body.ty.is_never()
             && function.body.tail.is_none()
             && signature.return_type != Type::Unit
@@ -789,10 +821,19 @@ impl Analyzer {
                 (StatementKind::UninitializedBinding(binding), false)
             }
             ast::StatementKind::Assignment { target, value } => {
-                let local = self.find_local(&target.text);
+                let local = self.find_local_with_scope(&target.text);
                 let function_span = self.functions.get(&target.text).map(|symbol| symbol.span);
                 let value = self.lower_expression(value, return_type);
-                let target_id = if let Some(symbol) = local {
+                let target_id = if let Some((scope_index, symbol)) = local {
+                    if !self.capture_binding_if_needed(
+                        scope_index,
+                        &target.text,
+                        target.span,
+                        &symbol,
+                    ) {
+                        self.require_type(&value.ty, &symbol.ty, value.span, "assigned value");
+                        None
+                    } else {
                     if !symbol.mutable {
                         self.diagnostics.push(
                             Diagnostic::error("N3008", "cannot assign to immutable binding")
@@ -816,6 +857,7 @@ impl Analyzer {
                         binding_name: target.text.clone(),
                         declaration_span: symbol.span,
                     })
+                    }
                 } else if let Some(span) = function_span {
                     self.diagnostics.push(
                         Diagnostic::error("N3008", "invalid assignment target")
@@ -1024,6 +1066,11 @@ impl Analyzer {
             }
             ast::ExpressionKind::Boolean(value) => (ExpressionKind::Boolean(*value), Type::Bool),
             ast::ExpressionKind::Unit => (ExpressionKind::Unit, Type::Unit),
+            ast::ExpressionKind::Lambda {
+                parameters,
+                return_type,
+                body,
+            } => self.lower_closure(parameters, return_type, body, expression.span),
             ast::ExpressionKind::Name(name) => self.lower_name(name),
             ast::ExpressionKind::RecordLiteral { name, fields } => {
                 self.lower_record_literal(name, fields, return_type, expression.span)
@@ -1348,6 +1395,117 @@ impl Analyzer {
                 ),
         );
         (ExpressionKind::Error, Type::Error)
+    }
+
+    fn lower_closure(
+        &mut self,
+        parameters: &[ast::Parameter],
+        return_reference: &ast::TypeRef,
+        body: &ast::Block,
+        span: Span,
+    ) -> (ExpressionKind, Type) {
+        let id = ClosureId::new(self.next_closure);
+        self.next_closure += 1;
+        self.closure_control_flow.push(None);
+
+        let parameter_types = parameters
+            .iter()
+            .map(|parameter| self.resolve_type_ref(&parameter.ty))
+            .collect::<Vec<_>>();
+        let return_type = self.resolve_type_ref(return_reference);
+
+        let parent_flow = self
+            .flow
+            .take()
+            .expect("closure lowering must suspend an enclosing callable CFG");
+        let parent_scopes = self.scopes.clone();
+        let parent_loop_stack = std::mem::take(&mut self.loop_stack);
+        let parent_diagnostic_depth = self.diagnostic_only_depth;
+
+        self.flow = Some(FunctionFlowBuilder::new_closure(id, span));
+        self.diagnostic_only_depth = 0;
+        let scope_base = self.scopes.len();
+        self.scopes.push(BTreeMap::new());
+        self.closure_stack.push(ClosureContext {
+            scope_base,
+            captures: Vec::new(),
+            captured_bindings: BTreeSet::new(),
+        });
+
+        let mut lowered_parameters = Vec::with_capacity(parameters.len());
+        for (parameter, ty) in parameters.iter().zip(&parameter_types) {
+            let binding = self.new_binding(&parameter.name, ty.clone(), false);
+            self.insert_local(&binding);
+            self.record_initialization(binding.id, binding.span);
+            lowered_parameters.push(binding);
+        }
+
+        let lowered_body = self.lower_block(body, &return_type, false);
+        debug_assert!(self.loop_stack.is_empty());
+        if !lowered_body.ty.is_never() && body.tail.is_none() && return_type != Type::Unit {
+            self.diagnostics.push(
+                Diagnostic::error("N3007", "anonymous function can complete without returning a value")
+                    .with_primary(
+                        body.span,
+                        format!("this closure must return {return_type} on every path"),
+                    ),
+            );
+        } else if body.tail.is_some() {
+            self.require_type(
+                &lowered_body.ty,
+                &return_type,
+                body.tail.as_ref().map_or(body.span, |tail| tail.span),
+                "anonymous-function tail expression",
+            );
+        }
+
+        let context = self
+            .closure_stack
+            .pop()
+            .expect("closure lowering must own one capture context");
+        let normal_exit = (!lowered_body.ty.is_never()).then(|| self.flow_cursor());
+        let flow = self
+            .flow
+            .take()
+            .expect("closure lowering must finish its CFG");
+        match flow.finish_closure(id, normal_exit) {
+            Ok(graph) => {
+                match definite_initialization_diagnostics(graph.graph(), span) {
+                    Ok(diagnostics) => self.diagnostics.extend(diagnostics),
+                    Err(error) => self.diagnostics.push(
+                        Diagnostic::error("N3999", "invalid semantic control-flow graph")
+                            .with_primary(error.span(), error.message())
+                            .with_note("the compiler rejected an invalid internal graph"),
+                    ),
+                }
+                self.closure_control_flow[id.index()] = Some(graph);
+            }
+            Err(error) => self.diagnostics.push(
+                Diagnostic::error("N3999", "invalid semantic control-flow graph")
+                    .with_primary(error.span(), error.message())
+                    .with_note("the compiler rejected an invalid internal graph"),
+            ),
+        }
+
+        self.scopes = parent_scopes;
+        self.loop_stack = parent_loop_stack;
+        self.diagnostic_only_depth = parent_diagnostic_depth;
+        self.flow = Some(parent_flow);
+
+        for capture in &context.captures {
+            self.record_capture_creation_read(capture);
+        }
+
+        let closure = hir::Closure {
+            id,
+            parameters: lowered_parameters,
+            return_type: return_type.clone(),
+            captures: context.captures,
+            body: lowered_body,
+            span,
+        };
+        let ty = Type::Function(closure.function_type());
+        (ExpressionKind::Closure(Box::new(closure)), ty)
     }
 
     fn lower_expression_for_diagnostics(
@@ -2164,7 +2322,10 @@ impl Analyzer {
     }
 
     fn lower_name(&mut self, name: &ast::Name) -> (ExpressionKind, Type) {
-        if let Some(symbol) = self.find_local(&name.text) {
+        if let Some((scope_index, symbol)) = self.find_local_with_scope(&name.text) {
+            if !self.capture_binding_if_needed(scope_index, &name.text, name.span, &symbol) {
+                return (ExpressionKind::Error, Type::Error);
+            }
             self.flow_advance(FlowNodeKind::Read(symbol.id), Some(name.span));
             return (
                 ExpressionKind::Binding(hir::BindingReference {
@@ -2193,10 +2354,113 @@ impl Analyzer {
     }
 
     fn find_local(&self, name: &str) -> Option<LocalSymbol> {
+        self.find_local_with_scope(name).map(|(_, symbol)| symbol)
+    }
+
+    fn find_local_with_scope(&self, name: &str) -> Option<(usize, LocalSymbol)> {
         self.scopes
             .iter()
+            .enumerate()
             .rev()
-            .find_map(|scope| scope.get(name).cloned())
+            .find_map(|(index, scope)| scope.get(name).cloned().map(|symbol| (index, symbol)))
+    }
+
+    fn capture_binding_if_needed(
+        &mut self,
+        scope_index: usize,
+        name: &str,
+        use_span: Span,
+        symbol: &LocalSymbol,
+    ) -> bool {
+        let Some(scope_base) = self.closure_stack.last().map(|context| context.scope_base) else {
+            return true;
+        };
+        if scope_index >= scope_base {
+            return true;
+        }
+        if symbol.mutable {
+            self.diagnostics.push(
+                Diagnostic::error("N3035", "mutable lexical capture is not supported")
+                    .with_primary(
+                        use_span,
+                        format!("`{name}` is mutable and cannot be captured by this closure"),
+                    )
+                    .with_secondary(symbol.span, "mutable binding declared here")
+                    .with_note(
+                        "the bootstrap closure slice captures immutable values by value; shared or mutable capture semantics are not yet defined",
+                    ),
+            );
+            return false;
+        }
+
+        let is_new = self
+            .closure_stack
+            .last()
+            .is_some_and(|context| !context.captured_bindings.contains(&symbol.id));
+        if is_new {
+            let binding = hir::Binding {
+                id: symbol.id,
+                name: name.to_owned(),
+                ty: symbol.ty.clone(),
+                mutable: false,
+                span: symbol.span,
+            };
+            self.flow
+                .as_mut()
+                .expect("closure capture requires an active CFG")
+                .register_binding(&binding);
+            self.record_initialization(binding.id, use_span);
+            let context = self
+                .closure_stack
+                .last_mut()
+                .expect("a capture requires an active closure context");
+            context.captured_bindings.insert(binding.id);
+            context.captures.push(hir::Capture {
+                reference: hir::BindingReference {
+                    binding: binding.id,
+                    binding_name: binding.name,
+                    declaration_span: binding.span,
+                },
+                ty: binding.ty,
+                first_use: use_span,
+            });
+        }
+        true
+    }
+
+    fn record_capture_creation_read(&mut self, capture: &hir::Capture) {
+        let Some((scope_index, symbol)) =
+            self.find_local_with_scope(&capture.reference.binding_name)
+        else {
+            self.diagnostics.push(
+                Diagnostic::error("N3999", "invalid semantic closure capture")
+                    .with_primary(capture.first_use, "captured binding is no longer in lexical scope")
+                    .with_note("the compiler rejected an inconsistent capture environment"),
+            );
+            return;
+        };
+        if symbol.id != capture.reference.binding
+            || symbol.span != capture.reference.declaration_span
+            || symbol.ty != capture.ty
+        {
+            self.diagnostics.push(
+                Diagnostic::error("N3999", "invalid semantic closure capture")
+                    .with_primary(capture.first_use, "captured binding metadata changed during lowering")
+                    .with_note("the compiler rejected an inconsistent capture environment"),
+            );
+            return;
+        }
+        if self.capture_binding_if_needed(
+            scope_index,
+            &capture.reference.binding_name,
+            capture.first_use,
+            &symbol,
+        ) {
+            self.flow_advance(
+                FlowNodeKind::Read(capture.reference.binding),
+                Some(capture.first_use),
+            );
+        }
     }
 
     fn record_initialization(&mut self, binding: BindingId, span: Span) {

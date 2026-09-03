@@ -348,7 +348,10 @@ impl<'source> Parser<'source> {
         let mut tail = None;
 
         while !self.at(TokenKind::RightBrace) && !self.at(TokenKind::Eof) {
-            if self.at(TokenKind::Fn) || self.at(TokenKind::Record) || self.at(TokenKind::Enum) {
+            if (self.at(TokenKind::Fn) && self.at_offset(1, TokenKind::Identifier))
+                || self.at(TokenKind::Record)
+                || self.at(TokenKind::Enum)
+            {
                 break;
             }
             let before = self.position;
@@ -404,7 +407,7 @@ impl<'source> Parser<'source> {
             if self.position == before
                 && !self.at(TokenKind::RightBrace)
                 && !self.at(TokenKind::Eof)
-                && !self.at(TokenKind::Fn)
+                && !(self.at(TokenKind::Fn) && self.at_offset(1, TokenKind::Identifier))
                 && !self.at(TokenKind::Record)
                 && !self.at(TokenKind::Enum)
             {
@@ -634,6 +637,7 @@ impl<'source> Parser<'source> {
                 kind: ExpressionKind::Name(name),
             }),
             TokenKind::New => self.parse_record_literal_expression(),
+            TokenKind::Fn => self.parse_lambda_expression(),
             TokenKind::Minus | TokenKind::Bang => {
                 self.bump();
                 let operator = if matches!(token.kind, TokenKind::Minus) {
@@ -679,6 +683,32 @@ impl<'source> Parser<'source> {
                 None
             }
         }
+    }
+
+    fn parse_lambda_expression(&mut self) -> Option<Expression> {
+        let keyword = self
+            .expect(TokenKind::Fn, "to start an anonymous function")?
+            .span;
+        self.expect(TokenKind::LeftParen, "after `fn` in an anonymous function")?;
+        let parameters = self.parse_parameters()?;
+        self.expect(
+            TokenKind::RightParen,
+            "after the anonymous-function parameter list",
+        )?;
+        self.expect(
+            TokenKind::Arrow,
+            "before the anonymous function's explicit return type",
+        )?;
+        let return_type = self.parse_type_ref("after `->` in an anonymous function")?;
+        let body = self.parse_block()?;
+        Some(Expression {
+            span: self.cover(keyword, body.span),
+            kind: ExpressionKind::Lambda {
+                parameters,
+                return_type,
+                body,
+            },
+        })
     }
 
     fn parse_enum_constructor_expression(&mut self) -> Option<Expression> {

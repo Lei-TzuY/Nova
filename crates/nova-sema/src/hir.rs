@@ -147,6 +147,24 @@ impl FunctionId {
     }
 }
 
+/// Stable semantic-traversal identifier for one anonymous closure expression.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ClosureId(usize);
+
+impl ClosureId {
+    /// Creates an identifier from its semantic-traversal index.
+    #[must_use]
+    pub const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    /// Returns the semantic-traversal index among closure expressions.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0
+    }
+}
+
 /// Stable analysis-order identifier for one local binding or parameter.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BindingId(usize);
@@ -241,6 +259,49 @@ pub struct Function {
     pub body: Block,
     /// Complete declaration range.
     pub span: Span,
+}
+
+/// One immutable lexical binding captured by value when a closure is created.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Capture {
+    /// Resolved declaration identity and metadata.
+    pub reference: BindingReference,
+    /// Resolved value type copied into the closure environment.
+    pub ty: Type,
+    /// First lexical use that caused this capture, used for deterministic ordering and diagnostics.
+    pub first_use: Span,
+}
+
+/// A typed anonymous callable embedded in its creating expression.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Closure {
+    /// Stable semantic-traversal identity.
+    pub id: ClosureId,
+    /// Explicitly typed parameters in source order.
+    pub parameters: Vec<Binding>,
+    /// Explicit resolved return type.
+    pub return_type: Type,
+    /// Immutable environment inputs in first-lexical-use order.
+    pub captures: Vec<Capture>,
+    /// Body evaluated at the closure call boundary.
+    pub body: Block,
+    /// Complete anonymous-function expression range.
+    pub span: Span,
+}
+
+impl Closure {
+    /// Returns the structural callable type exposed by this closure.
+    #[must_use]
+    pub fn function_type(&self) -> FunctionType {
+        FunctionType {
+            parameters: self
+                .parameters
+                .iter()
+                .map(|parameter| parameter.ty.clone())
+                .collect(),
+            return_type: Box::new(self.return_type.clone()),
+        }
+    }
 }
 
 /// A resolved local binding or parameter.
@@ -377,6 +438,8 @@ pub enum ExpressionKind {
     Boolean(bool),
     /// Unit literal.
     Unit,
+    /// Anonymous function plus its resolved lexical capture contract.
+    Closure(Box<Closure>),
     /// Reference to a local binding or parameter.
     Binding(BindingReference),
     /// Reference to a top-level function.

@@ -109,13 +109,18 @@ value contract deliberately does not settle concatenation, indexing, interpolati
 encoding conversion, standard-library APIs, allocation, layout, ownership, or ABI.
 
 The bootstrap surface also admits explicit recursive function types written
-`fn(T1, T2) -> U`. These lower directly to the existing resolved `FunctionType`, so a
-named top-level function may be passed as an argument, returned from another function,
-stored in a typed binding, and called through that binding. Function types are structural
-signatures while runtime function values retain top-level declaration identity. This is
-higher-order named-function support only: lambda syntax, closure creation, lexical capture,
-method values, callable objects, and closure allocation/ownership semantics remain
-unimplemented and must not be inferred from this slice.
+`fn(T1, T2) -> U`. These lower directly to the resolved `FunctionType`, so named top-level
+functions and explicitly typed anonymous functions may be passed, returned, stored, and
+called through one structural signature. `fn(name: Type, ...) -> Type { ... }` creates a
+closure whose referenced outer immutable `let` and parameter values are copied at creation
+in first lexical-use order. Closure aliases preserve opaque runtime instance identity;
+separate evaluations produce distinct identities, and a closure never compares equal to a
+named function. Mutable `var` capture is rejected until shared-cell/by-reference semantics
+can be specified with ownership and lifetime rules. Initializers still resolve before their
+new binding enters scope, so anonymous closures cannot self-reference through that binding.
+Each closure is also a return and loop-control boundary. Explicit capture lists, mutable or
+shared capture, method values, callable objects, closure layout/allocation, and ownership/ABI
+semantics remain unimplemented and must not be inferred from this slice.
 
 The bootstrap surface spelling `!` denotes the semantic core's existing uninhabited bottom
 type. It is a real type rather than a runtime sentinel: no ordinary value can conform to it,
