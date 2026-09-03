@@ -122,13 +122,17 @@ fn rejected_mixed_equality_does_not_leak_rhs_initialization() {
         }"#,
     );
 
-    assert!(output
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.code == "N3004"));
-    assert!(output
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.code == "N3009"));
+    assert!(
+        output
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "N3004")
+    );
+    assert!(
+        output
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "N3009")
+    );
     assert!(!output.is_success());
 }

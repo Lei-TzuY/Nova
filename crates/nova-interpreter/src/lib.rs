@@ -1398,10 +1398,9 @@ fn main() -> String {
             .expect("string equality executes");
         assert_eq!(equal, Value::Bool(true));
 
-        let returned = execute_text(
-            r#"fn main() -> String { "evaluated first" == { return "returned"; } }"#,
-        )
-        .expect("non-continuing equality operand propagates return");
+        let returned =
+            execute_text(r#"fn main() -> String { "evaluated first" == { return "returned"; } }"#)
+                .expect("non-continuing equality operand propagates return");
         assert_eq!(returned, Value::String("returned".to_owned()));
     }
 
