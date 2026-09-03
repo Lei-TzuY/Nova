@@ -214,6 +214,34 @@ fn nested_if_noncontinuing_self_read_does_not_poison_match_assignment() {
 }
 
 #[test]
+fn nested_if_initialized_self_read_stays_valid_through_match_merge() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Left, Right }
+
+        fn main(choice: Choice, flag: Bool) -> Int {
+            var value: Int;
+            value = match choice {
+                Choice::Left => if flag {
+                    value = 1;
+                    value
+                } else {
+                    2
+                },
+                Choice::Right => 3,
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    // Every continuing path produces the outer assignment. The nested self-read
+    // is already initialized on its path, so it must not poison either merge.
+    assert_eq!(code_count(&output, "N3009"), 0, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
