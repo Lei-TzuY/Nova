@@ -181,3 +181,36 @@ fn returning_target_initialization_does_not_mask_continuing_self_read() {
     // `value` definitely initialized afterward.
     assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn if_match_returning_target_initialization_does_not_mask_continuing_self_read() {
+    let output = analyze_text(
+        r#"
+        enum Detail { First, Second }
+
+        fn main(flag: Bool, detail: Detail) -> Int {
+            var value: Int;
+            value = if flag {
+                match detail {
+                    Detail::First => {
+                        value = 7;
+                        value;
+                        return 0;
+                    },
+                    Detail::Second => value,
+                }
+            } else {
+                2
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    // The returning inner match arm's target initialization must remain local to
+    // that non-continuing path. The sibling continuing arm still self-reads
+    // `value` uninitialized, which prevents the enclosing assignment from making
+    // `value` definitely initialized after the dynamic `if`.
+    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
+}
