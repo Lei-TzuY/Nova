@@ -272,8 +272,7 @@ impl<'program> Interpreter<'program> {
                 ));
             }
         }
-        for (index, (parameter, argument)) in
-            closure.parameters.iter().zip(&arguments).enumerate()
+        for (index, (parameter, argument)) in closure.parameters.iter().zip(&arguments).enumerate()
         {
             if !self.value_conforms_to_type(argument, &parameter.ty) {
                 return Err(self.invariant(
@@ -578,10 +577,10 @@ impl<'program> Interpreter<'program> {
                     }
                 }
                 let instance = self.next_closure_instance;
-                self.next_closure_instance = self
-                    .next_closure_instance
-                    .checked_add(1)
-                    .ok_or_else(|| self.invariant(closure.span, "closure instance identity overflow"))?;
+                self.next_closure_instance =
+                    self.next_closure_instance.checked_add(1).ok_or_else(|| {
+                        self.invariant(closure.span, "closure instance identity overflow")
+                    })?;
                 Ok(Flow::Value(Value::Closure {
                     instance,
                     closure: closure.clone(),
@@ -1143,26 +1142,14 @@ impl<'program> Interpreter<'program> {
                 }
                 Ok(Value::Bool(left != right))
             }
-            (
-                BinaryOperator::Equal,
-                Value::Function(_),
-                Value::Closure { .. },
-            )
-            | (
-                BinaryOperator::Equal,
-                Value::Closure { .. },
-                Value::Function(_),
-            ) => Ok(Value::Bool(false)),
-            (
-                BinaryOperator::NotEqual,
-                Value::Function(_),
-                Value::Closure { .. },
-            )
-            | (
-                BinaryOperator::NotEqual,
-                Value::Closure { .. },
-                Value::Function(_),
-            ) => Ok(Value::Bool(true)),
+            (BinaryOperator::Equal, Value::Function(_), Value::Closure { .. })
+            | (BinaryOperator::Equal, Value::Closure { .. }, Value::Function(_)) => {
+                Ok(Value::Bool(false))
+            }
+            (BinaryOperator::NotEqual, Value::Function(_), Value::Closure { .. })
+            | (BinaryOperator::NotEqual, Value::Closure { .. }, Value::Function(_)) => {
+                Ok(Value::Bool(true))
+            }
             (
                 BinaryOperator::Equal,
                 Value::Enum {

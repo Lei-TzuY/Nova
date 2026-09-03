@@ -12,9 +12,7 @@ fn parse_text(text: &str) -> nova_parser::ParseOutput {
 
 #[test]
 fn parses_explicitly_typed_lambda_and_immediate_call() {
-    let parsed = parse_text(
-        "fn main() -> Int { (fn(value: Int,) -> Int { value + 1 })(41) }",
-    );
+    let parsed = parse_text("fn main() -> Int { (fn(value: Int,) -> Int { value + 1 })(41) }");
     assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
     let tail = parsed.program.functions[0]
         .body

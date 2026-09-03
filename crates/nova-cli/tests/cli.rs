@@ -729,7 +729,10 @@ fn closures_run_and_require_inspection_schema_v5() {
         "{}",
         String::from_utf8_lossy(&run.stderr)
     );
-    assert_eq!(String::from_utf8(run.stdout).expect("closure output"), "42\n");
+    assert_eq!(
+        String::from_utf8(run.stdout).expect("closure output"),
+        "42\n"
+    );
 
     for version in ["1", "2", "3", "4"] {
         let output = nova(&[

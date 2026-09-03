@@ -834,29 +834,29 @@ impl Analyzer {
                         self.require_type(&value.ty, &symbol.ty, value.span, "assigned value");
                         None
                     } else {
-                    if !symbol.mutable {
-                        self.diagnostics.push(
-                            Diagnostic::error("N3008", "cannot assign to immutable binding")
-                                .with_primary(
-                                    target.span,
-                                    format!("`{}` is not mutable", target.text),
-                                )
-                                .with_secondary(symbol.span, "binding declared here"),
-                        );
-                    }
-                    self.require_type(&value.ty, &symbol.ty, value.span, "assigned value");
-                    if symbol.mutable
-                        && !value.ty.is_error()
-                        && !value.ty.is_never()
-                        && expected_type_compatible(&value.ty, &symbol.ty)
-                    {
-                        self.record_initialization(symbol.id, target.span);
-                    }
-                    Some(hir::BindingReference {
-                        binding: symbol.id,
-                        binding_name: target.text.clone(),
-                        declaration_span: symbol.span,
-                    })
+                        if !symbol.mutable {
+                            self.diagnostics.push(
+                                Diagnostic::error("N3008", "cannot assign to immutable binding")
+                                    .with_primary(
+                                        target.span,
+                                        format!("`{}` is not mutable", target.text),
+                                    )
+                                    .with_secondary(symbol.span, "binding declared here"),
+                            );
+                        }
+                        self.require_type(&value.ty, &symbol.ty, value.span, "assigned value");
+                        if symbol.mutable
+                            && !value.ty.is_error()
+                            && !value.ty.is_never()
+                            && expected_type_compatible(&value.ty, &symbol.ty)
+                        {
+                            self.record_initialization(symbol.id, target.span);
+                        }
+                        Some(hir::BindingReference {
+                            binding: symbol.id,
+                            binding_name: target.text.clone(),
+                            declaration_span: symbol.span,
+                        })
                     }
                 } else if let Some(span) = function_span {
                     self.diagnostics.push(
@@ -1444,11 +1444,14 @@ impl Analyzer {
         debug_assert!(self.loop_stack.is_empty());
         if !lowered_body.ty.is_never() && body.tail.is_none() && return_type != Type::Unit {
             self.diagnostics.push(
-                Diagnostic::error("N3007", "anonymous function can complete without returning a value")
-                    .with_primary(
-                        body.span,
-                        format!("this closure must return {return_type} on every path"),
-                    ),
+                Diagnostic::error(
+                    "N3007",
+                    "anonymous function can complete without returning a value",
+                )
+                .with_primary(
+                    body.span,
+                    format!("this closure must return {return_type} on every path"),
+                ),
             );
         } else if body.tail.is_some() {
             self.require_type(
@@ -2353,10 +2356,6 @@ impl Analyzer {
         (ExpressionKind::Error, Type::Error)
     }
 
-    fn find_local(&self, name: &str) -> Option<LocalSymbol> {
-        self.find_local_with_scope(name).map(|(_, symbol)| symbol)
-    }
-
     fn find_local_with_scope(&self, name: &str) -> Option<(usize, LocalSymbol)> {
         self.scopes
             .iter()
@@ -2434,7 +2433,10 @@ impl Analyzer {
         else {
             self.diagnostics.push(
                 Diagnostic::error("N3999", "invalid semantic closure capture")
-                    .with_primary(capture.first_use, "captured binding is no longer in lexical scope")
+                    .with_primary(
+                        capture.first_use,
+                        "captured binding is no longer in lexical scope",
+                    )
                     .with_note("the compiler rejected an inconsistent capture environment"),
             );
             return;
@@ -2445,7 +2447,10 @@ impl Analyzer {
         {
             self.diagnostics.push(
                 Diagnostic::error("N3999", "invalid semantic closure capture")
-                    .with_primary(capture.first_use, "captured binding metadata changed during lowering")
+                    .with_primary(
+                        capture.first_use,
+                        "captured binding metadata changed during lowering",
+                    )
                     .with_note("the compiler rejected an inconsistent capture environment"),
             );
             return;

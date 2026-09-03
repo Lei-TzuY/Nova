@@ -20,9 +20,8 @@ fn analyzed(text: &str) -> (SourceFile, nova_sema::AnalysisOutput) {
 
 #[test]
 fn v5_projects_closure_captures_and_cfgs_while_v1_through_v4_fail_closed() {
-    let (source, analysis) = analyzed(
-        "fn make(base: Int) -> fn(Int) -> Int { fn(value: Int) -> Int { base + value } }",
-    );
+    let (source, analysis) =
+        analyzed("fn make(base: Int) -> fn(Int) -> Int { fn(value: Int) -> Int { base + value } }");
 
     let errors = [
         build_document(&analysis.program, &source).expect_err("v1 must reject closures"),
@@ -83,7 +82,8 @@ fn v5_rejects_capture_type_or_free_reference_drift() {
         panic!("closure initializer");
     };
     closure.captures.clear();
-    let error = build_document_v5(&analysis, &source).expect_err("missing capture must fail closed");
+    let error =
+        build_document_v5(&analysis, &source).expect_err("missing capture must fail closed");
     assert!(error.message().contains("capture") || error.message().contains("ownership"));
 }
 

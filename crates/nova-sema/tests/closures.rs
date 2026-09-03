@@ -59,18 +59,16 @@ fn nested_closure_propagates_a_transitive_capture_to_its_creator() {
     else {
         panic!("expected outer closure");
     };
-    let ExpressionKind::Closure(inner) = &outer
-        .body
-        .tail
-        .as_deref()
-        .expect("inner closure")
-        .kind
+    let ExpressionKind::Closure(inner) = &outer.body.tail.as_deref().expect("inner closure").kind
     else {
         panic!("expected nested closure");
     };
     assert_eq!(outer.captures.len(), 1);
     assert_eq!(inner.captures.len(), 1);
-    assert_eq!(outer.captures[0].reference.binding, inner.captures[0].reference.binding);
+    assert_eq!(
+        outer.captures[0].reference.binding,
+        inner.captures[0].reference.binding
+    );
     assert_eq!(outer.id.index(), 0);
     assert_eq!(inner.id.index(), 1);
     assert_eq!(output.control_flow.closures().len(), 2);
@@ -120,8 +118,7 @@ fn closure_is_a_return_and_loop_control_boundary() {
         output.diagnostics
     );
 
-    let accepted = analyze_text(
-        "fn main() -> Int { let stop = fn() -> Int { return 42; 0 }; stop() }",
-    );
+    let accepted =
+        analyze_text("fn main() -> Int { let stop = fn() -> Int { return 42; 0 }; stop() }");
     assert!(accepted.is_success(), "{:?}", accepted.diagnostics);
 }

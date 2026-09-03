@@ -306,10 +306,7 @@ impl<'a> Builder<'a> {
 
     fn build_parts(
         mut self,
-    ) -> Result<
-        (v1::Document, Vec<v3::MatchPattern>, Vec<v5::Closure>),
-        InspectionError,
-    > {
+    ) -> Result<(v1::Document, Vec<v3::MatchPattern>, Vec<v5::Closure>), InspectionError> {
         let program_span = self.span(self.program.span)?;
         if self.program.span.start() != 0 || self.program.span.end() != self.source.len() {
             return Err(InspectionError::invalid(format!(
@@ -1474,9 +1471,7 @@ fn project_one_closure_control_flow(
     let expected_bindings = program
         .bindings
         .iter()
-        .filter(|binding| {
-            binding.owner == closure.id || allowed_captures.contains(&binding.id)
-        })
+        .filter(|binding| binding.owner == closure.id || allowed_captures.contains(&binding.id))
         .collect::<Vec<_>>();
     if graph.bindings().len() != expected_bindings.len() {
         return Err(InspectionError::invalid(format!(
@@ -1717,14 +1712,13 @@ fn project_function_control_flow(
             )));
         }
 
-        let (kind, binding) =
-            project_flow_node_kind(
-                &node.kind,
-                &function.id,
-                &binding_ids,
-                bindings_by_id,
-                &allowed_cross_owner,
-            )?;
+        let (kind, binding) = project_flow_node_kind(
+            &node.kind,
+            &function.id,
+            &binding_ids,
+            bindings_by_id,
+            &allowed_cross_owner,
+        )?;
         let mut incoming = node.predecessors.iter().collect::<Vec<_>>();
         incoming.sort_by_key(|edge| (edge.from.index(), flow_edge_rank(edge.kind)));
         if incoming
