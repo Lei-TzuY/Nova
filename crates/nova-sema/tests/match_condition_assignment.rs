@@ -242,6 +242,36 @@ fn nested_if_initialized_self_read_stays_valid_through_match_merge() {
 }
 
 #[test]
+fn nested_if_mixed_self_read_keeps_match_assignment_uninitialized() {
+    let output = analyze_text(
+        r#"
+        enum Choice { Left, Right }
+
+        fn main(choice: Choice, flag: Bool) -> Int {
+            var value: Int;
+            value = match choice {
+                Choice::Left => if flag {
+                    value = 1;
+                    value
+                } else {
+                    value
+                },
+                Choice::Right => 3,
+            };
+            value;
+            0
+        }
+        "#,
+    );
+
+    // The initialized nested path is valid, but the sibling continuing path still
+    // performs an uninitialized self-read. That reachable invalid dependency must
+    // block the outer assignment, so both that read and the post-assignment read
+    // report N3009.
+    assert_eq!(code_count(&output, "N3009"), 2, "{:?}", output.diagnostics);
+}
+
+#[test]
 fn earlier_invalid_read_does_not_block_later_valid_assignment() {
     let output = analyze_text(
         r#"
