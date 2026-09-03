@@ -474,13 +474,13 @@ definite-assignment gate consumes that graph before HIR can reach execution.
 The interpreter consumes typed HIR directly and supports the implemented
 function, call, record construction/projection, enum construction/matching,
 block, `if`, `while`, `break`, `continue`, return, binding, assignment, Unit,
-Boolean, and integer subset. Unit helpers may return explicit `()` or fall through
-a value-less body. Evaluation order is left-to-right; named record initializers
-do not reorder their expressions when resolved to declaration slots. A match
+Boolean, String, and integer subset. Unit helpers may return explicit `()` or
+fall through a value-less body. Evaluation order is left-to-right; named record
+initializers do not reorder their expressions when resolved to declaration slots. A match
 evaluates its scrutinee once and only its selected arm. `&&` and `||`
 short-circuit, and semantic dataflow models that same conditional RHS execution
 rather than granting facts from code the interpreter may skip. The entry point
-is a zero-argument top-level `main` returning `Int`, `Bool`, or `Unit`.
+is a zero-argument top-level `main` returning `Int`, `Bool`, `String`, or `Unit`.
 
 The interpreter propagates `return`, `break`, and `continue` as structured
 control flow through nested expressions and selected match arms. A `while`

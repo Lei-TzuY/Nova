@@ -726,10 +726,11 @@ mod tests {
 
     #[test]
     fn rejects_unterminated_strings_at_the_opening_quote_without_eating_the_next_line() {
-        for text in [
-            "\"end of file",
-            "\"first line\ntrue",
-            "\"continued\\\nfalse",
+        for (text, following) in [
+            ("\"end of file", None),
+            ("\"first line\ntrue", Some(TokenKind::True)),
+            ("\"continued\\\nfalse", Some(TokenKind::False)),
+            ("\"carriage return\r\ntrue", Some(TokenKind::True)),
         ] {
             let source = source(text);
             let output = lex(&source);
@@ -745,6 +746,9 @@ mod tests {
                     .iter()
                     .any(|token| token.kind == TokenKind::String)
             );
+            if let Some(following) = following {
+                assert!(output.tokens.iter().any(|token| token.kind == following));
+            }
         }
     }
 

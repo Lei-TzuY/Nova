@@ -136,3 +136,25 @@ fn rejected_mixed_equality_does_not_leak_rhs_initialization() {
     );
     assert!(!output.is_success());
 }
+
+#[test]
+fn mutable_string_equality_does_not_manufacture_definite_initialization() {
+    let output = analyze_text(
+        r#"fn choose(flag: Bool) -> Int {
+            var text: String = "Nova";
+            if flag { text = "changed"; () } else { () };
+            var answer: Int;
+            if text == "Nova" { answer = 42; () } else { () };
+            answer
+        }
+        fn main() -> Int { 0 }"#,
+    );
+
+    assert!(
+        output
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "N3009")
+    );
+    assert!(!output.is_success());
+}
