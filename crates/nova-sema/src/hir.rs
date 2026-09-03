@@ -65,6 +65,8 @@ pub enum Type {
     Int,
     /// Boolean type.
     Bool,
+    /// Immutable UTF-8 string value.
+    String,
     /// Nominal user-defined record type.
     Record(RecordType),
     /// Nominal user-defined enum type.
@@ -98,6 +100,7 @@ impl fmt::Display for Type {
         match self {
             Self::Int => formatter.write_str("Int"),
             Self::Bool => formatter.write_str("Bool"),
+            Self::String => formatter.write_str("String"),
             Self::Record(record) => formatter.write_str(&record.name),
             Self::Enum(enumeration) => formatter.write_str(&enumeration.name),
             Self::Unit => formatter.write_str("Unit"),
@@ -368,6 +371,8 @@ pub struct Expression {
 pub enum ExpressionKind {
     /// Integer literal.
     Integer(i64),
+    /// Decoded UTF-8 string literal.
+    String(String),
     /// Boolean literal.
     Boolean(bool),
     /// Unit literal.

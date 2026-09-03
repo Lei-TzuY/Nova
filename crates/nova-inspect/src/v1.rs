@@ -104,6 +104,8 @@ pub enum TypeKind {
     Int,
     /// Surface `Bool`.
     Bool,
+    /// Surface `String`; emitted only by schema v4 and later.
+    String,
     /// Nominal record.
     Record,
     /// Nominal enum.
@@ -326,6 +328,8 @@ pub struct RecordFieldInitializer {
 pub enum ExpressionKind {
     /// Integer literal.
     Integer,
+    /// String literal; emitted only by schema v4 and later.
+    String,
     /// Boolean literal.
     Boolean,
     /// Unit literal.

@@ -4,7 +4,7 @@ use crate::ast::{
     StatementKind, TypeRef, TypeRefKind, UnaryOperator,
 };
 use nova_diagnostics::Diagnostic;
-use nova_lexer::{Token, TokenKind};
+use nova_lexer::{Token, TokenKind, decode_string_literal};
 use nova_source::{SourceFile, Span};
 
 const MAX_EXPRESSION_DEPTH: usize = 256;
@@ -599,6 +599,26 @@ impl<'source> Parser<'source> {
                     span: token.span,
                 })
             }
+            TokenKind::String => {
+                self.bump();
+                let Some(value) = decode_string_literal(self.source, token.span) else {
+                    self.diagnostics.push(
+                        Diagnostic::error("N2010", "invalid string literal token")
+                            .with_primary(
+                                token.span,
+                                "the token span does not contain a valid Nova string literal",
+                            )
+                            .with_note(
+                                "the parser rejects malformed synthetic token streams instead of manufacturing a string value",
+                            ),
+                    );
+                    return None;
+                };
+                Some(Expression {
+                    kind: ExpressionKind::String(value),
+                    span: token.span,
+                })
+            }
             TokenKind::True | TokenKind::False => {
                 self.bump();
                 Some(Expression {
@@ -1045,7 +1065,7 @@ impl<'source> Parser<'source> {
 mod tests {
     use super::parse;
     use crate::ast::{BinaryOperator, ExpressionKind, StatementKind, TypeRef, TypeRefKind};
-    use nova_lexer::lex;
+    use nova_lexer::{TokenKind, lex};
     use nova_source::{SourceFile, SourceId};
 
     fn parse_text(text: &str) -> (SourceFile, super::ParseOutput) {
@@ -1132,6 +1152,44 @@ fn f() -> Int {
             &function.body.tail.as_deref().expect("tail").kind,
             ExpressionKind::FieldAccess { field, .. } if field.text == "left"
         ));
+    }
+
+    #[test]
+    fn parses_decoded_string_literals_with_exact_source_spans() {
+        let text = r#"fn greet() -> String { "hello 🦀\n" }"#;
+        let (source, parsed) = parse_text(text);
+
+        assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
+        let function = &parsed.program.functions[0];
+        assert_eq!(named_type_text(&function.return_type), "String");
+        let expression = function.body.tail.as_deref().expect("string tail");
+        assert!(matches!(
+            &expression.kind,
+            ExpressionKind::String(value) if value == "hello 🦀\n"
+        ));
+        assert_eq!(source.slice(expression.span), Some(r#""hello 🦀\n""#));
+    }
+
+    #[test]
+    fn rejects_a_synthetic_string_token_with_invalid_source_contents() {
+        let source = SourceFile::new(
+            SourceId::new(0),
+            "synthetic.nv",
+            "fn main() -> String { nope }",
+        );
+        let mut tokens = lex(&source).tokens;
+        let token = tokens
+            .iter_mut()
+            .find(|token| source.slice(token.span) == Some("nope"))
+            .expect("literal placeholder token");
+        token.kind = TokenKind::String;
+
+        let parsed = parse(&source, &tokens);
+        assert!(parsed.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "N2010"
+                && source.slice(diagnostic.labels[0].span) == Some("nope")
+        }));
+        assert!(parsed.program.functions.is_empty());
     }
 
     #[test]
