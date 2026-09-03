@@ -1,0 +1,28 @@
+name: PR166 sync latest main
+
+on:
+  push:
+    branches:
+      - feat/closures-lexical-capture
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/closures-lexical-capture
+          fetch-depth: 0
+      - name: Merge latest main without conflict guessing
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          git rm .github/workflows/sync-pr166-main.yml
+          git commit -m "chore: remove one-shot main sync workflow"
+          git push origin HEAD:feat/closures-lexical-capture
