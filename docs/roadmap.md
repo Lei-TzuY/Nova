@@ -1030,7 +1030,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: twenty-four vertical slices implemented; execution surface remains small.**
+**Status: twenty-six vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -1400,12 +1400,29 @@ Implemented in the twenty-fifth Phase 3 slice:
 - this slice defines no concatenation, indexing, interpolation, library API, allocation, layout,
   ownership, ABI, native backend, or memory-safety claim.
 
+Implemented in the twenty-sixth Phase 3 slice:
+
+- explicitly typed anonymous functions use `fn(name: Type, ...) -> Type { ... }` and share
+  the existing structural callable types used by named functions;
+- semantic analysis assigns stable closure/callable ownership, captures outer immutable
+  `let` bindings and parameters by value in first lexical-use order, rejects mutable `var`
+  capture as `N3035`, and keeps initializer-before-binding self-reference fail closed;
+- closure bodies own their `return`, `break`, and `continue` boundaries, with dedicated
+  verified CFGs and capture-aware HIR validation rather than leaking control or bindings
+  across callable ownership;
+- the interpreter materializes per-evaluation closure environments, preserves instance
+  identity through aliases, distinguishes separately evaluated closures and named functions,
+  and rechecks capture/type/call-boundary invariants under the existing `N4005` policy;
+- semantic-inspection v5 adds closure definitions, captures, callable ownership, and verified
+  closure CFGs while v1-v4 fail closed with `N5001` instead of reinterpreting older schemas;
+- parser recursion guarding is tightened to fail with `N2008` before host-stack exhaustion as
+  anonymous-function parsing increases expression-frame size; and
+- parser, semantic, CFG, interpreter, inspection, CLI, lexical-shadowing, nested-capture,
+  malformed-HIR, and recursion-budget regressions lock the vertical slice end to end.
+
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
 
-- prioritize closures and lexical capture only after binding ownership, captured-environment
-  identity, recursion/self-reference, callable type, flow, and runtime trust-boundary contracts
-  are written together;
 - make name resolution module-ready before adding import syntax, so declaration identity and
   diagnostics do not depend permanently on a single flat source namespace;
 - consider labelled loops, value-producing loop expressions, or value-carrying

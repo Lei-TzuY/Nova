@@ -20,13 +20,13 @@ interpreter slices. The toolchain is written in Rust and can:
 
 - read a Nova file or standard input while rejecting malformed UTF-8;
 - lex the documented v0.1 subset with byte-exact source spans;
-- parse functions, recursive explicit function types, nominal records and enums,
-  UTF-8 string literals, explicit aggregate construction, exhaustive enum matching with payload discard, field projection,
+- parse functions, explicitly typed anonymous function expressions, recursive explicit function types,
+  nominal records and enums, UTF-8 string literals, explicit aggregate construction, exhaustive enum matching with payload discard, field projection,
   initialized bindings, typed delayed `var` initialization, narrow assignments,
   expressions, blocks, calls, `if` expressions, pre-test `while` loops, bare Unit
   returns, and statement-only `break`/`continue`;
-- lower accepted syntax into a resolved, typed HIR with stable function,
-  binding, record, and enum identities, plus a verified function-level CFG;
+- lower accepted syntax into a resolved, typed HIR with stable function, closure,
+  binding, record, and enum identities, explicit closure capture metadata, plus verified callable CFGs;
 - resolve top-level functions and nominal types, parameters, lexical local
   bindings, record-field and enum-variant name/slot identities, and match payload bindings;
 - check bootstrap `Int`, `Bool`, `String`, `Unit`, the uninhabited `!` bottom type, and nominal aggregate types, function
@@ -35,9 +35,9 @@ interpreter slices. The toolchain is written in Rust and can:
   enum construction, match exhaustiveness and arm types, direct-constructor arm
   usefulness, assignment mutability/type constraints, and CFG-based definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
-  interpreter with function calls, recursion, Unit-valued procedures, records, enums,
-  UTF-8 strings, pattern matching, mutation, blocks, conditionals, bounded loops, and structured
-  `break`/`continue`;
+  interpreter with named functions, typed closures and immutable capture-by-value environments,
+  recursion, Unit-valued procedures, records, enums, UTF-8 strings, pattern matching, mutation,
+  blocks, conditionals, bounded loops, and structured `break`/`continue`;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
   text or JSON Lines, including reachability and match-usefulness warnings;
 - print a deterministic debug representation of the parsed AST; and
@@ -45,7 +45,8 @@ interpreter slices. The toolchain is written in Rust and can:
   bindings, types, spans, expression relationships, and exhaustive match facts,
   plus explicitly selected v2 documents that add the verified CFG and v3 documents
   that additionally expose explicit match payload modes without reinterpreting v1/v2 fields,
-  and v4 documents that extend the program projection with String type/literal categories.
+  v4 documents that extend the program projection with String type/literal categories,
+  and v5 documents that add closure definitions, captures, callable ownership, and verified closure CFGs.
 
 `nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
 definite-assignment validation. `nova run` performs those same checks and then
@@ -88,7 +89,8 @@ behavior,
 [the semantic-introspection v1 contract](docs/semantic-introspection.md),
 [v2 CFG extension](docs/semantic-introspection-v2.md), and
 [v3 pattern extension](docs/semantic-introspection-v3.md), and
-[v4 String extension](docs/semantic-introspection-v4.md) for the machine-readable
+[v4 String extension](docs/semantic-introspection-v4.md), and
+[v5 closure extension](docs/semantic-introspection-v5.md) for the machine-readable
 tooling boundary,
 [the bootstrap control-flow contract](docs/control-flow.md) for CFG verification
 and definite-initialization dataflow, and
@@ -106,11 +108,14 @@ rejected; nested lexical blocks may shadow outer bindings in this slice.
 Function parameters and a function body's outermost bindings share one scope.
 
 Explicit function types use `fn(T1, T2) -> U` and may nest recursively in any type
-position. They expose the callable signatures the HIR/runtime already use internally, so
-named top-level functions can now be passed, returned, stored in typed locals, and invoked
-through those values. For example, a parameter `transform: fn(Int) -> Int` can be called
-like any other function value. This slice deliberately does not add lambda expressions,
-closures, captured environments, methods, or implicit callable conversions.
+position. Named top-level functions and explicitly typed anonymous functions share those
+structural callable signatures, so either can be passed, returned, stored in typed locals,
+and invoked through values. Anonymous functions use `fn(name: Type, ...) -> Type { ... }`
+and capture outer immutable `let` bindings and parameters by value in first lexical-use order.
+Capturing a mutable `var` fails closed as `N3035`; no shared-cell or by-reference mutation
+semantics are inferred. Each anonymous-function evaluation creates a distinct closure instance,
+while aliases retain that instance identity. Methods and implicit callable conversions remain
+outside the bootstrap subset.
 
 `String` is an immutable UTF-8 bootstrap scalar. Literals admit unescaped non-control
 Unicode scalar values and the exact escapes `\\`, `\"`, `\n`, `\r`, `\t`, and `\0`;
