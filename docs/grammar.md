@@ -23,6 +23,9 @@ binary_integer  = ("0b" | "0B") , binary_digit , { [ "_" ] , binary_digit } ;
 octal_integer   = ("0o" | "0O") , octal_digit , { [ "_" ] , octal_digit } ;
 hex_integer     = ("0x" | "0X") , hex_digit , { [ "_" ] , hex_digit } ;
 integer         = decimal_integer | binary_integer | octal_integer | hex_integer ;
+string          = '"' , { string_character | string_escape } , '"' ;
+string_character = ? any Unicode scalar except '"', "\\", or a control character ? ;
+string_escape   = "\\\\" | "\\\"" | "\\n" | "\\r" | "\\t" | "\\0" ;
 ```
 
 Keywords are `fn`, `record`, `enum`, `new`, `let`, `var`, `if`, `else`,
@@ -37,6 +40,14 @@ magnitude, rejecting values above `2^63` without wrapping or truncation. Semanti
 lowering interprets that magnitude as signed `Int`: positive literals end at
 `2^63 - 1`, while magnitude `2^63` in any supported radix is accepted only under
 prefix `-`, giving the exact minimum value `-9223372036854775808`.
+
+String literals are delimited by `"` and contain immutable UTF-8 text. Any
+non-control Unicode scalar value other than `"` and `\\` may appear directly.
+The complete escape set is `\\`, `\"`, `\n`, `\r`, `\t`, and `\0`; unknown
+escapes and unescaped control characters are `N1006`. Literals may not cross a
+source line, and a missing closing delimiter is `N1005`. The lexer retains the
+exact token span, while parser decoding produces the scalar value once without
+reinterpreting it in semantic analysis or at runtime.
 
 Spaces, tabs, carriage returns, and newlines separate tokens. Newline has no
 statement-ending meaning. `//` begins a line comment. `/*` and `*/` delimit a
@@ -96,6 +107,7 @@ call_suffix         = "(" , [ arguments ] , ")" ;
 field_suffix        = "." , identifier ;
 arguments           = expression , { "," , expression } , [ "," ] ;
 primary             = integer
+                    | string
                     | "true"
                     | "false"
                     | identifier
@@ -138,6 +150,14 @@ nevertheless preserve whether source wrote a bare return instead of manufacturin
 synthetic `()` expression. Other return types still require a compatible tail or an
 explicit value-returning path. Parenthesized non-empty expressions retain ordinary
 grouping, so `(value)` is not a Unit literal.
+
+`String` is a built-in surface type. A string literal has type `String`; values
+may be inferred or explicitly annotated and may cross the same function,
+binding, record-field, enum-payload, branch, and match boundaries as other
+ordinary values. Matching `String` operands support `==` and `!=` by decoded
+Unicode scalar sequence. No concatenation, indexing, interpolation, conversion,
+method, standard-library, layout, allocation, ownership, or ABI contract is
+defined by this scalar slice.
 
 Function types use the recursive surface form `fn(T1, T2) -> U`; zero parameters and
 a trailing comma are allowed, and parameter/return positions may themselves be function
@@ -253,7 +273,7 @@ deep source will remain portable unchanged.
 
 ## Deliberate limitations
 
-The implemented grammar has no strings, floating-point literals, arrays,
+The implemented grammar has no floating-point literals, arrays,
 wildcard or guarded patterns, multi-payload variants, record destructuring,
 field assignment, `for`, labelled loops, value-carrying loop control, methods,
 modules, imports, generics, traits, effects, async syntax, ownership syntax,

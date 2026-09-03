@@ -22,6 +22,8 @@ pub enum Value {
     Int(i64),
     /// Boolean value.
     Bool(bool),
+    /// Immutable UTF-8 string value.
+    String(String),
     /// Nominal record value stored in declaration-order slots.
     Record {
         /// Stable nominal record identity.
@@ -49,6 +51,7 @@ impl fmt::Display for Value {
         match self {
             Self::Int(value) => write!(formatter, "{value}"),
             Self::Bool(value) => write!(formatter, "{value}"),
+            Self::String(value) => formatter.write_str(value),
             Self::Record { record, .. } => write!(formatter, "<record:{}>", record.index()),
             Self::Enum {
                 enumeration,
@@ -111,7 +114,7 @@ impl<'program> Interpreter<'program> {
             .find(|function| function.name == "main")
         else {
             return Err(Diagnostic::error("N4001", "missing entry point").with_note(
-                "`nova run` requires a top-level zero-argument `main` returning `Int`, `Bool`, or `Unit`",
+                "`nova run` requires a top-level zero-argument `main` returning `Int`, `Bool`, `String`, or `Unit`",
             ));
         };
         if !main.parameters.is_empty() {
@@ -122,7 +125,10 @@ impl<'program> Interpreter<'program> {
                 ),
             );
         }
-        if !matches!(main.return_type, Type::Int | Type::Bool | Type::Unit) {
+        if !matches!(
+            main.return_type,
+            Type::Int | Type::Bool | Type::String | Type::Unit
+        ) {
             return Err(
                 Diagnostic::error("N4001", "invalid entry point").with_primary(
                     main.span,
@@ -398,6 +404,7 @@ impl<'program> Interpreter<'program> {
     ) -> Result<Flow, Diagnostic> {
         match &expression.kind {
             ExpressionKind::Integer(value) => Ok(Flow::Value(Value::Int(*value))),
+            ExpressionKind::String(value) => Ok(Flow::Value(Value::String(value.clone()))),
             ExpressionKind::Boolean(value) => Ok(Flow::Value(Value::Bool(*value))),
             ExpressionKind::Unit => Ok(Flow::Value(Value::Unit)),
             ExpressionKind::Binding(reference) => {
@@ -883,6 +890,12 @@ impl<'program> Interpreter<'program> {
             (BinaryOperator::NotEqual, Value::Bool(left), Value::Bool(right)) => {
                 Ok(Value::Bool(left != right))
             }
+            (BinaryOperator::Equal, Value::String(left), Value::String(right)) => {
+                Ok(Value::Bool(left == right))
+            }
+            (BinaryOperator::NotEqual, Value::String(left), Value::String(right)) => {
+                Ok(Value::Bool(left != right))
+            }
             (BinaryOperator::Equal, Value::Unit, Value::Unit) => Ok(Value::Bool(true)),
             (BinaryOperator::NotEqual, Value::Unit, Value::Unit) => Ok(Value::Bool(false)),
             (BinaryOperator::Equal, Value::Function(left), Value::Function(right)) => {
@@ -1175,7 +1188,7 @@ impl<'program> Interpreter<'program> {
 
     fn type_is_runtime_valid(&self, ty: &Type) -> bool {
         match ty {
-            Type::Int | Type::Bool | Type::Unit => true,
+            Type::Int | Type::Bool | Type::String | Type::Unit => true,
             Type::Record(record) => {
                 self.program
                     .records
@@ -1210,6 +1223,7 @@ impl<'program> Interpreter<'program> {
         match (value, ty) {
             (Value::Int(_), Type::Int)
             | (Value::Bool(_), Type::Bool)
+            | (Value::String(_), Type::String)
             | (Value::Unit, Type::Unit) => true,
             (Value::Record { record, fields }, Type::Record(expected))
                 if *record == expected.id =>
@@ -1318,7 +1332,10 @@ mod tests {
     use super::{Value, execute};
     use nova_lexer::lex;
     use nova_parser::parse;
-    use nova_sema::{analyze, hir::ExpressionKind};
+    use nova_sema::{
+        analyze,
+        hir::{ExpressionKind, Type},
+    };
     use nova_source::{SourceFile, SourceId};
 
     fn execute_text(text: &str) -> Result<Value, nova_diagnostics::Diagnostic> {
@@ -1357,6 +1374,72 @@ mod tests {
         )
         .expect("recursive enum program should execute");
         assert_eq!(value, Value::Int(2));
+    }
+
+    #[test]
+    fn executes_utf8_strings_through_aggregates_and_equality() {
+        let value = execute_text(
+            r#"
+record Message { text: String }
+enum MaybeMessage { None, Some(Message) }
+fn main() -> String {
+    let selected = match MaybeMessage::Some(new Message { text: "Nova 🦀\n" }) {
+        MaybeMessage::None => "empty",
+        MaybeMessage::Some(message) => message.text,
+    };
+    if selected != "empty" { selected } else { "unreachable" }
+}
+"#,
+        )
+        .expect("string program executes");
+        assert_eq!(value, Value::String("Nova 🦀\n".to_owned()));
+
+        let equal = execute_text(r#"fn main() -> Bool { "same" == "same" }"#)
+            .expect("string equality executes");
+        assert_eq!(equal, Value::Bool(true));
+
+        let assigned = execute_text(
+            r#"fn main() -> String {
+                var text: String;
+                text = "first";
+                text = "second";
+                text
+            }"#,
+        )
+        .expect("String slots support delayed initialization and reassignment");
+        assert_eq!(assigned, Value::String("second".to_owned()));
+
+        let returned =
+            execute_text(r#"fn main() -> String { "evaluated first" == { return "returned"; } }"#)
+                .expect("non-continuing equality operand propagates return");
+        assert_eq!(returned, Value::String("returned".to_owned()));
+    }
+
+    #[test]
+    fn malformed_string_literal_type_fails_the_runtime_boundary() {
+        let source = SourceFile::new(
+            SourceId::new(0),
+            "test.nv",
+            r#"fn main() -> String { "value" }"#,
+        );
+        let lexed = lex(&source);
+        let parsed = parse(&source, &lexed.tokens);
+        let mut analyzed = analyze(&parsed.program);
+        assert!(analyzed.is_success(), "{:?}", analyzed.diagnostics);
+        analyzed.program.functions[0]
+            .body
+            .tail
+            .as_deref_mut()
+            .expect("string tail")
+            .ty = Type::Bool;
+
+        let diagnostic = execute(&analyzed.program).expect_err("malformed HIR must fail closed");
+        assert_eq!(diagnostic.code, "N4005");
+        assert!(
+            diagnostic.labels[0]
+                .message
+                .contains("does not conform to HIR type Bool")
+        );
     }
 
     #[test]

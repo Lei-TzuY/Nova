@@ -11,6 +11,8 @@ pub enum TokenKind {
     Identifier,
     /// A checked integer magnitude. Source radix is erased after lexing.
     Integer(u64),
+    /// A validated UTF-8 string literal. The decoded value is recovered from its span.
+    String,
     /// `fn`.
     Fn,
     /// `record`.
@@ -104,6 +106,7 @@ impl TokenKind {
         match self {
             Self::Identifier => "identifier",
             Self::Integer(_) => "integer literal",
+            Self::String => "string literal",
             Self::Fn => "`fn`",
             Self::Record => "`record`",
             Self::Enum => "`enum`",
@@ -186,6 +189,41 @@ impl LexOutput {
 #[must_use]
 pub fn lex(source: &SourceFile) -> LexOutput {
     Lexer::new(source).run()
+}
+
+/// Decodes a string-literal token after lexical validation.
+///
+/// The accepted escape set is deliberately small and deterministic: `\\`, `\"`,
+/// `\n`, `\r`, `\t`, and `\0`. Unescaped UTF-8 scalar values are preserved.
+/// Invalid spans, delimiters, escapes, and unescaped control characters fail
+/// closed instead of manufacturing a value for a malformed token stream.
+#[must_use]
+pub fn decode_string_literal(source: &SourceFile, span: Span) -> Option<String> {
+    let text = source.slice(span)?;
+    let contents = text.strip_prefix('"')?.strip_suffix('"')?;
+    let mut decoded = String::with_capacity(contents.len());
+    let mut characters = contents.chars();
+
+    while let Some(character) = characters.next() {
+        if character == '\\' {
+            let escaped = match characters.next()? {
+                '\\' => '\\',
+                '"' => '"',
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                '0' => '\0',
+                _ => return None,
+            };
+            decoded.push(escaped);
+        } else if character == '"' || character.is_control() {
+            return None;
+        } else {
+            decoded.push(character);
+        }
+    }
+
+    Some(decoded)
 }
 
 struct Lexer<'source> {
@@ -284,6 +322,10 @@ impl<'source> Lexer<'source> {
         }
         if character.is_ascii_digit() {
             self.lex_integer(start);
+            return;
+        }
+        if character == '"' {
+            self.lex_string(start);
             return;
         }
 
@@ -433,6 +475,68 @@ impl<'source> Lexer<'source> {
         }
     }
 
+    fn lex_string(&mut self, start: usize) {
+        debug_assert_eq!(self.current_byte(), Some(b'"'));
+        self.offset += 1;
+
+        while self.offset < self.source.len() {
+            let character_start = self.offset;
+            let Some(character) = self.remaining().chars().next() else {
+                break;
+            };
+            match character {
+                '"' => {
+                    self.offset += 1;
+                    self.tokens.push(Token {
+                        kind: TokenKind::String,
+                        span: self.span(start, self.offset),
+                    });
+                    return;
+                }
+                '\n' | '\r' => break,
+                '\\' => {
+                    self.offset += 1;
+                    let Some(escaped) = self.remaining().chars().next() else {
+                        break;
+                    };
+                    if matches!(escaped, '\n' | '\r') {
+                        break;
+                    }
+                    self.offset += escaped.len_utf8();
+                    if !matches!(escaped, '\\' | '"' | 'n' | 'r' | 't' | '0') {
+                        self.diagnostics.push(
+                            Diagnostic::error("N1006", "invalid string escape")
+                                .with_primary(
+                                    self.span(character_start, self.offset),
+                                    "supported escapes are `\\\\`, `\\\"`, `\\n`, `\\r`, `\\t`, and `\\0`",
+                                ),
+                        );
+                    }
+                }
+                character if character.is_control() => {
+                    self.offset += character.len_utf8();
+                    self.diagnostics.push(
+                        Diagnostic::error("N1006", "unescaped control character in string literal")
+                            .with_primary(
+                                self.span(character_start, self.offset),
+                                "write this control character with a supported escape",
+                            ),
+                    );
+                }
+                _ => self.offset += character.len_utf8(),
+            }
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error("N1005", "unterminated string literal")
+                .with_primary(
+                    self.span(start, (start + 1).min(self.source.len())),
+                    "this string literal is never closed",
+                )
+                .with_note("string literals must close before the end of the source line"),
+        );
+    }
+
     fn current_byte(&self) -> Option<u8> {
         self.source.text().as_bytes().get(self.offset).copied()
     }
@@ -463,7 +567,7 @@ impl<'source> Lexer<'source> {
 
 #[cfg(test)]
 mod tests {
-    use super::{TokenKind, lex};
+    use super::{TokenKind, decode_string_literal, lex};
     use nova_source::{SourceFile, SourceId};
 
     fn source(text: &str) -> SourceFile {
@@ -563,6 +667,89 @@ mod tests {
                 span: overflow_source.eof_span(),
             }]
         );
+    }
+
+    #[test]
+    fn lexes_and_decodes_utf8_strings_with_the_closed_escape_set() {
+        let source = source(r#""Nova 🦀\n\"quote\"\\tab\tzero\0" true"#);
+        let output = lex(&source);
+
+        assert!(output.is_success(), "{:?}", output.diagnostics);
+        assert_eq!(output.tokens[0].kind, TokenKind::String);
+        assert_eq!(
+            source.slice(output.tokens[0].span),
+            Some(r#""Nova 🦀\n\"quote\"\\tab\tzero\0""#)
+        );
+        assert_eq!(
+            decode_string_literal(&source, output.tokens[0].span),
+            Some("Nova 🦀\n\"quote\"\\tab\tzero\0".to_owned())
+        );
+        assert_eq!(output.tokens[1].kind, TokenKind::True);
+    }
+
+    #[test]
+    fn rejects_invalid_escapes_and_unescaped_control_characters_exactly() {
+        let invalid_escape_source = source(r#""bad\q""#);
+        let invalid_escape = lex(&invalid_escape_source);
+        assert_eq!(invalid_escape.diagnostics.len(), 1);
+        assert_eq!(invalid_escape.diagnostics[0].code, "N1006");
+        assert_eq!(
+            invalid_escape_source.slice(invalid_escape.diagnostics[0].labels[0].span),
+            Some(r"\q")
+        );
+        assert_eq!(invalid_escape.tokens[0].kind, TokenKind::String);
+        assert_eq!(
+            decode_string_literal(&invalid_escape_source, invalid_escape.tokens[0].span),
+            None
+        );
+
+        let control_source = source("\"raw\ttab\"");
+        let control = lex(&control_source);
+        assert_eq!(control.diagnostics.len(), 1);
+        assert_eq!(control.diagnostics[0].code, "N1006");
+        assert_eq!(
+            control_source.slice(control.diagnostics[0].labels[0].span),
+            Some("\t")
+        );
+
+        let synthetic_source = source(r#""first"second""#);
+        assert_eq!(
+            decode_string_literal(
+                &synthetic_source,
+                synthetic_source
+                    .span(0, synthetic_source.len())
+                    .expect("whole-source span"),
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn rejects_unterminated_strings_at_the_opening_quote_without_eating_the_next_line() {
+        for (text, following) in [
+            ("\"end of file", None),
+            ("\"first line\ntrue", Some(TokenKind::True)),
+            ("\"continued\\\nfalse", Some(TokenKind::False)),
+            ("\"carriage return\r\ntrue", Some(TokenKind::True)),
+        ] {
+            let source = source(text);
+            let output = lex(&source);
+            assert_eq!(output.diagnostics.len(), 1, "source: {text:?}");
+            assert_eq!(output.diagnostics[0].code, "N1005");
+            assert_eq!(
+                source.slice(output.diagnostics[0].labels[0].span),
+                Some("\"")
+            );
+            assert!(
+                !output
+                    .tokens
+                    .iter()
+                    .any(|token| token.kind == TokenKind::String)
+            );
+            if let Some(following) = following {
+                assert!(output.tokens.iter().any(|token| token.kind == following));
+            }
+        }
     }
 
     #[test]

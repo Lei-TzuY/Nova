@@ -179,6 +179,15 @@ fn evaluate_binary_checked<'a>(
                     };
                     left == right
                 }
+                (Type::String, Type::String) => {
+                    let Some(left) = string_value_checked_with_bindings(left, bindings)? else {
+                        return Ok(None);
+                    };
+                    let Some(right) = string_value_checked_with_bindings(right, bindings)? else {
+                        return Ok(None);
+                    };
+                    left == right
+                }
                 (Type::Unit, Type::Unit) => {
                     let Some(()) = unit_value_checked_with_bindings(left, bindings)? else {
                         return Ok(None);
@@ -253,6 +262,88 @@ fn int_value_checked<'a>(
             span: expression.span,
         }),
         None => Ok(None),
+    }
+}
+
+fn string_value_checked_with_bindings<'a>(
+    expression: &'a Expression,
+    bindings: &[ClosedBinding<'a>],
+) -> Result<Option<&'a str>, ClosedConditionArithmeticFailure> {
+    if expression.ty != Type::String {
+        return Ok(None);
+    }
+
+    match &expression.kind {
+        ExpressionKind::String(value) => Ok(Some(value)),
+        ExpressionKind::Binding(reference) => {
+            let Some(value) = closed_binding_value(reference, &expression.ty, bindings) else {
+                return Ok(None);
+            };
+            string_value_checked_with_bindings(value, bindings)
+        }
+        ExpressionKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => match evaluate_checked_with_bindings(condition, bindings)? {
+            Some(true) => {
+                let Some(proof) = closed_block_tail_with_bindings(then_branch, bindings) else {
+                    return Ok(None);
+                };
+                let (tail, selected_bindings) = proof?;
+                let Some(tail) = tail else {
+                    return Ok(None);
+                };
+                string_value_checked_with_bindings(tail, &selected_bindings)
+            }
+            Some(false) => string_value_checked_with_bindings(else_branch, bindings),
+            None => Ok(None),
+        },
+        ExpressionKind::Match {
+            scrutinee,
+            enumeration,
+            arms,
+        } => {
+            let Some((value, selected_bindings)) = selected_match_value_checked_with_bindings(
+                scrutinee,
+                *enumeration,
+                arms,
+                bindings,
+            )?
+            else {
+                return Ok(None);
+            };
+            string_value_checked_with_bindings(value, &selected_bindings)
+        }
+        ExpressionKind::FieldAccess {
+            base,
+            record,
+            field_index,
+            ..
+        } => {
+            let Some((value, selected_bindings)) =
+                selected_record_field_value_checked_with_bindings(
+                    base,
+                    *record,
+                    *field_index,
+                    bindings,
+                )?
+            else {
+                return Ok(None);
+            };
+            string_value_checked_with_bindings(value, &selected_bindings)
+        }
+        ExpressionKind::Block(block) => {
+            let Some(proof) = closed_block_tail_with_bindings(block, bindings) else {
+                return Ok(None);
+            };
+            let (tail, selected_bindings) = proof?;
+            let Some(tail) = tail else {
+                return Ok(None);
+            };
+            string_value_checked_with_bindings(tail, &selected_bindings)
+        }
+        _ => Ok(None),
     }
 }
 
@@ -1423,6 +1514,7 @@ fn is_closed_total_value_checked_with_bindings<'a>(
             None => Ok(false),
         },
         Type::Bool => Ok(evaluate_checked_with_bindings(expression, bindings)?.is_some()),
+        Type::String => Ok(string_value_checked_with_bindings(expression, bindings)?.is_some()),
         Type::Unit => Ok(unit_value_checked_with_bindings(expression, bindings)?.is_some()),
         Type::Function(_) => Ok(function_id_checked_with_bindings(expression, bindings)?.is_some()),
         Type::Enum(_) => Ok(match_variant_checked_with_bindings(expression, bindings)?.is_some()),

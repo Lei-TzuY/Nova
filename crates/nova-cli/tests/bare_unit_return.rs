@@ -32,7 +32,7 @@ fn check_run_ast_and_existing_inspection_schemas_accept_bare_unit_return() {
     );
     assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
 
-    for version in ["1", "2", "3"] {
+    for version in ["1", "2", "3", "4"] {
         let output = Command::new(env!("CARGO_BIN_EXE_nova"))
             .args([
                 "inspect",

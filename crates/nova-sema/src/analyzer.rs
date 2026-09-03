@@ -438,7 +438,7 @@ impl Analyzer {
         declarations.sort_by_key(|(start, _, _)| *start);
 
         for (_, name, definition) in declarations {
-            if matches!(name.text.as_str(), "Int" | "Bool" | "Unit") {
+            if matches!(name.text.as_str(), "Int" | "Bool" | "String" | "Unit") {
                 self.diagnostics.push(
                     Diagnostic::error("N3002", "duplicate type definition").with_primary(
                         name.span,
@@ -569,6 +569,7 @@ impl Analyzer {
             ast::TypeRefKind::Named(name) => match name.text.as_str() {
                 "Int" => Type::Int,
                 "Bool" => Type::Bool,
+                "String" => Type::String,
                 "Unit" => Type::Unit,
                 unknown => {
                     if let Some(symbol) = self.types.get(unknown).copied() {
@@ -587,7 +588,7 @@ impl Analyzer {
                         Diagnostic::error("N3001", "unknown type")
                             .with_primary(reference.span, format!("unknown type `{unknown}`"))
                             .with_note(
-                                "the bootstrap semantic core recognizes Int, Bool, Unit, !, declared record or enum names, and explicit function types",
+                                "the bootstrap semantic core recognizes Int, Bool, String, Unit, !, declared record or enum names, and explicit function types",
                             ),
                     );
                     Type::Error
@@ -1017,6 +1018,9 @@ impl Analyzer {
         let (kind, ty) = match &expression.kind {
             ast::ExpressionKind::Integer(value) => {
                 self.lower_integer_literal(*value, expression.span)
+            }
+            ast::ExpressionKind::String(value) => {
+                (ExpressionKind::String(value.clone()), Type::String)
             }
             ast::ExpressionKind::Boolean(value) => (ExpressionKind::Boolean(*value), Type::Bool),
             ast::ExpressionKind::Unit => (ExpressionKind::Unit, Type::Unit),
@@ -2494,7 +2498,7 @@ impl Analyzer {
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires matching comparable operands (Int, Bool, Unit, function, or payload-free enum), found {} and {}",
+                        "equality requires matching comparable operands (Int, Bool, String, Unit, function, or payload-free enum), found {} and {}",
                         left.ty, right.ty
                     ),
                 ));
@@ -2509,7 +2513,7 @@ impl Analyzer {
                 .push(Diagnostic::error("N3004", "type mismatch").with_primary(
                     span,
                     format!(
-                        "equality requires matching comparable operands (Int, Bool, Unit, function, or payload-free enum), found {} and {}",
+                        "equality requires matching comparable operands (Int, Bool, String, Unit, function, or payload-free enum), found {} and {}",
                         left.ty, right.ty
                     ),
                 ));

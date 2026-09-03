@@ -1,0 +1,6 @@
+record Message { text: String }
+
+fn main() -> String {
+    let message = new Message { text: "Nova 🦀\nready" };
+    if message.text != "missing" { message.text } else { "unreachable" }
+}
