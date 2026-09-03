@@ -1030,7 +1030,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: twenty-three vertical slices implemented; execution surface remains small.**
+**Status: twenty-four vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -1360,6 +1360,20 @@ Implemented in the twenty-third Phase 3 slice:
   unchanged because the new form enters the already-established Return flow channel; and
 - runtime plus end-to-end CLI regressions prove successful Unit return and a `42` caller
   result without changing runtime `Value`, CFG, inspection schema, layout, or ABI.
+
+Implemented in the twenty-fourth Phase 3 slice:
+
+- block evaluation now has its own typed-HIR runtime postcondition: every ordinary
+  `Flow::Value` must recursively conform to the block's resolved result type before
+  leaving that block boundary;
+- the check covers top-level function bodies, selected `if` branches, nested block
+  expressions, and executed `while` bodies even when a caller discards their values;
+- structured `Return`, `Break`, and `Continue` flows bypass the value-only postcondition,
+  preserving ownership by the existing function and nearest-loop control boundaries;
+- expression and function-return conformance remain independent defense-in-depth checks
+  rather than substitutes for block metadata validation; and
+- malformed-HIR regressions cover function, selected-branch, and discarded-loop-body type
+  drift, while return and break controls prove structured flow remains executable.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

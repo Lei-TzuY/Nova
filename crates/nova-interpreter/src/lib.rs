@@ -227,6 +227,26 @@ impl<'program> Interpreter<'program> {
     }
 
     fn eval_block(&mut self, block: &Block, frame: &mut Frame) -> Result<Flow, Diagnostic> {
+        let flow = self.eval_block_unchecked(block, frame)?;
+        if let Flow::Value(value) = &flow {
+            if !self.value_conforms_to_type(value, &block.ty) {
+                return Err(self.invariant(
+                    block.span,
+                    format!(
+                        "block produced a runtime value that does not conform to HIR type {}",
+                        block.ty
+                    ),
+                ));
+            }
+        }
+        Ok(flow)
+    }
+
+    fn eval_block_unchecked(
+        &mut self,
+        block: &Block,
+        frame: &mut Frame,
+    ) -> Result<Flow, Diagnostic> {
         for statement in &block.statements {
             if let Some(flow) = self.eval_statement(statement, frame)? {
                 return Ok(flow);

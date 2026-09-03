@@ -340,9 +340,11 @@ RHS first; only an ordinary produced value triggers target identity, mutability,
 replacement-type validation, preserving structured `return`/`break`/`continue` precedence.
 Any such interpreter/HIR drift fails closed with `N4005`.
 
-Every expression that completes with an ordinary runtime value also has a final
-interpreter postcondition: the value must recursively conform to that expression's
-typed-HIR result type. Runtime conformance first validates the resolved type itself:
+Every block and expression that completes with an ordinary runtime value also has a
+final interpreter postcondition: the value must recursively conform to that node's
+typed-HIR result type. Block checking includes function bodies, selected conditional
+branches, and executed loop bodies even when their result is discarded. Runtime
+conformance first validates the resolved type itself:
 nominal record/enum names must still match their declaration IDs, and function
 signatures recursively apply the same rule to parameter and return types. This closes
 a malformed-HIR gap where a record or enum value with the correct nominal ID could
@@ -355,8 +357,10 @@ normally, their resolved types must satisfy the same shared semantic comparabili
 including the declaration-wide payload-free requirement for enums. Malformed HIR therefore
 cannot compare a payload-free variant of an enum whose other variants carry payloads.
 A `Never` operand still evaluates normally for structured `return`, `break`, or `continue`
-propagation and never reaches the comparison itself. Any interpreter/HIR contract drift
-on a value-producing equality path fails closed with `N4005`.
+propagation and never reaches the comparison itself. Structured transfers likewise bypass
+block and expression value postconditions until their owning function or loop consumes
+them. Any interpreter/HIR contract drift on a value-producing path fails closed with
+`N4005`.
 
 For deterministic execution while the numeric design remains provisional, integer
 literals may be decimal or use binary (`0b`/`0B`), octal (`0o`/`0O`), or hexadecimal
