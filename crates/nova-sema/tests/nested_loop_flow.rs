@@ -53,3 +53,38 @@ fn inner_continue_backedge_does_not_leak_returning_initialization_to_outer_break
     // the post-outer-loop read therefore both remain maybe-uninitialized.
     assert_eq!(n3009_count, 2, "{:?}", output.diagnostics);
 }
+
+#[test]
+fn inner_break_initialization_does_not_leak_into_outer_continue_backedge() {
+    let output = analyze_text(
+        "fn f(exit: Bool) -> Int {\n\
+             var value: Int;\n\
+             while true {\n\
+                 if exit {\n\
+                     while true {\n\
+                         value = 7;\n\
+                         break;\n\
+                     }\n\
+                     break;\n\
+                 } else {\n\
+                     value;\n\
+                     continue;\n\
+                 };\n\
+             }\n\
+             value;\n\
+             0\n\
+         }",
+    );
+
+    let n3009_count = output
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "N3009")
+        .count();
+
+    // The inner break initializes `value` only on the outer-loop exit path. That fact
+    // must not leak sideways into the sibling continue backedge and mask its read.
+    // Conversely, every actual outer-loop exit has crossed the initializing inner loop,
+    // so the post-loop read is definitely initialized.
+    assert_eq!(n3009_count, 1, "{:?}", output.diagnostics);
+}
