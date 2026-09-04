@@ -20,6 +20,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - name: Align grammar source shape
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('docs/grammar.md')
+          text = p.read_text()
+          old = '''function            = "fn" , identifier , "(" , [ parameters ] , ")" ,
+                                "->" , type_ref , block ;'''
+          new = 'function_decl       = "fn" , identifier , "(" , [ parameters ] , ")" , "->" , type_ref , block ;'
+          assert old in text
+          text = text.replace(old, new, 1)
+          text = text.replace('declaration         = record_declaration | enum_declaration | function ;', 'declaration         = record_declaration | enum_declaration | function_decl ;', 1)
+          p.write_text(text)
+          PY
       - name: Apply implementation
         run: |
           if ! python .github/bil34_impl.py > /tmp/bil34.log 2>&1; then
@@ -32,8 +46,20 @@ jobs:
             git push origin HEAD:conquest/bil-34-generic-functions
             exit 1
           fi
+          rm -f .github/bil34-error.txt
       - run: cargo fmt --all
-      - run: cargo check --workspace --all-targets --locked
+      - name: Compile candidate
+        run: |
+          if ! cargo check --workspace --all-targets --locked > /tmp/bil34-check.log 2>&1; then
+            cat /tmp/bil34-check.log
+            cp /tmp/bil34-check.log .github/bil34-error.txt
+            git config user.name LeiZ
+            git config user.email 52287354+Lei-TzuY@users.noreply.github.com
+            git add .github/bil34-error.txt
+            git commit -m "chore: capture BIL-34 compile error [bil34-error]"
+            git push origin HEAD:conquest/bil-34-generic-functions
+            exit 1
+          fi
       - name: Commit implementation
         run: |
           git config user.name LeiZ
