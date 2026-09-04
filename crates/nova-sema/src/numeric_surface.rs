@@ -176,7 +176,9 @@ fn rewrite_expression(expression: &mut ast::Expression) {
             rewrite_expression(left);
             rewrite_expression(right);
         }
-        ExpressionKind::Call { callee, arguments } => {
+        ExpressionKind::Call {
+            callee, arguments, ..
+        } => {
             rewrite_expression(callee);
             for argument in arguments {
                 rewrite_expression(argument);

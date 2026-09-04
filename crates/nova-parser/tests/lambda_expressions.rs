@@ -19,7 +19,10 @@ fn parses_explicitly_typed_lambda_and_immediate_call() {
         .tail
         .as_deref()
         .expect("main tail");
-    let ExpressionKind::Call { callee, arguments } = &tail.kind else {
+    let ExpressionKind::Call {
+        callee, arguments, ..
+    } = &tail.kind
+    else {
         panic!("expected immediate lambda call");
     };
     assert_eq!(arguments.len(), 1);

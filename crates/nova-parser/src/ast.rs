@@ -297,7 +297,9 @@ pub enum ExpressionKind {
     Call {
         /// Expression producing the callee.
         callee: Box<Expression>,
-        /// Arguments in source order.
+        /// Explicit call-site type arguments in source order.
+        type_arguments: Vec<TypeRef>,
+        /// Value arguments in source order.
         arguments: Vec<Expression>,
     },
     /// Nested block expression.
