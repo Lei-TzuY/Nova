@@ -56,7 +56,10 @@ fn unknown_or_payload_bearing_int_members_remain_rejected() {
         "fn main() -> Int { Int::MAX(1) }",
     ] {
         let output = run_stdin(&["check", "-"], source);
-        assert!(!output.status.success(), "source unexpectedly accepted: {source}");
+        assert!(
+            !output.status.success(),
+            "source unexpectedly accepted: {source}"
+        );
         assert!(
             !String::from_utf8_lossy(&output.stderr).trim().is_empty(),
             "rejection should retain a deterministic diagnostic"
