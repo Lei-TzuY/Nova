@@ -39,7 +39,7 @@ if text.count(old) != 1:
 text = text.replace(old, new, 1)
 
 # Keep ordinary by-value captures heap-indirected so adding RuntimeCapture does not
-# increase the recursive interpreter call-frame footprint enough to outrun N4006.
+# increase recursive evaluator stack pressure.
 old = "pub enum RuntimeCapture {\n    ByValue(Value),\n    ByReference(usize),\n}"
 new = "pub enum RuntimeCapture {\n    ByValue(Box<Value>),\n    ByReference(usize),\n}"
 if text.count(old) != 1:
@@ -54,6 +54,14 @@ text = text.replace(
     "self.bind_runtime_slot(&mut frame, &binding, Some(*value), capture.first_use)?;",
     1,
 )
+
+# The runtime frame gained shared-cell bookkeeping. Recalibrate the conservative
+# host-stack safety budget so N4004 is guaranteed to fire before native stack exhaustion.
+old = "const MAX_CALL_DEPTH: usize = 64;"
+new = "const MAX_CALL_DEPTH: usize = 48;"
+if text.count(old) != 1:
+    raise SystemExit(f"call-depth budget replacement count={text.count(old)}")
+text = text.replace(old, new, 1)
 p.write_text(text)
 
 p = Path("crates/nova-cli/tests/closure_snapshot.rs")
