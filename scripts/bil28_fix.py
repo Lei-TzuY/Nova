@@ -16,11 +16,45 @@ text = text.replace(
     "pub enum RuntimeCapture {\n    ByValue(Value),\n    ByReference(usize),\n}",
     1,
 )
-old = """                    && closure\n                        .captures\n                        .iter()\n                        .zip(captures)\n                        .all(|(capture, value)| self.value_conforms_to_type(value, &capture.ty))"""
-new = """                    && closure.captures.iter().zip(captures).all(|(capture, value)| {\n                        match (capture.mode, value) {\n                            (CaptureMode::ByValue, RuntimeCapture::ByValue(value)) => {\n                                self.value_conforms_to_type(value, &capture.ty)\n                            }\n                            (CaptureMode::ByReference, RuntimeCapture::ByReference(cell)) => self\n                                .shared_cells\n                                .get(*cell)\n                                .and_then(Option::as_ref)\n                                .is_some_and(|value| self.value_conforms_to_type(value, &capture.ty)),\n                            _ => false,\n                        }\n                    })"""
+old = """                    && closure
+                        .captures
+                        .iter()
+                        .zip(captures)
+                        .all(|(capture, value)| self.value_conforms_to_type(value, &capture.ty))"""
+new = """                    && closure.captures.iter().zip(captures).all(|(capture, value)| {
+                        match (capture.mode, value) {
+                            (CaptureMode::ByValue, RuntimeCapture::ByValue(value)) => {
+                                self.value_conforms_to_type(value, &capture.ty)
+                            }
+                            (CaptureMode::ByReference, RuntimeCapture::ByReference(cell)) => self
+                                .shared_cells
+                                .get(*cell)
+                                .and_then(Option::as_ref)
+                                .is_some_and(|value| self.value_conforms_to_type(value, &capture.ty)),
+                            _ => false,
+                        }
+                    })"""
 if text.count(old) != 1:
     raise SystemExit(f"closure conformity replacement count={text.count(old)}")
-p.write_text(text.replace(old, new, 1))
+text = text.replace(old, new, 1)
+
+# Keep ordinary by-value captures heap-indirected so adding RuntimeCapture does not
+# increase the recursive interpreter call-frame footprint enough to outrun N4006.
+old = "pub enum RuntimeCapture {\n    ByValue(Value),\n    ByReference(usize),\n}"
+new = "pub enum RuntimeCapture {\n    ByValue(Box<Value>),\n    ByReference(usize),\n}"
+if text.count(old) != 1:
+    raise SystemExit(f"RuntimeCapture boxing replacement count={text.count(old)}")
+text = text.replace(old, new, 1)
+text = text.replace(
+    "RuntimeCapture::ByValue(value.clone())",
+    "RuntimeCapture::ByValue(Box::new(value.clone()))",
+)
+text = text.replace(
+    "self.bind_runtime_slot(&mut frame, &binding, Some(value), capture.first_use)?;",
+    "self.bind_runtime_slot(&mut frame, &binding, Some(*value), capture.first_use)?;",
+    1,
+)
+p.write_text(text)
 
 p = Path("crates/nova-cli/tests/closure_snapshot.rs")
 text = p.read_text()
