@@ -28,11 +28,7 @@ fn uint_executes_through_check_run_and_inspect() {
         "{}",
         String::from_utf8_lossy(&run.stderr)
     );
-    assert_eq!(
-        String::from_utf8_lossy(&run.stdout),
-        "42\
-"
-    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
     let inspect = run_stdin(
         &["inspect", "-", "--format=json", "--schema-version", "6"],
         source,
@@ -43,7 +39,7 @@ fn uint_executes_through_check_run_and_inspect() {
         String::from_utf8_lossy(&inspect.stderr)
     );
     let json = String::from_utf8_lossy(&inspect.stdout);
-    assert!(json.contains("\\\"uint\\\""));
+    assert!(json.contains("\"uint\""));
     assert!(json.contains("numeric_conversion"));
 }
 
@@ -57,8 +53,7 @@ fn uint_boundaries_and_checked_narrowing_execute() {
     );
     assert_eq!(
         String::from_utf8_lossy(&max.stdout),
-        "18446744073709551615\
-"
+        "18446744073709551615\n"
     );
     let narrow = run_stdin(
         &["run", "-"],
@@ -69,11 +64,7 @@ fn uint_boundaries_and_checked_narrowing_execute() {
         "{}",
         String::from_utf8_lossy(&narrow.stderr)
     );
-    assert_eq!(
-        String::from_utf8_lossy(&narrow.stdout),
-        "42\
-"
-    );
+    assert_eq!(String::from_utf8_lossy(&narrow.stdout), "42\n");
 }
 
 #[test]
