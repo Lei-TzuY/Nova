@@ -32,7 +32,8 @@ fn mutable_write_capture_shares_one_cell_with_outer_scope() {
 
 #[test]
 fn read_only_mutable_capture_keeps_creation_time_snapshot() {
-    let source = "fn main() -> Int { var value = 40; let get = fn() -> Int { value }; value = 99; get() }";
+    let source =
+        "fn main() -> Int { var value = 40; let get = fn() -> Int { value }; value = 99; get() }";
     let output = run_stdin(&["run", "-"], source);
     assert!(
         output.status.success(),
@@ -44,10 +45,14 @@ fn read_only_mutable_capture_keeps_creation_time_snapshot() {
 
 #[test]
 fn immutable_capture_assignment_remains_rejected() {
-    let source = "fn main() -> Int { let value = 40; let set = fn() -> Int { value = 99; value }; set() }";
+    let source =
+        "fn main() -> Int { let value = 40; let set = fn() -> Int { value = 99; value }; set() }";
     let output = run_stdin(&["check", "-"], source);
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("error[N3008]") || stderr.contains("immutable"), "{stderr}");
+    assert!(
+        stderr.contains("error[N3008]") || stderr.contains("immutable"),
+        "{stderr}"
+    );
 }

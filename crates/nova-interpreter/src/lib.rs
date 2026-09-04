@@ -6,13 +6,13 @@ use nova_int_semantics::IntArithmeticError;
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::equality_rules::matching_equality_types;
 use nova_sema::hir::{
-    Binding, BindingId, BindingReference, Block, Closure, EnumId, Expression, ExpressionKind,
-    Function, FunctionId, Program, RecordId, Statement, StatementKind, Type,
+    Binding, BindingId, BindingReference, Block, CaptureMode, Closure, EnumId, Expression,
+    ExpressionKind, Function, FunctionId, Program, RecordId, Statement, StatementKind, Type,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-const MAX_CALL_DEPTH: usize = 64;
+const MAX_CALL_DEPTH: usize = 48;
 const MAX_EXECUTION_STEPS: usize = 100_000;
 
 /// Runtime value produced by the bootstrap interpreter.
@@ -50,11 +50,17 @@ pub enum Value {
         instance: usize,
         /// Typed callable body and capture contract.
         closure: Box<Closure>,
-        /// Captured values aligned with `closure.captures`.
-        captures: Vec<Value>,
+        /// Runtime captures aligned with `closure.captures`.
+        captures: Vec<RuntimeCapture>,
     },
     /// Unit value produced by `()` or a value-less block.
     Unit,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RuntimeCapture {
+    ByValue(Box<Value>),
+    ByReference(usize),
 }
 
 impl fmt::Display for Value {
@@ -115,6 +121,7 @@ struct RuntimeSlot {
     binding_name: String,
     declaration_span: nova_source::Span,
     value: Option<Value>,
+    shared_cell: Option<usize>,
 }
 
 type Frame = BTreeMap<BindingId, RuntimeSlot>;
@@ -131,6 +138,7 @@ struct Interpreter<'program> {
     call_depth: usize,
     steps: usize,
     next_closure_instance: usize,
+    shared_cells: Vec<Option<Value>>,
 }
 
 impl<'program> Interpreter<'program> {
@@ -140,6 +148,7 @@ impl<'program> Interpreter<'program> {
             call_depth: 0,
             steps: 0,
             next_closure_instance: 0,
+            shared_cells: Vec::new(),
         }
     }
 
@@ -274,7 +283,7 @@ impl<'program> Interpreter<'program> {
     fn call_closure(
         &mut self,
         closure: &Closure,
-        captured_values: Vec<Value>,
+        captured_values: Vec<RuntimeCapture>,
         arguments: Vec<Value>,
     ) -> Result<Value, Diagnostic> {
         if closure.id.module() != self.program.module.id {
@@ -307,14 +316,38 @@ impl<'program> Interpreter<'program> {
                     "closure capture table repeats one binding identity",
                 ));
             }
-            if !self.value_conforms_to_type(value, &capture.ty) {
-                return Err(self.invariant(
-                    capture.first_use,
-                    format!(
-                        "captured `{}` value does not conform to resolved type {}",
-                        capture.reference.binding_name, capture.ty
-                    ),
-                ));
+            match (capture.mode, value) {
+                (CaptureMode::ByValue, RuntimeCapture::ByValue(value)) => {
+                    if !self.value_conforms_to_type(value, &capture.ty) {
+                        return Err(self.invariant(
+                            capture.first_use,
+                            format!(
+                                "captured `{}` value does not conform to resolved type {}",
+                                capture.reference.binding_name, capture.ty
+                            ),
+                        ));
+                    }
+                }
+                (CaptureMode::ByReference, RuntimeCapture::ByReference(cell)) => {
+                    let Some(value) = self.shared_cells.get(*cell).and_then(Option::as_ref) else {
+                        return Err(self.invariant(
+                            capture.first_use,
+                            "by-reference closure capture points at an absent or uninitialized shared cell",
+                        ));
+                    };
+                    if !self.value_conforms_to_type(value, &capture.ty) {
+                        return Err(self.invariant(
+                            capture.first_use,
+                            "by-reference closure capture cell does not conform to its resolved type",
+                        ));
+                    }
+                }
+                _ => {
+                    return Err(self.invariant(
+                        capture.first_use,
+                        "closure runtime capture mode does not match typed HIR",
+                    ));
+                }
             }
         }
         for (index, (parameter, argument)) in closure.parameters.iter().zip(&arguments).enumerate()
@@ -344,14 +377,37 @@ impl<'program> Interpreter<'program> {
 
         let mut frame = Frame::new();
         for (capture, value) in closure.captures.iter().zip(captured_values) {
-            let binding = Binding {
-                id: capture.reference.binding,
-                name: capture.reference.binding_name.clone(),
-                ty: capture.ty.clone(),
-                mutable: false,
-                span: capture.reference.declaration_span,
-            };
-            self.bind_runtime_slot(&mut frame, &binding, Some(value), capture.first_use)?;
+            match (capture.mode, value) {
+                (CaptureMode::ByValue, RuntimeCapture::ByValue(value)) => {
+                    let binding = Binding {
+                        id: capture.reference.binding,
+                        name: capture.reference.binding_name.clone(),
+                        ty: capture.ty.clone(),
+                        mutable: false,
+                        span: capture.reference.declaration_span,
+                    };
+                    self.bind_runtime_slot(&mut frame, &binding, Some(*value), capture.first_use)?;
+                }
+                (CaptureMode::ByReference, RuntimeCapture::ByReference(cell)) => {
+                    frame.insert(
+                        capture.reference.binding,
+                        RuntimeSlot {
+                            ty: capture.ty.clone(),
+                            mutable: true,
+                            binding_name: capture.reference.binding_name.clone(),
+                            declaration_span: capture.reference.declaration_span,
+                            value: None,
+                            shared_cell: Some(cell),
+                        },
+                    );
+                }
+                _ => {
+                    return Err(self.invariant(
+                        capture.first_use,
+                        "closure runtime capture mode changed while entering the call frame",
+                    ));
+                }
+            }
         }
         for (parameter, argument) in closure.parameters.iter().zip(arguments) {
             self.bind_runtime_slot(&mut frame, parameter, Some(argument), closure.span)?;
@@ -486,7 +542,17 @@ impl<'program> Interpreter<'program> {
                                 ),
                             ));
                         }
-                        slot.value = Some(value);
+                        if let Some(cell) = slot.shared_cell {
+                            let Some(destination) = self.shared_cells.get_mut(cell) else {
+                                return Err(self.invariant(
+                                    statement.span,
+                                    "assignment target points at a missing shared capture cell",
+                                ));
+                            };
+                            *destination = Some(value);
+                        } else {
+                            slot.value = Some(value);
+                        }
                         Ok(None)
                     }
                     flow => Ok(Some(flow)),
@@ -600,19 +666,71 @@ impl<'program> Interpreter<'program> {
                             ),
                         ));
                     }
-                    let Some(value) = slot.value.as_ref() else {
-                        return Err(self.invariant(
-                            capture.first_use,
-                            "closure captured a runtime slot before initialization",
-                        ));
-                    };
-                    if !self.value_conforms_to_type(value, &capture.ty) {
-                        return Err(self.invariant(
-                            capture.first_use,
-                            "closure capture value does not conform to its resolved type",
-                        ));
+                    match capture.mode {
+                        CaptureMode::ByValue => {
+                            let value = if let Some(cell) = slot.shared_cell {
+                                self.shared_cells
+                                    .get(cell)
+                                    .and_then(Option::as_ref)
+                                    .ok_or_else(|| self.invariant(
+                                        capture.first_use,
+                                        "closure captured a shared runtime slot before initialization",
+                                    ))?
+                            } else {
+                                slot.value.as_ref().ok_or_else(|| {
+                                    self.invariant(
+                                        capture.first_use,
+                                        "closure captured a runtime slot before initialization",
+                                    )
+                                })?
+                            };
+                            if !self.value_conforms_to_type(value, &capture.ty) {
+                                return Err(self.invariant(
+                                    capture.first_use,
+                                    "closure capture value does not conform to its resolved type",
+                                ));
+                            }
+                            captured_values.push(RuntimeCapture::ByValue(Box::new(value.clone())));
+                        }
+                        CaptureMode::ByReference => {
+                            if !slot.mutable {
+                                return Err(self.invariant(
+                                    capture.first_use,
+                                    "by-reference capture resolved to an immutable runtime slot",
+                                ));
+                            }
+                            let existing = slot.shared_cell;
+                            let cell = if let Some(cell) = existing {
+                                cell
+                            } else {
+                                let slot = frame.get_mut(&capture.reference.binding).expect(
+                                    "validated by-reference capture must have a runtime slot",
+                                );
+                                let value = slot.value.take().ok_or_else(|| self.invariant(
+                                    capture.first_use,
+                                    "by-reference closure captured a runtime slot before initialization",
+                                ))?;
+                                let cell = self.shared_cells.len();
+                                self.shared_cells.push(Some(value));
+                                slot.shared_cell = Some(cell);
+                                cell
+                            };
+                            let Some(value) = self.shared_cells.get(cell).and_then(Option::as_ref)
+                            else {
+                                return Err(self.invariant(
+                                    capture.first_use,
+                                    "by-reference closure capture points at an uninitialized shared cell",
+                                ));
+                            };
+                            if !self.value_conforms_to_type(value, &capture.ty) {
+                                return Err(self.invariant(
+                                    capture.first_use,
+                                    "by-reference closure capture cell does not conform to its resolved type",
+                                ));
+                            }
+                            captured_values.push(RuntimeCapture::ByReference(cell));
+                        }
                     }
-                    captured_values.push(value.clone());
                 }
                 for parameter in &closure.parameters {
                     if parameter.mutable || !identities.insert(parameter.id) {
@@ -649,7 +767,12 @@ impl<'program> Interpreter<'program> {
                         ),
                     ));
                 }
-                let Some(value) = slot.value.as_ref() else {
+                let value = if let Some(cell) = slot.shared_cell {
+                    self.shared_cells.get(cell).and_then(Option::as_ref)
+                } else {
+                    slot.value.as_ref()
+                };
+                let Some(value) = value else {
                     return Err(self.invariant(
                         expression.span,
                         format!(
@@ -1422,6 +1545,7 @@ impl<'program> Interpreter<'program> {
                 binding_name: binding.name.clone(),
                 declaration_span: binding.span,
                 value,
+                shared_cell: None,
             },
         );
         Ok(())
@@ -1720,7 +1844,19 @@ impl<'program> Interpreter<'program> {
                         .captures
                         .iter()
                         .zip(captures)
-                        .all(|(capture, value)| self.value_conforms_to_type(value, &capture.ty))
+                        .all(|(capture, value)| match (capture.mode, value) {
+                            (CaptureMode::ByValue, RuntimeCapture::ByValue(value)) => {
+                                self.value_conforms_to_type(value, &capture.ty)
+                            }
+                            (CaptureMode::ByReference, RuntimeCapture::ByReference(cell)) => self
+                                .shared_cells
+                                .get(*cell)
+                                .and_then(Option::as_ref)
+                                .is_some_and(|value| {
+                                    self.value_conforms_to_type(value, &capture.ty)
+                                }),
+                            _ => false,
+                        })
             }
             _ => false,
         }

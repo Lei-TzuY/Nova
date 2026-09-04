@@ -268,13 +268,24 @@ pub struct Function {
     pub span: Span,
 }
 
-/// One lexical binding captured by value when a closure is created.
+/// How one lexical binding enters a closure environment.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CaptureMode {
+    /// Copy the current value when the closure expression is evaluated.
+    ByValue,
+    /// Share one mutable runtime cell with the enclosing binding and closure aliases.
+    ByReference,
+}
+
+/// One lexical binding captured when a closure is created.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Capture {
     /// Resolved declaration identity and metadata.
     pub reference: BindingReference,
-    /// Resolved value type copied into the closure environment.
+    /// Resolved value type exposed through the closure environment.
     pub ty: Type,
+    /// Environment transfer mode selected by semantic analysis.
+    pub mode: CaptureMode,
     /// First lexical use that caused this capture, used for deterministic ordering and diagnostics.
     pub first_use: Span,
 }
@@ -288,7 +299,7 @@ pub struct Closure {
     pub parameters: Vec<Binding>,
     /// Explicit resolved return type.
     pub return_type: Type,
-    /// By-value environment inputs in first-lexical-use order.
+    /// Environment inputs in first-lexical-use order.
     pub captures: Vec<Capture>,
     /// Body evaluated at the closure call boundary.
     pub body: Block,
