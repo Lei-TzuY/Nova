@@ -1283,9 +1283,17 @@ impl Analyzer {
                     ty,
                 )
             }
-            ast::ExpressionKind::Call { callee, arguments } => {
+            ast::ExpressionKind::Call {
+                callee,
+                type_arguments,
+                arguments,
+            } => {
                 let call_entry_state = self.capture_reachable_state();
                 let callee = self.lower_expression(callee, return_type);
+                let explicit_type_arguments = type_arguments
+                    .iter()
+                    .map(|argument| self.resolve_type_ref(argument))
+                    .collect::<Vec<_>>();
                 let mut can_continue = !callee.ty.is_never();
                 let mut lowered_arguments = Vec::with_capacity(arguments.len());
                 for argument in arguments {
@@ -1299,7 +1307,12 @@ impl Analyzer {
                     }
                     lowered_arguments.push(argument);
                 }
-                let ty = self.check_call(&callee, &lowered_arguments, expression.span);
+                let ty = self.check_call(
+                    &callee,
+                    &explicit_type_arguments,
+                    &lowered_arguments,
+                    expression.span,
+                );
                 if ty.is_error() {
                     self.restore_reachable_state(call_entry_state);
                 }
@@ -3121,6 +3134,7 @@ impl Analyzer {
     fn check_call(
         &mut self,
         callee: &hir::Expression,
+        explicit_type_arguments: &[Type],
         arguments: &[hir::Expression],
         span: Span,
     ) -> Type {
@@ -3160,6 +3174,20 @@ impl Analyzer {
             _ => Vec::new(),
         };
         let generic_set = generic_parameters.iter().cloned().collect::<BTreeSet<_>>();
+        let explicit_arity_matches = explicit_type_arguments.is_empty()
+            || explicit_type_arguments.len() == generic_parameters.len();
+        if !explicit_arity_matches {
+            self.diagnostics.push(
+                Diagnostic::error("N3039", "wrong number of generic type arguments").with_primary(
+                    span,
+                    format!(
+                        "expected {} type argument(s), found {}",
+                        generic_parameters.len(),
+                        explicit_type_arguments.len()
+                    ),
+                ),
+            );
+        }
 
         let arity_matches = arguments.len() == signature.parameters.len();
         if !arity_matches {
@@ -3176,7 +3204,12 @@ impl Analyzer {
         }
 
         let mut substitutions = BTreeMap::new();
-        let mut argument_types_match = true;
+        if explicit_arity_matches && !explicit_type_arguments.is_empty() {
+            for (name, ty) in generic_parameters.iter().zip(explicit_type_arguments) {
+                substitutions.insert(name.clone(), ty.clone());
+            }
+        }
+        let mut argument_types_match = explicit_arity_matches;
         for (index, (argument, expected)) in arguments
             .iter()
             .zip(signature.parameters.iter())
@@ -3226,7 +3259,7 @@ impl Analyzer {
                         format!("cannot infer type parameter(s): {}", missing.join(", ")),
                     )
                     .with_note(
-                        "explicit type arguments are not implemented in this bootstrap slice",
+                        "provide explicit call type arguments, for example `function<Int>(...)`",
                     ),
             );
             argument_types_match = false;
