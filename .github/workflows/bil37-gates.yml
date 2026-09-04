@@ -1,0 +1,38 @@
+name: BIL-37 gate repair
+
+on:
+  push:
+    branches:
+      - conquest/bil-37-explicit-generic-arguments
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Format and persist
+        run: |
+          cargo fmt --all
+          if ! git diff --quiet; then
+            git config user.name LeiZ
+            git config user.email 52287354+Lei-TzuY@users.noreply.github.com
+            git add -A
+            git commit -m "style: format explicit generic call slice"
+            git push origin HEAD:conquest/bil-37-explicit-generic-arguments
+          fi
+      - name: Stable clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Workspace tests
+        run: cargo test --workspace --all-targets --locked
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - name: MSRV check
+        run: cargo +1.85.0 check --workspace --all-targets --locked
