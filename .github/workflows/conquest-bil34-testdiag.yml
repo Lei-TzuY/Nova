@@ -1,0 +1,32 @@
+name: BIL-34 Test Diagnostic
+
+on:
+  push:
+    branches:
+      - conquest/bil-34-generic-functions
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: ${{ !contains(github.event.head_commit.message, '[testdiag]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: conquest/bil-34-generic-functions
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Capture workspace test result
+        run: |
+          if ! cargo test --workspace --all-targets --locked > /tmp/bil34-test.log 2>&1; then
+            tail -n 240 /tmp/bil34-test.log > .github/bil34-test-error.txt
+            cat .github/bil34-test-error.txt
+            git config user.name LeiZ
+            git config user.email 52287354+Lei-TzuY@users.noreply.github.com
+            git add .github/bil34-test-error.txt
+            git commit -m "chore: capture BIL-34 test failure [testdiag]"
+            git push origin HEAD:conquest/bil-34-generic-functions
+            exit 1
+          fi
