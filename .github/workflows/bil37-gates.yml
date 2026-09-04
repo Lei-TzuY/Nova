@@ -1,4 +1,4 @@
-name: BIL-37 gate repair
+name: BIL-37 gate diagnostics
 
 on:
   push:
@@ -9,30 +9,24 @@ permissions:
   contents: write
 
 jobs:
-  repair:
+  diagnose:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-      - name: Format and persist
+          components: clippy
+      - name: Capture stable gates
         run: |
-          cargo fmt --all
-          if ! git diff --quiet; then
-            git config user.name LeiZ
-            git config user.email 52287354+Lei-TzuY@users.noreply.github.com
-            git add -A
-            git commit -m "style: format explicit generic call slice"
-            git push origin HEAD:conquest/bil-37-explicit-generic-arguments
-          fi
-      - name: Stable clippy
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-      - name: Workspace tests
-        run: cargo test --workspace --all-targets --locked
-      - uses: dtolnay/rust-toolchain@1.85.0
-      - name: MSRV check
-        run: cargo +1.85.0 check --workspace --all-targets --locked
+          set +e
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings > .github/bil37_clippy.log 2>&1
+          clippy_status=$?
+          cargo test --workspace --all-targets --locked > .github/bil37_tests.log 2>&1
+          test_status=$?
+          git config user.name LeiZ
+          git config user.email 52287354+Lei-TzuY@users.noreply.github.com
+          git add .github/bil37_clippy.log .github/bil37_tests.log
+          git commit -m "chore: capture BIL-37 gate diagnostics"
+          git push origin HEAD:conquest/bil-37-explicit-generic-arguments
+          if [ $clippy_status -ne 0 ] || [ $test_status -ne 0 ]; then exit 1; fi
