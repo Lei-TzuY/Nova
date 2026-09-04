@@ -1,4 +1,4 @@
-name: BIL-37 implementation
+name: BIL-37 diagnostics
 
 on:
   push:
@@ -9,19 +9,19 @@ permissions:
   contents: write
 
 jobs:
-  implement:
+  diagnose:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply semantic patch
-        run: python3 .github/bil37_patch.py
-      - name: Format, persist, and compile
+      - name: Capture workspace check
         run: |
-          cargo fmt --all
+          set +e
+          cargo check --workspace --all-targets > .github/bil37_build.log 2>&1
+          status=$?
           git config user.name LeiZ
           git config user.email 52287354+Lei-TzuY@users.noreply.github.com
-          git add crates/nova-sema/src/analyzer.rs crates/nova-sema/src/numeric_surface.rs
-          git commit -m "feat: type explicit generic call arguments"
+          git add .github/bil37_build.log
+          git commit -m "chore: capture BIL-37 compile diagnostics"
           git push origin HEAD:conquest/bil-37-explicit-generic-arguments
-          cargo check --workspace --all-targets
+          exit $status
