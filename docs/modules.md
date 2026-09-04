@@ -78,6 +78,8 @@ Explicit schema v6 preserves all v5 facts and adds one `module` object containin
 
 Schema v6 also validates HIR and CFG module ownership independently. Its module ID is
 session-local inspection evidence, not a stable package coordinate or import path.
+Schema v7 retains this module object and validation unchanged while extending numeric
+and closure-capture facts; it does not add a module graph.
 
 ## Deliberately unresolved
 

@@ -25,7 +25,12 @@ facts; see [`semantic-introspection-v2.md`](semantic-introspection-v2.md).
 Schema v3 adds explicit match-payload modes, while schema v4 is the first
 contract that represents the `String` type and literal category. V1 rejects
 source using either unrepresentable feature with `N5001` rather than changing
-its frozen enums or fields.
+its frozen enums or fields. Schema v5 adds immutable-source closures and their CFGs,
+v6 adds single-module ownership, and v7 adds `UInt`, explicit `Int`/`UInt`
+conversion expressions, and an explicit by-value closure-capture mode that admits
+mutable-source snapshots. All later versions are opt-in; v1-v6 reject UInt-bearing HIR
+and v5/v6 reject mutable-source snapshot captures with `N5001` instead of silently
+broadening their published contracts.
 
 `inspect` runs the same UTF-8, lexical, syntactic, name-resolution, type, and
 definite-assignment checks as `nova check`. It writes exactly one JSON document
@@ -144,9 +149,11 @@ evaluation order; this is empty on every other expression kind. Literal values
 and source text are intentionally omitted.
 
 Only accepted programs produce this schema, so the semantic recovery type and
-error expressions are forbidden. Surface `Unit` and the internal `never` type
-may appear because tooling needs to understand value-less and non-continuing
-control flow; only `never` lacks a surface spelling.
+error expressions are forbidden. Surface `Unit` and the surface `!` type
+(encoded as `never`) may appear because tooling needs to understand value-less and
+non-continuing control flow. Schema v1 cannot represent `String`, closures, non-root module
+ownership, or `UInt`; callers must select the first schema version that covers
+the accepted program instead of expecting lossy output.
 
 ## Deliberate v1 limits
 

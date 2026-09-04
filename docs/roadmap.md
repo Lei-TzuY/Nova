@@ -1014,8 +1014,8 @@ Implemented in the fifty-fifth Phase 2 slice:
 
 The next Phase 2 slices should address semantic depth rather than widen syntax
 prematurely. In particular:
-- define language-level numeric types, defaulting, conversions, and overflow
-  behavior beyond the provisional interpreter contract;
+- finish literal forms, defaulting, conversion coverage, and future-family rules
+  beyond the implemented checked `Int`/`UInt` contracts;
 - deepen the pattern model only with a specified usefulness and diagnostic
   strategy rather than adding ad-hoc wildcard or guard behavior;
 - specify aggregate mutation/ownership and layout semantics before field mutation
@@ -1030,7 +1030,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: twenty-seven vertical slices implemented; execution surface remains small.**
+**Status: thirty-five vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -1437,6 +1437,83 @@ Implemented in the twenty-seventh Phase 3 slice:
 - semantic, runtime, inspection-schema, malformed-HIR, determinism, and CLI regressions lock
   the identity boundary without adding module/import syntax or making package, linker, ABI,
   ownership, or multi-file claims.
+
+Implemented in the twenty-eighth Phase 3 slice:
+
+- payload-free `Int::MIN` and `Int::MAX` expose the exact signed 64-bit bounds through
+  semantic canonicalization, interpreter execution, and complete-pipeline regressions;
+- invalid member spellings and payload arities remain ordinary deterministic semantic
+  errors rather than introducing parser-special numeric syntax.
+
+Implemented in the twenty-ninth Phase 3 slice:
+
+- `Int::from(Bool)` is an explicit single-evaluation conversion from `false`/`true` to
+  `0`/`1`, lowered through ordinary typed conditional HIR;
+- wrong or missing payloads fail through the existing type and arity diagnostics, with no
+  implicit conversion or interpreter-only opcode.
+
+Implemented in the thirtieth Phase 3 slice:
+
+- `Bool::from(Int)` explicitly maps zero to `false` and every non-zero signed value to
+  `true`, lowered to the established typed inequality semantics;
+- negative and boundary inputs, wrong payloads, execution, and inspection are covered
+  without adding implicit truthiness.
+
+Implemented in the thirty-first Phase 3 slice:
+
+- `Int::is_negative`, `Int::is_zero`, and `Int::is_positive` classify one evaluated
+  operand by canonicalizing to ordinary comparisons against zero;
+- the existing type, flow, diagnostic, and runtime rules remain authoritative rather than
+  adding a parallel predicate runtime model.
+
+Implemented in the thirty-second Phase 3 slice:
+
+- `Int::is_even` and `Int::is_odd` classify signed values through the specified remainder
+  and equality operations, including negative values, zero, and `Int::MIN`;
+- each operand is evaluated once and established checked-arithmetic failures propagate
+  through the canonical HIR.
+
+Implemented in the thirty-third Phase 3 slice:
+
+- `Int::abs` evaluates its operand once and lowers through a local, comparison,
+  conditional, and checked unary negation;
+- `Int::abs(Int::MIN)` therefore remains overflow rather than wrapping or saturating, and
+  malformed payloads retain ordinary semantic diagnostics.
+
+Implemented in the thirty-fourth Phase 3 slice:
+
+- `UInt` is a distinct checked unsigned 64-bit family with `UInt::MIN`, `UInt::MAX`,
+  same-family arithmetic/equality/ordering, and no unary negation or implicit mixing;
+- `UInt::from(Int)` and `Int::from_uint(UInt)` are explicit, single-evaluation checked
+  conversions whose out-of-range runtime failure is `N4007`;
+- resolved typed HIR and the interpreter preserve the unsigned value family and reject
+  malformed type/conversion drift at their trust boundaries;
+- semantic-inspection v7 is the first contract to expose `uint`, `unsigned_integer`, and
+  `numeric_conversion`; v1-v6 retain their published enums and fail closed with `N5001`
+  for UInt-bearing HIR; and
+- semantic, runtime, malformed-HIR, schema-freezing, deterministic rendering, and CLI
+  human/JSON diagnostic regressions lock the complete slice without claiming unsigned
+  literal suffixes, generalized numeric inference, layout, ABI, or native code generation.
+
+Implemented in the thirty-fifth Phase 3 slice:
+
+- reading an enclosing mutable `var` from a closure takes a creation-time by-value
+  snapshot; later outer assignment cannot change that environment value, including
+  transitive nested captures and lexically shadowed bindings;
+- assignment through a captured snapshot is rejected as `N3035`, and a continuing rejected
+  assignment rolls back RHS initialization and loop-transfer facts while a non-continuing
+  RHS retains its established `!` propagation;
+- closure-creation reads participate in the verified parent CFG, so a snapshot cannot hide
+  an uninitialized source binding, while closure CFGs treat the copied environment slot as
+  initialized and immutable;
+- runtime creation clones the validated slot exactly once, closure invocation installs an
+  immutable environment slot, and malformed assignment-through-capture HIR fails as `N4005`;
+- semantic-inspection v7 adds explicit `mode: "by_value"` capture facts and independently
+  rejects assignment through a captured snapshot; frozen v5/v6 reject mutable-source
+  captures with `N5001` rather than changing their admitted binding relation; and
+- semantic, CFG/dataflow, runtime, inspection, malformed-HIR, determinism, schema, CLI
+  human/JSON, nested-capture, and shadowing regressions lock the slice without claiming
+  shared cells, by-reference mutation, ownership, lifetime, layout, or ABI semantics.
 
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:

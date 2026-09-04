@@ -87,3 +87,51 @@ fn missing_capture_cannot_silently_read_an_unrelated_frame_slot() {
     let error = execute(&analyzed.program).expect_err("missing capture must fail closed");
     assert_eq!(error.code, "N4005");
 }
+
+#[test]
+fn mutable_outer_capture_is_a_creation_time_snapshot() {
+    let analyzed = accepted(
+        "fn main() -> Int { var value = 40; let get = fn() -> Int { value }; value = 99; get() }",
+    );
+    assert_eq!(execute(&analyzed.program), Ok(Value::Int(40)));
+}
+
+#[test]
+fn nested_mutable_outer_capture_keeps_the_original_snapshot() {
+    let analyzed = accepted(
+        "fn main() -> Int { var value = 40; let outer = fn() -> fn() -> Int { fn() -> Int { value } }; value = 99; outer()() }",
+    );
+    assert_eq!(execute(&analyzed.program), Ok(Value::Int(40)));
+}
+
+#[test]
+fn mutable_snapshot_respects_lexical_shadowing() {
+    let analyzed = accepted(
+        "fn main() -> Int { var value = 1; let get = { var value = 2; fn() -> Int { value } }; value = 3; get() }",
+    );
+    assert_eq!(execute(&analyzed.program), Ok(Value::Int(2)));
+}
+
+#[test]
+fn malformed_assignment_through_snapshot_capture_fails_closed() {
+    let mut analyzed = accepted(
+        "fn main() -> Int { var value = 40; let update = fn() -> Int { var local = 0; local = value; local }; update() }",
+    );
+    let StatementKind::Binding { initializer, .. } =
+        &mut analyzed.program.functions[0].body.statements[1].kind
+    else {
+        panic!("closure binding");
+    };
+    let ExpressionKind::Closure(closure) = &mut initializer.kind else {
+        panic!("closure initializer");
+    };
+    let captured = closure.captures[0].reference.clone();
+    let StatementKind::Assignment { target, .. } = &mut closure.body.statements[1].kind else {
+        panic!("closure assignment");
+    };
+    *target = Some(captured);
+
+    let error = execute(&analyzed.program)
+        .expect_err("assignment through an immutable snapshot slot must fail closed");
+    assert_eq!(error.code, "N4005");
+}

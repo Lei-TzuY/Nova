@@ -1,6 +1,6 @@
 # Semantic Introspection v5
 
-Status: **implemented tooling contract for closures and immutable captures**
+Status: **implemented tooling contract for closures and immutable-source captures**
 
 Schema v5 preserves the v4 `program`, top-level `control_flow`, and
 `match_patterns` meanings. It is the first schema that can publish anonymous-function
@@ -40,4 +40,6 @@ missing captures are both invariant failures.
 
 Schemas v1 through v4 remain frozen and return CLI diagnostic `N5001` for a program that
 contains a closure. Schema v5 must be requested explicitly; no existing document changes
-shape or interpretation merely because the compiler learned closure semantics.
+shape or interpretation merely because the compiler learned closure semantics. V5 also
+remains frozen after mutable-source snapshot reads were added: such a capture requires
+schema v7, whose explicit capture mode avoids widening v5's admitted binding relation.

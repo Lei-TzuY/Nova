@@ -30,7 +30,7 @@ fn uint_executes_through_check_run_and_inspect() {
     );
     assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
     let inspect = run_stdin(
-        &["inspect", "-", "--format=json", "--schema-version", "6"],
+        &["inspect", "-", "--format=json", "--schema-version", "7"],
         source,
     );
     assert!(
@@ -39,8 +39,42 @@ fn uint_executes_through_check_run_and_inspect() {
         String::from_utf8_lossy(&inspect.stderr)
     );
     let json = String::from_utf8_lossy(&inspect.stdout);
+    assert!(json.contains("\"schema_version\": 7"));
     assert!(json.contains("\"uint\""));
     assert!(json.contains("numeric_conversion"));
+}
+
+#[test]
+fn uint_inspection_requires_v7_with_human_and_json_diagnostics() {
+    let source = "fn main() -> UInt { UInt::MAX }";
+    for version in ["1", "2", "3", "4", "5", "6"] {
+        let output = run_stdin(
+            &["inspect", "-", "--format=json", "--schema-version", version],
+            source,
+        );
+        assert_eq!(output.status.code(), Some(1), "schema v{version}");
+        assert!(output.stdout.is_empty(), "schema v{version} leaked output");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("N5001"), "{stderr}");
+        assert!(stderr.contains("select schema v7"), "{stderr}");
+    }
+
+    let output = run_stdin(
+        &[
+            "inspect",
+            "-",
+            "--format=json",
+            "--schema-version",
+            "6",
+            "--message-format=json",
+        ],
+        source,
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("\"code\":\"N5001\""), "{stderr}");
+    assert!(stderr.contains("select schema v7"), "{stderr}");
 }
 
 #[test]

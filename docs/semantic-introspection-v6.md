@@ -18,6 +18,13 @@ V6 preserves v5's `program`, function `control_flow`, `match_patterns`, `closure
 `closure_control_flow` projections. It adds the required top-level `module` field. V1
 remains the CLI default; no caller receives v6 implicitly.
 
+V6's published type/expression enums and immutable-source capture relation remain
+frozen. An accepted program containing `UInt` or a closure that snapshots an enclosing
+mutable `var` therefore fails v6 inspection with `N5001` and no partial document; callers
+must explicitly select
+[`schema v7`](semantic-introspection-v7.md). This is a versioned tooling limitation,
+not rejection of the source by semantic analysis or execution.
+
 For the CLI's implicit root module, v1-v5 output remains unchanged. A compiler client
 that analyzes an AST under a non-root `ModuleId` must request v6: older schemas fail
 closed with inspection diagnostic `N5001` because they cannot publish module ownership.
@@ -54,4 +61,5 @@ deterministic.
 
 V6 describes compiler-session identity only. It does not describe module paths,
 imports, exports, dependency graphs, packages, filesystem mapping, linkage, layouts,
-ABI, incremental cache keys, or cross-module execution.
+ABI, incremental cache keys, cross-module execution, the later `UInt` projection, or
+mutable-source snapshot capture semantics.

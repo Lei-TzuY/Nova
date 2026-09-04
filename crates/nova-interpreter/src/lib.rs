@@ -44,7 +44,7 @@ pub enum Value {
     },
     /// First-class reference to a top-level function.
     Function(FunctionId),
-    /// One evaluated anonymous function and its immutable captured values.
+    /// One evaluated anonymous function and its by-value captured snapshots.
     Closure {
         /// Deterministic runtime instance identity.
         instance: usize,
@@ -591,12 +591,6 @@ impl<'program> Interpreter<'program> {
                     let slot = frame
                         .get(&capture.reference.binding)
                         .expect("validated capture must have a runtime slot");
-                    if slot.mutable {
-                        return Err(self.invariant(
-                            capture.first_use,
-                            "closure capture resolved to a mutable runtime slot",
-                        ));
-                    }
                     if slot.ty != capture.ty {
                         return Err(self.invariant(
                             capture.first_use,

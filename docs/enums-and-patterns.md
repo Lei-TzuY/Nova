@@ -19,7 +19,8 @@ enum OptionInt {
 
 Each variant carries either no payload or one payload with an explicit type.
 Variant names must be unique within their enum. Record and enum declarations
-share one type namespace with the built-in `Int` and `Bool` names. A duplicate
+share one type namespace with the built-in `Int`, `UInt`, `Bool`, `String`, and `Unit`
+names. A duplicate
 type declaration is rejected even when the two declarations have different
 kinds.
 
