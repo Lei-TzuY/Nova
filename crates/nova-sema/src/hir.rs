@@ -95,6 +95,8 @@ pub struct EnumType {
 pub enum Type {
     /// Bootstrap `Int` type.
     Int,
+    /// Unsigned 64-bit integer type.
+    UInt,
     /// Boolean type.
     Bool,
     /// Immutable UTF-8 string value.
@@ -131,6 +133,7 @@ impl fmt::Display for Type {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Int => formatter.write_str("Int"),
+            Self::UInt => formatter.write_str("UInt"),
             Self::Bool => formatter.write_str("Bool"),
             Self::String => formatter.write_str("String"),
             Self::Record(record) => formatter.write_str(&record.name),
@@ -436,6 +439,8 @@ pub struct Expression {
 pub enum ExpressionKind {
     /// Integer literal.
     Integer(i64),
+    /// Unsigned integer value introduced by the UInt numeric surface.
+    Unsigned(u64),
     /// Decoded UTF-8 string literal.
     String(String),
     /// Boolean literal.
@@ -497,6 +502,16 @@ pub enum ExpressionKind {
         left: Box<Expression>,
         /// Typed right operand.
         right: Box<Expression>,
+    },
+    /// Checked explicit conversion from signed Int to UInt.
+    IntToUInt {
+        /// Operand evaluated exactly once.
+        operand: Box<Expression>,
+    },
+    /// Checked explicit conversion from UInt to signed Int.
+    UIntToInt {
+        /// Operand evaluated exactly once.
+        operand: Box<Expression>,
     },
     /// Function invocation.
     Call {

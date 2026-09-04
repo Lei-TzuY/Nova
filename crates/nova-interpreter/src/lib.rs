@@ -20,6 +20,8 @@ const MAX_EXECUTION_STEPS: usize = 100_000;
 pub enum Value {
     /// Signed bootstrap integer value.
     Int(i64),
+    /// Unsigned 64-bit integer value.
+    UInt(u64),
     /// Boolean value.
     Bool(bool),
     /// Immutable UTF-8 string value.
@@ -59,6 +61,7 @@ impl fmt::Display for Value {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Int(value) => write!(formatter, "{value}"),
+            Self::UInt(value) => write!(formatter, "{value}"),
             Self::Bool(value) => write!(formatter, "{value}"),
             Self::String(value) => formatter.write_str(value),
             Self::Record { record, .. } => write!(
@@ -154,7 +157,7 @@ impl<'program> Interpreter<'program> {
             .find(|function| function.name == "main")
         else {
             return Err(Diagnostic::error("N4001", "missing entry point").with_note(
-                "`nova run` requires a top-level zero-argument `main` returning `Int`, `Bool`, `String`, or `Unit`",
+                "`nova run` requires a top-level zero-argument `main` returning `Int`, `UInt`, `Bool`, `String`, or `Unit`",
             ));
         };
         if !main.parameters.is_empty() {
@@ -167,7 +170,7 @@ impl<'program> Interpreter<'program> {
         }
         if !matches!(
             main.return_type,
-            Type::Int | Type::Bool | Type::String | Type::Unit
+            Type::Int | Type::UInt | Type::Bool | Type::String | Type::Unit
         ) {
             return Err(
                 Diagnostic::error("N4001", "invalid entry point").with_primary(
@@ -564,6 +567,7 @@ impl<'program> Interpreter<'program> {
     ) -> Result<Flow, Diagnostic> {
         match &expression.kind {
             ExpressionKind::Integer(value) => Ok(Flow::Value(Value::Int(*value))),
+            ExpressionKind::Unsigned(value) => Ok(Flow::Value(Value::UInt(*value))),
             ExpressionKind::String(value) => Ok(Flow::Value(Value::String(value.clone()))),
             ExpressionKind::Boolean(value) => Ok(Flow::Value(Value::Bool(*value))),
             ExpressionKind::Unit => Ok(Flow::Value(Value::Unit)),
@@ -877,6 +881,42 @@ impl<'program> Interpreter<'program> {
                 left,
                 right,
             } => self.eval_binary(*operator, left, right, expression, frame),
+            ExpressionKind::IntToUInt { operand } => {
+                let operand = match self.eval_expression(operand, frame)? {
+                    Flow::Value(value) => value,
+                    flow => return Ok(flow),
+                };
+                match operand {
+                    Value::Int(value) if value >= 0 => Ok(Flow::Value(Value::UInt(value as u64))),
+                    Value::Int(_) => Err(self.numeric_conversion_range(
+                        expression,
+                        "negative Int cannot be represented as UInt",
+                    )),
+                    _ => Err(self.invariant(
+                        expression.span,
+                        "Int-to-UInt conversion received the wrong runtime value",
+                    )),
+                }
+            }
+            ExpressionKind::UIntToInt { operand } => {
+                let operand = match self.eval_expression(operand, frame)? {
+                    Flow::Value(value) => value,
+                    flow => return Ok(flow),
+                };
+                match operand {
+                    Value::UInt(value) if value <= i64::MAX as u64 => {
+                        Ok(Flow::Value(Value::Int(value as i64)))
+                    }
+                    Value::UInt(_) => {
+                        Err(self
+                            .numeric_conversion_range(expression, "UInt value exceeds Int::MAX"))
+                    }
+                    _ => Err(self.invariant(
+                        expression.span,
+                        "UInt-to-Int conversion received the wrong runtime value",
+                    )),
+                }
+            }
             ExpressionKind::Call { callee, arguments } => {
                 let callee = match self.eval_expression(callee, frame)? {
                     Flow::Value(value) => value,
@@ -1110,34 +1150,76 @@ impl<'program> Interpreter<'program> {
             (BinaryOperator::Add, Value::Int(left), Value::Int(right)) => {
                 self.int_result(int_semantics::add(left, right), expression)
             }
+            (BinaryOperator::Add, Value::UInt(left), Value::UInt(right)) => left
+                .checked_add(right)
+                .map(Value::UInt)
+                .ok_or_else(|| self.overflow(expression)),
             (BinaryOperator::Subtract, Value::Int(left), Value::Int(right)) => {
                 self.int_result(int_semantics::subtract(left, right), expression)
             }
+            (BinaryOperator::Subtract, Value::UInt(left), Value::UInt(right)) => left
+                .checked_sub(right)
+                .map(Value::UInt)
+                .ok_or_else(|| self.overflow(expression)),
             (BinaryOperator::Multiply, Value::Int(left), Value::Int(right)) => {
                 self.int_result(int_semantics::multiply(left, right), expression)
             }
+            (BinaryOperator::Multiply, Value::UInt(left), Value::UInt(right)) => left
+                .checked_mul(right)
+                .map(Value::UInt)
+                .ok_or_else(|| self.overflow(expression)),
             (BinaryOperator::Divide, Value::Int(left), Value::Int(right)) => {
                 self.int_result(int_semantics::divide(left, right), expression)
+            }
+            (BinaryOperator::Divide, Value::UInt(_), Value::UInt(0)) => {
+                Err(self.zero_divisor(expression))
+            }
+            (BinaryOperator::Divide, Value::UInt(left), Value::UInt(right)) => {
+                Ok(Value::UInt(left / right))
             }
             (BinaryOperator::Remainder, Value::Int(left), Value::Int(right)) => {
                 self.int_result(int_semantics::remainder(left, right), expression)
             }
+            (BinaryOperator::Remainder, Value::UInt(_), Value::UInt(0)) => {
+                Err(self.zero_divisor(expression))
+            }
+            (BinaryOperator::Remainder, Value::UInt(left), Value::UInt(right)) => {
+                Ok(Value::UInt(left % right))
+            }
             (BinaryOperator::Less, Value::Int(left), Value::Int(right)) => {
+                Ok(Value::Bool(left < right))
+            }
+            (BinaryOperator::Less, Value::UInt(left), Value::UInt(right)) => {
                 Ok(Value::Bool(left < right))
             }
             (BinaryOperator::LessEqual, Value::Int(left), Value::Int(right)) => {
                 Ok(Value::Bool(left <= right))
             }
+            (BinaryOperator::LessEqual, Value::UInt(left), Value::UInt(right)) => {
+                Ok(Value::Bool(left <= right))
+            }
             (BinaryOperator::Greater, Value::Int(left), Value::Int(right)) => {
+                Ok(Value::Bool(left > right))
+            }
+            (BinaryOperator::Greater, Value::UInt(left), Value::UInt(right)) => {
                 Ok(Value::Bool(left > right))
             }
             (BinaryOperator::GreaterEqual, Value::Int(left), Value::Int(right)) => {
                 Ok(Value::Bool(left >= right))
             }
+            (BinaryOperator::GreaterEqual, Value::UInt(left), Value::UInt(right)) => {
+                Ok(Value::Bool(left >= right))
+            }
             (BinaryOperator::Equal, Value::Int(left), Value::Int(right)) => {
                 Ok(Value::Bool(left == right))
             }
+            (BinaryOperator::Equal, Value::UInt(left), Value::UInt(right)) => {
+                Ok(Value::Bool(left == right))
+            }
             (BinaryOperator::NotEqual, Value::Int(left), Value::Int(right)) => {
+                Ok(Value::Bool(left != right))
+            }
+            (BinaryOperator::NotEqual, Value::UInt(left), Value::UInt(right)) => {
                 Ok(Value::Bool(left != right))
             }
             (BinaryOperator::Equal, Value::Bool(left), Value::Bool(right)) => {
@@ -1529,7 +1611,7 @@ impl<'program> Interpreter<'program> {
 
     fn type_is_runtime_valid(&self, ty: &Type) -> bool {
         match ty {
-            Type::Int | Type::Bool | Type::String | Type::Unit => true,
+            Type::Int | Type::UInt | Type::Bool | Type::String | Type::Unit => true,
             Type::Record(record) => {
                 record.id.module() == self.program.module.id
                     && self
@@ -1567,6 +1649,7 @@ impl<'program> Interpreter<'program> {
         }
         match (value, ty) {
             (Value::Int(_), Type::Int)
+            | (Value::UInt(_), Type::UInt)
             | (Value::Bool(_), Type::Bool)
             | (Value::String(_), Type::String)
             | (Value::Unit, Type::Unit) => true,
@@ -1678,6 +1761,12 @@ impl<'program> Interpreter<'program> {
         }
     }
 
+    fn numeric_conversion_range(&self, expression: &Expression, detail: &str) -> Diagnostic {
+        Diagnostic::error("N4007", "numeric conversion out of range")
+            .with_primary(expression.span, detail)
+            .with_note("explicit Int/UInt conversions are checked; they never wrap or saturate")
+    }
+
     fn zero_divisor(&self, expression: &Expression) -> Diagnostic {
         Diagnostic::error("N4003", "division by zero")
             .with_primary(expression.span, "zero divisor is not executable")
@@ -1686,7 +1775,7 @@ impl<'program> Interpreter<'program> {
     fn overflow(&self, expression: &Expression) -> Diagnostic {
         Diagnostic::error("N4002", "integer arithmetic overflow").with_primary(
             expression.span,
-            "bootstrap Int arithmetic is checked signed 64-bit execution",
+            "bootstrap Int/UInt arithmetic is checked 64-bit execution",
         )
     }
 
