@@ -1,0 +1,53 @@
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded serde v1.0.229
+  Downloaded itoa v1.0.18
+  Downloaded unicode-ident v1.0.24
+  Downloaded serde_core v1.0.229
+  Downloaded serde_derive v1.0.229
+  Downloaded quote v1.0.47
+  Downloaded zmij v1.0.23
+  Downloaded proc-macro2 v1.0.107
+  Downloaded memchr v2.8.3
+  Downloaded serde_json v1.0.151
+  Downloaded syn v3.0.4
+    Checking nova-source v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-source)
+    Checking nova-int-semantics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-int-semantics)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.24
+    Checking nova-diagnostics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-diagnostics)
+   Compiling serde_core v1.0.229
+    Checking nova-lexer v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-lexer)
+    Checking nova-parser v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-parser)
+   Compiling zmij v1.0.23
+    Checking nova-sema v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-sema)
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+    Checking itoa v1.0.18
+    Checking nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
+    Checking memchr v2.8.3
+   Compiling syn v3.0.4
+   Compiling serde_derive v1.0.229
+error[E0027]: pattern does not mention field `type_arguments`
+  --> crates/nova-parser/tests/lambda_expressions.rs:22:9
+   |
+22 |     let ExpressionKind::Call { callee, arguments } = &tail.kind else {
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing field `type_arguments`
+   |
+help: include the missing field in the pattern
+   |
+22 |     let ExpressionKind::Call { callee, arguments, type_arguments } = &tail.kind else {
+   |                                                 ++++++++++++++++
+help: if you don't care about this missing field, you can explicitly ignore it
+   |
+22 |     let ExpressionKind::Call { callee, arguments, type_arguments: _ } = &tail.kind else {
+   |                                                 +++++++++++++++++++
+help: or always ignore missing fields here
+   |
+22 |     let ExpressionKind::Call { callee, arguments, .. } = &tail.kind else {
+   |                                                 ++++
+
+For more information about this error, try `rustc --explain E0027`.
+error: could not compile `nova-parser` (test "lambda_expressions") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
