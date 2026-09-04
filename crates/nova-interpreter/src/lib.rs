@@ -1895,9 +1895,22 @@ impl<'program> Interpreter<'program> {
 
     fn value_conforms_to_type(&self, value: &Value, ty: &Type) -> bool {
         // A generic function symbol is a valid runtime value before call-site
-        // instantiation. Concrete `T` validation begins inside `call_function`.
+        // instantiation. Keep this exception narrow: ordinary functions must still
+        // traverse runtime-valid nominal types so forged name/identity drift fails closed.
+        fn contains_type_parameter(ty: &Type) -> bool {
+            match ty {
+                Type::TypeParameter(_) => true,
+                Type::Function(signature) => {
+                    signature.parameters.iter().any(contains_type_parameter)
+                        || contains_type_parameter(&signature.return_type)
+                }
+                _ => false,
+            }
+        }
         if let (Value::Function(id), Type::Function(expected)) = (value, ty) {
-            if id.module() == self.program.module.id {
+            let is_generic = expected.parameters.iter().any(contains_type_parameter)
+                || contains_type_parameter(&expected.return_type);
+            if is_generic && id.module() == self.program.module.id {
                 if let Some(function) = self.program.functions.get(id.index()) {
                     let signature_matches = function.id == *id
                         && function.parameters.len() == expected.parameters.len()
