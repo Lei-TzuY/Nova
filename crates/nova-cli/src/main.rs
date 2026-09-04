@@ -3,7 +3,7 @@ use nova_inspect::{
     render_json as render_semantic_json, render_json_v2 as render_semantic_json_v2,
     render_json_v3 as render_semantic_json_v3, render_json_v4 as render_semantic_json_v4,
     render_json_v5 as render_semantic_json_v5, render_json_v6 as render_semantic_json_v6,
-    render_json_v7 as render_semantic_json_v7,
+    render_json_v7 as render_semantic_json_v7, render_json_v8 as render_semantic_json_v8,
 };
 use nova_interpreter::execute;
 use nova_lexer::lex;
@@ -23,7 +23,7 @@ Usage:
   nova check [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
   nova run [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
   nova ast [--source-name name] [--message-format human|json] [--] <file|->
-  nova inspect --format json [--schema-version 1|2|3|4|5|6|7] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
+  nova inspect --format json [--schema-version 1|2|3|4|5|6|7|8] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
   nova --help
 
 `check` validates UTF-8, tokens, syntax, names, types, and definite assignment.
@@ -63,6 +63,7 @@ enum InspectSchemaVersion {
     V5,
     V6,
     V7,
+    V8,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -223,6 +224,7 @@ fn run(
             InspectSchemaVersion::V5 => render_semantic_json_v5(&analyzed, &source),
             InspectSchemaVersion::V6 => render_semantic_json_v6(&analyzed, &source),
             InspectSchemaVersion::V7 => render_semantic_json_v7(&analyzed, &source),
+            InspectSchemaVersion::V8 => render_semantic_json_v8(&analyzed, &source),
         };
         match rendered {
             Ok(document) => writeln!(stdout, "{document}")?,
@@ -427,6 +429,7 @@ fn parse_inspect_schema_version(value: &str) -> Result<InspectSchemaVersion, Str
         "5" => Ok(InspectSchemaVersion::V5),
         "6" => Ok(InspectSchemaVersion::V6),
         "7" => Ok(InspectSchemaVersion::V7),
+        "8" => Ok(InspectSchemaVersion::V8),
         _ => Err(format!(
             "unsupported inspection schema version `{value}`; expected `1`, `2`, `3`, `4`, `5`, `6`, or `7`"
         )),

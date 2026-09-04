@@ -10,6 +10,7 @@ pub mod v4;
 pub mod v5;
 pub mod v6;
 pub mod v7;
+pub mod v8;
 
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::AnalysisOutput;
@@ -130,7 +131,7 @@ pub fn build_document_v3(
         ));
     }
 
-    let (program_document, match_patterns, _) = Builder::new(&analysis.program, source)
+    let (program_document, match_patterns, _, _) = Builder::new(&analysis.program, source)
         .with_payload_discard()
         .build_parts()?;
     let control_flow = project_control_flow(
@@ -175,7 +176,7 @@ pub fn build_document_v4(
         ));
     }
 
-    let (program_document, match_patterns, _) = Builder::new(&analysis.program, source)
+    let (program_document, match_patterns, _, _) = Builder::new(&analysis.program, source)
         .with_payload_discard()
         .with_string()
         .build_parts()?;
@@ -221,7 +222,7 @@ pub fn build_document_v5(
         ));
     }
 
-    let (program_document, match_patterns, closures) = Builder::new(&analysis.program, source)
+    let (program_document, match_patterns, closures, _) = Builder::new(&analysis.program, source)
         .with_payload_discard()
         .with_string()
         .with_closures()
@@ -277,7 +278,7 @@ pub fn build_document_v6(
         ));
     }
 
-    let (program_document, match_patterns, closures) = Builder::new(&analysis.program, source)
+    let (program_document, match_patterns, closures, _) = Builder::new(&analysis.program, source)
         .with_payload_discard()
         .with_string()
         .with_closures()
@@ -369,7 +370,7 @@ pub fn build_document_v7(
         ));
     }
 
-    let (program_document, match_patterns, closures) = Builder::new(&analysis.program, source)
+    let (program_document, match_patterns, closures, _) = Builder::new(&analysis.program, source)
         .with_payload_discard()
         .with_string()
         .with_closures()
@@ -446,6 +447,106 @@ pub fn render_json_v7(
         .map_err(|error| InspectionError::invalid(format!("could not encode schema v7: {error}")))
 }
 
+/// Builds schema v8, the first tooling contract that exposes shared mutable captures.
+pub fn build_document_v8(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<v8::Document, InspectionError> {
+    if !analysis.is_success() {
+        return Err(InspectionError::invalid(
+            "schema v8 requires a successful semantic analysis",
+        ));
+    }
+    let (program_document, match_patterns, closures, capture_modes) =
+        Builder::new(&analysis.program, source)
+            .with_payload_discard()
+            .with_string()
+            .with_closures()
+            .with_module_identity()
+            .with_unsigned()
+            .with_mutable_captures()
+            .with_reference_captures()
+            .build_parts()?;
+    let control_flow = project_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        analysis.program.module.id,
+        source,
+    )?;
+    let closure_control_flow = project_closure_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        &closures,
+        analysis.program.module.id,
+        source,
+    )?;
+    let module = v6::Module {
+        id: module_id(analysis.program.module.id),
+        source: program_document.source.id.clone(),
+        implicit_root: analysis.program.module.id == hir::ModuleId::ROOT,
+        span: program_document.program.span.clone(),
+        records: program_document
+            .program
+            .records
+            .iter()
+            .map(|record| record.id.clone())
+            .collect(),
+        enums: program_document
+            .program
+            .enums
+            .iter()
+            .map(|item| item.id.clone())
+            .collect(),
+        functions: program_document
+            .program
+            .functions
+            .iter()
+            .map(|function| function.id.clone())
+            .collect(),
+        bindings: program_document
+            .program
+            .bindings
+            .iter()
+            .map(|binding| binding.id.clone())
+            .collect(),
+        closures: closures.iter().map(|closure| closure.id.clone()).collect(),
+    };
+    let closures = closures
+        .into_iter()
+        .zip(capture_modes)
+        .map(|(closure, modes)| v8::Closure::from_v5(closure, modes))
+        .collect();
+    Ok(v8::Document {
+        schema: v8::SCHEMA_NAME.to_owned(),
+        schema_version: v8::SCHEMA_VERSION,
+        producer: program_document.producer,
+        source: program_document.source,
+        module,
+        program: program_document.program,
+        control_flow,
+        match_patterns,
+        closures,
+        closure_control_flow,
+    })
+}
+
+/// Renders one successful analysis as deterministic schema-v8 JSON.
+pub fn render_json_v8(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<String, InspectionError> {
+    let document = build_document_v8(analysis, source)?;
+    serde_json::to_string_pretty(&document)
+        .map_err(|error| InspectionError::invalid(format!("could not encode schema v8: {error}")))
+}
+
+type BuildParts = (
+    v1::Document,
+    Vec<v3::MatchPattern>,
+    Vec<v5::Closure>,
+    Vec<Vec<hir::CaptureMode>>,
+);
+
 struct Builder<'a> {
     program: &'a hir::Program,
     source: &'a SourceFile,
@@ -463,8 +564,11 @@ struct Builder<'a> {
     allow_module_identity: bool,
     allow_unsigned: bool,
     allow_mutable_captures: bool,
+    allow_reference_captures: bool,
+    closure_capture_modes: Vec<Option<Vec<hir::CaptureMode>>>,
     active_scopes: Vec<String>,
     active_capture_bindings: Vec<BTreeSet<hir::BindingId>>,
+    active_reference_capture_bindings: Vec<BTreeSet<hir::BindingId>>,
     active_capture_uses: Vec<BTreeSet<hir::BindingId>>,
     loop_depth: usize,
 }
@@ -488,8 +592,11 @@ impl<'a> Builder<'a> {
             allow_module_identity: false,
             allow_unsigned: false,
             allow_mutable_captures: false,
+            allow_reference_captures: false,
+            closure_capture_modes: Vec::new(),
             active_scopes: Vec::new(),
             active_capture_bindings: Vec::new(),
+            active_reference_capture_bindings: Vec::new(),
             active_capture_uses: Vec::new(),
             loop_depth: 0,
         }
@@ -525,13 +632,16 @@ impl<'a> Builder<'a> {
         self
     }
 
-    fn build(self) -> Result<v1::Document, InspectionError> {
-        self.build_parts().map(|(document, _, _)| document)
+    fn with_reference_captures(mut self) -> Self {
+        self.allow_reference_captures = true;
+        self
     }
 
-    fn build_parts(
-        mut self,
-    ) -> Result<(v1::Document, Vec<v3::MatchPattern>, Vec<v5::Closure>), InspectionError> {
+    fn build(self) -> Result<v1::Document, InspectionError> {
+        self.build_parts().map(|(document, _, _, _)| document)
+    }
+
+    fn build_parts(mut self) -> Result<BuildParts, InspectionError> {
         let program_span = self.span(self.program.span)?;
         if self.program.module.span != self.program.span {
             return Err(InspectionError::invalid(
@@ -563,6 +673,8 @@ impl<'a> Builder<'a> {
         let expressions = take_complete("expression", self.expressions)?;
         let matches = take_complete("match", self.matches)?;
         let closures = take_complete("closure", self.closures)?;
+        let closure_capture_modes =
+            take_complete("closure capture modes", self.closure_capture_modes)?;
 
         let match_patterns = self.match_patterns;
         let document = v1::Document {
@@ -590,7 +702,7 @@ impl<'a> Builder<'a> {
                 matches,
             },
         };
-        Ok((document, match_patterns, closures))
+        Ok((document, match_patterns, closures, closure_capture_modes))
     }
 
     fn prepare_type_order(&mut self) -> Result<(), InspectionError> {
@@ -811,7 +923,12 @@ impl<'a> Builder<'a> {
                     ))
                 })?;
                 let binding = self.require_binding_reference(resolved, owner)?;
-                if binding.owner != owner {
+                if binding.owner != owner
+                    && !self
+                        .active_reference_capture_bindings
+                        .last()
+                        .is_some_and(|captures| captures.contains(&resolved.binding))
+                {
                     return Err(InspectionError::invalid(format!(
                         "assignment targets captured snapshot {}",
                         binding_id(resolved.binding.index())
@@ -934,6 +1051,7 @@ impl<'a> Builder<'a> {
                     )));
                 }
                 self.closures.push(None);
+                self.closure_capture_modes.push(None);
                 let closure_owner = closure_id(closure_index);
                 let expected_type = Type::Function(closure.function_type());
                 if expression.ty != expected_type {
@@ -952,6 +1070,8 @@ impl<'a> Builder<'a> {
                 let mut capture_ids = BTreeSet::new();
                 let mut captures = Vec::with_capacity(closure.captures.len());
                 let mut previous_first_use = None;
+                let mut capture_modes = Vec::with_capacity(closure.captures.len());
+                let mut reference_capture_ids = BTreeSet::new();
                 for capture in &closure.captures {
                     let binding = self.require_binding_reference(&capture.reference, owner)?;
                     if binding.mutable && !self.allow_mutable_captures {
@@ -959,6 +1079,21 @@ impl<'a> Builder<'a> {
                             "semantic-inspection schema v5/v6 cannot represent a mutable-source snapshot capture; select schema v7",
                         ));
                     }
+                    if capture.mode == hir::CaptureMode::ByReference {
+                        if !self.allow_reference_captures {
+                            return Err(InspectionError::invalid(
+                                "semantic-inspection schema v1-v7 cannot represent a by-reference closure capture; select schema v8",
+                            ));
+                        }
+                        if !binding.mutable {
+                            return Err(InspectionError::invalid(format!(
+                                "{} by-reference capture targets immutable {}",
+                                closure_owner, binding.id
+                            )));
+                        }
+                        reference_capture_ids.insert(capture.reference.binding);
+                    }
+                    capture_modes.push(capture.mode);
                     if !capture_ids.insert(capture.reference.binding) {
                         return Err(InspectionError::invalid(format!(
                             "{} repeats capture {}",
@@ -1006,6 +1141,8 @@ impl<'a> Builder<'a> {
                 }
 
                 self.active_capture_bindings.push(capture_ids.clone());
+                self.active_reference_capture_bindings
+                    .push(reference_capture_ids);
                 self.active_capture_uses.push(BTreeSet::new());
                 let outer_loop_depth = std::mem::replace(&mut self.loop_depth, 0);
                 let body_result = self.collect_block(&closure.body, &closure_owner);
@@ -1014,6 +1151,7 @@ impl<'a> Builder<'a> {
                     .active_capture_uses
                     .pop()
                     .expect("closure inspection must own one capture-use set");
+                self.active_reference_capture_bindings.pop();
                 self.active_capture_bindings.pop();
                 let body = body_result?;
                 if used_captures != capture_ids {
@@ -1034,6 +1172,7 @@ impl<'a> Builder<'a> {
                     body,
                     span: span.clone(),
                 });
+                self.closure_capture_modes[closure_index] = Some(capture_modes);
                 target = Some(closure_owner);
                 v1::ExpressionKind::Closure
             }
