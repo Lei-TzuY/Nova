@@ -1,0 +1,68 @@
+name: Conquest UInt repair
+
+on:
+  push:
+    branches: [bil-5-uint-family]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: ${{ !contains(github.event.head_commit.message, '[uint-fix-result]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bil-5-uint-family
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - name: Repair and validate
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          p = Path('crates/nova-sema/src/analyzer.rs')
+          s = p.read_text()
+          s = s.replace('            let ty = if payload_never {\n                Type::Never\n            } else {\n                Type::UInt\n            };\n            return match (variant.text.as_str(), payload) {', '            return match (variant.text.as_str(), payload) {', 1)
+          p.write_text(s)
+
+          p = Path('crates/nova-sema/src/constant_condition.rs')
+          s = p.read_text()
+          old = '        Type::Int => Ok(int_value_checked(expression, bindings)?.is_some()),\n'
+          if old not in s:
+              raise SystemExit('constant-condition Int closed-value arm not found')
+          s = s.replace(old, old + '        Type::UInt => Ok(false),\n', 1)
+          p.write_text(s)
+          PY
+
+          cargo fmt --all
+          set +e
+          : > conquest-result.log
+          run_gate() { echo "### $*" >> conquest-result.log; "$@" >> conquest-result.log 2>&1; rc=$?; echo "exit=$rc" >> conquest-result.log; return $rc; }
+          failed=0
+          run_gate cargo fmt --all -- --check || failed=1
+          run_gate cargo clippy --workspace --all-targets --all-features --locked -- -D warnings || failed=1
+          run_gate cargo +1.85.0 check --workspace --all-targets --locked || failed=1
+          run_gate cargo test --workspace --all-targets --locked || failed=1
+          run_gate cargo build --workspace --all-targets --locked || failed=1
+          echo '### cargo doc' >> conquest-result.log
+          RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked >> conquest-result.log 2>&1 || failed=1
+          echo "overall_failed=$failed" >> conquest-result.log
+          git config user.name 'LeiZ'
+          git config user.email '52287354+Lei-TzuY@users.noreply.github.com'
+          if [ "$failed" -eq 0 ]; then
+            rm -f conquest-result.log .github/workflows/conquest-uint.yml .github/workflows/conquest-uint-fix.yml
+            git add -A
+            git commit -m '[uint-fix-result] feat: complete checked UInt numeric family'
+            git push origin HEAD:bil-5-uint-family
+          else
+            git add -A
+            git commit -m '[uint-fix-result] chore: update UInt gate diagnostics'
+            git push origin HEAD:bil-5-uint-family
+            exit 1
+          fi
