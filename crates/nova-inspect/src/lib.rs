@@ -1777,6 +1777,11 @@ impl<'a> Builder<'a> {
                     "semantic-inspection schema v1-v6 cannot represent `UInt`; select schema v7",
                 ));
             }
+            Type::TypeParameter(name) => {
+                return Err(InspectionError::invalid(format!(
+                    "semantic-inspection schema v1-v8 cannot represent generic type parameter `{name}`"
+                )));
+            }
             Type::Int
             | Type::UInt
             | Type::Bool
@@ -1797,6 +1802,11 @@ impl<'a> Builder<'a> {
                     Type::Int => (v1::TypeKind::Int, None, Vec::new(), None),
                     Type::UInt => (v1::TypeKind::UInt, None, Vec::new(), None),
                     Type::Bool => (v1::TypeKind::Bool, None, Vec::new(), None),
+                    Type::TypeParameter(name) => {
+                        return Err(InspectionError::invalid(format!(
+                            "semantic-inspection schema v1-v8 cannot encode generic type parameter `{name}`"
+                        )));
+                    }
                     Type::String => (v1::TypeKind::String, None, Vec::new(), None),
                     Type::Record(record) => (
                         v1::TypeKind::Record,

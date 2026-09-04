@@ -99,6 +99,8 @@ pub enum Type {
     UInt,
     /// Boolean type.
     Bool,
+    /// Rigid function-scoped generic type parameter.
+    TypeParameter(String),
     /// Immutable UTF-8 string value.
     String,
     /// Nominal user-defined record type.
@@ -135,6 +137,7 @@ impl fmt::Display for Type {
             Self::Int => formatter.write_str("Int"),
             Self::UInt => formatter.write_str("UInt"),
             Self::Bool => formatter.write_str("Bool"),
+            Self::TypeParameter(name) => formatter.write_str(name),
             Self::String => formatter.write_str("String"),
             Self::Record(record) => formatter.write_str(&record.name),
             Self::Enum(enumeration) => formatter.write_str(&enumeration.name),

@@ -1,0 +1,2 @@
+fn first<T>(left: T, right: T) -> T { left }
+fn main() -> Int { first(1, true) }

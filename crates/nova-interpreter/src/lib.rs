@@ -139,6 +139,7 @@ struct Interpreter<'program> {
     steps: usize,
     next_closure_instance: usize,
     shared_cells: Vec<Option<Value>>,
+    type_argument_stack: Vec<BTreeMap<String, Type>>,
 }
 
 impl<'program> Interpreter<'program> {
@@ -149,6 +150,7 @@ impl<'program> Interpreter<'program> {
             steps: 0,
             next_closure_instance: 0,
             shared_cells: Vec::new(),
+            type_argument_stack: Vec::new(),
         }
     }
 
@@ -194,6 +196,93 @@ impl<'program> Interpreter<'program> {
         self.call_function(main.id, Vec::new())
     }
 
+    fn collect_runtime_type_parameters(ty: &Type, names: &mut BTreeSet<String>) {
+        match ty {
+            Type::TypeParameter(name) => {
+                names.insert(name.clone());
+            }
+            Type::Function(signature) => {
+                for parameter in &signature.parameters {
+                    Self::collect_runtime_type_parameters(parameter, names);
+                }
+                Self::collect_runtime_type_parameters(&signature.return_type, names);
+            }
+            _ => {}
+        }
+    }
+
+    fn concrete_type_of_value(&self, value: &Value) -> Option<Type> {
+        match value {
+            Value::Int(_) => Some(Type::Int),
+            Value::UInt(_) => Some(Type::UInt),
+            Value::Bool(_) => Some(Type::Bool),
+            Value::String(_) => Some(Type::String),
+            Value::Unit => Some(Type::Unit),
+            Value::Record { record, .. } => {
+                self.program
+                    .records
+                    .get(record.index())
+                    .and_then(|definition| {
+                        (definition.id == *record).then(|| {
+                            Type::Record(nova_sema::hir::RecordType {
+                                id: *record,
+                                name: definition.name.clone(),
+                            })
+                        })
+                    })
+            }
+            Value::Enum { enumeration, .. } => self
+                .program
+                .enums
+                .get(enumeration.index())
+                .and_then(|definition| {
+                    (definition.id == *enumeration).then(|| {
+                        Type::Enum(nova_sema::hir::EnumType {
+                            id: *enumeration,
+                            name: definition.name.clone(),
+                        })
+                    })
+                }),
+            Value::Function(id) => self.program.functions.get(id.index()).and_then(|function| {
+                (function.id == *id).then(|| {
+                    Type::Function(nova_sema::hir::FunctionType {
+                        parameters: function
+                            .parameters
+                            .iter()
+                            .map(|parameter| parameter.ty.clone())
+                            .collect(),
+                        return_type: Box::new(function.return_type.clone()),
+                    })
+                })
+            }),
+            Value::Closure { closure, .. } => Some(Type::Function(closure.function_type())),
+        }
+    }
+
+    fn bind_runtime_generic(
+        &self,
+        pattern: &Type,
+        value: &Value,
+        generic_names: &BTreeSet<String>,
+        substitutions: &mut BTreeMap<String, Type>,
+    ) -> bool {
+        match pattern {
+            Type::TypeParameter(name) if generic_names.contains(name) => {
+                let Some(actual) = self.concrete_type_of_value(value) else {
+                    return false;
+                };
+                match substitutions.get(name) {
+                    Some(previous) => previous == &actual,
+                    None => {
+                        substitutions.insert(name.clone(), actual);
+                        true
+                    }
+                }
+            }
+            _ => self.value_conforms_to_type(value, pattern),
+        }
+    }
+
     fn call_function(
         &mut self,
         function_id: FunctionId,
@@ -234,50 +323,88 @@ impl<'program> Interpreter<'program> {
                 ),
             ));
         }
-        for (index, (parameter, argument)) in function.parameters.iter().zip(&arguments).enumerate()
-        {
-            if !self.value_conforms_to_type(argument, &parameter.ty) {
+
+        let mut generic_names = BTreeSet::new();
+        for parameter in &function.parameters {
+            Self::collect_runtime_type_parameters(&parameter.ty, &mut generic_names);
+        }
+        Self::collect_runtime_type_parameters(&function.return_type, &mut generic_names);
+        let mut substitutions = BTreeMap::new();
+        for (parameter, argument) in function.parameters.iter().zip(&arguments) {
+            if !self.bind_runtime_generic(
+                &parameter.ty,
+                argument,
+                &generic_names,
+                &mut substitutions,
+            ) {
                 return Err(self.invariant(
                     function.span,
                     format!(
-                        "argument {index} for parameter `{}` of function `{}` does not conform to declared runtime type {}",
-                        parameter.name, function.name, parameter.ty
+                        "runtime generic instantiation does not satisfy parameter `{}` type {}",
+                        parameter.name, parameter.ty
                     ),
                 ));
             }
         }
-        if self.call_depth >= MAX_CALL_DEPTH {
-            return Err(
-                Diagnostic::error("N4004", "execution call-depth limit exceeded")
-                    .with_primary(
-                        function.span,
-                        format!(
-                            "the bootstrap interpreter allows at most {MAX_CALL_DEPTH} active function calls"
-                        ),
-                    )
-                    .with_note("this guard prevents uncontrolled host-stack recursion"),
-            );
-        }
-
-        let mut frame = Frame::new();
-        for (parameter, argument) in function.parameters.iter().zip(arguments) {
-            self.bind_runtime_slot(&mut frame, parameter, Some(argument), function.span)?;
-        }
-
-        self.call_depth += 1;
-        let result = self.eval_function(&function, &mut frame);
-        self.call_depth -= 1;
-        let value = result?;
-        if !self.value_conforms_to_type(&value, &function.return_type) {
+        if generic_names
+            .iter()
+            .any(|name| !substitutions.contains_key(name))
+        {
             return Err(self.invariant(
                 function.span,
-                format!(
-                    "function `{}` returned a runtime value that does not conform to declared type {}",
-                    function.name, function.return_type
-                ),
+                "runtime generic call is missing an inferred type argument",
             ));
         }
-        Ok(value)
+
+        self.type_argument_stack.push(substitutions);
+        let result = (|| -> Result<Value, Diagnostic> {
+            for (index, (parameter, argument)) in
+                function.parameters.iter().zip(&arguments).enumerate()
+            {
+                if !self.value_conforms_to_type(argument, &parameter.ty) {
+                    return Err(self.invariant(
+                        function.span,
+                        format!(
+                            "argument {index} for parameter `{}` of function `{}` does not conform to instantiated runtime type {}",
+                            parameter.name, function.name, parameter.ty
+                        ),
+                    ));
+                }
+            }
+            if self.call_depth >= MAX_CALL_DEPTH {
+                return Err(
+                    Diagnostic::error("N4004", "execution call-depth limit exceeded")
+                        .with_primary(
+                            function.span,
+                            format!(
+                                "the bootstrap interpreter allows at most {MAX_CALL_DEPTH} active function calls"
+                            ),
+                        )
+                        .with_note("this guard prevents uncontrolled host-stack recursion"),
+                );
+            }
+
+            let mut frame = Frame::new();
+            for (parameter, argument) in function.parameters.iter().zip(arguments) {
+                self.bind_runtime_slot(&mut frame, parameter, Some(argument), function.span)?;
+            }
+            self.call_depth += 1;
+            let evaluated = self.eval_function(&function, &mut frame);
+            self.call_depth -= 1;
+            let value = evaluated?;
+            if !self.value_conforms_to_type(&value, &function.return_type) {
+                return Err(self.invariant(
+                    function.span,
+                    format!(
+                        "function `{}` returned a runtime value that does not conform to instantiated type {}",
+                        function.name, function.return_type
+                    ),
+                ));
+            }
+            Ok(value)
+        })();
+        self.type_argument_stack.pop();
+        result
     }
 
     fn call_closure(
@@ -1730,6 +1857,11 @@ impl<'program> Interpreter<'program> {
     fn type_is_runtime_valid(&self, ty: &Type) -> bool {
         match ty {
             Type::Int | Type::UInt | Type::Bool | Type::String | Type::Unit => true,
+            Type::TypeParameter(name) => self
+                .type_argument_stack
+                .last()
+                .and_then(|arguments| arguments.get(name))
+                .is_some_and(|resolved| self.type_is_runtime_valid(resolved)),
             Type::Record(record) => {
                 record.id.module() == self.program.module.id
                     && self
@@ -1764,6 +1896,13 @@ impl<'program> Interpreter<'program> {
     fn value_conforms_to_type(&self, value: &Value, ty: &Type) -> bool {
         if !self.type_is_runtime_valid(ty) {
             return false;
+        }
+        if let Type::TypeParameter(name) = ty {
+            return self
+                .type_argument_stack
+                .last()
+                .and_then(|arguments| arguments.get(name))
+                .is_some_and(|resolved| self.value_conforms_to_type(value, resolved));
         }
         match (value, ty) {
             (Value::Int(_), Type::Int)
