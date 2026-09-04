@@ -93,8 +93,9 @@ fn explicit_generic_arguments_execute_and_fail_deterministically() {
         ("generic-explicit-conflict.nv", "N3037"),
         ("generic-explicit-arity.nv", "N3039"),
     ] {
+        let invalid_path = fixture("invalid", name);
         let output = Command::new(env!("CARGO_BIN_EXE_nova"))
-            .args(["check", fixture("invalid", name)])
+            .args(["check", &invalid_path])
             .output()
             .unwrap();
         assert!(!output.status.success());
