@@ -1,127 +1,360 @@
-[1m[92m    Updating[0m crates.io index
-[1m[92m Downloading[0m crates ...
-[1m[92m  Downloaded[0m proc-macro2 v1.0.107
-[1m[92m  Downloaded[0m itoa v1.0.18
-[1m[92m  Downloaded[0m memchr v2.8.3
-[1m[92m  Downloaded[0m quote v1.0.47
-[1m[92m  Downloaded[0m zmij v1.0.23
-[1m[92m  Downloaded[0m serde v1.0.229
-[1m[92m  Downloaded[0m unicode-ident v1.0.24
-[1m[92m  Downloaded[0m serde_core v1.0.229
-[1m[92m  Downloaded[0m serde_derive v1.0.229
-[1m[92m  Downloaded[0m serde_json v1.0.151
-[1m[92m  Downloaded[0m syn v3.0.4
-[1m[92m   Compiling[0m nova-source v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-source)
-[1m[92m   Compiling[0m nova-int-semantics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-int-semantics)
-[1m[92m   Compiling[0m proc-macro2 v1.0.107
-[1m[92m   Compiling[0m quote v1.0.47
-[1m[92m   Compiling[0m unicode-ident v1.0.24
-[1m[92m   Compiling[0m nova-diagnostics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-diagnostics)
-[1m[92m   Compiling[0m serde_core v1.0.229
-[1m[92m   Compiling[0m zmij v1.0.23
-[1m[92m   Compiling[0m nova-lexer v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-lexer)
-[1m[92m   Compiling[0m nova-parser v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-parser)
-[1m[92m   Compiling[0m serde_json v1.0.151
-[1m[92m   Compiling[0m nova-sema v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-sema)
-[1m[92m   Compiling[0m serde v1.0.229
-[1m[92m   Compiling[0m syn v3.0.4
-[1m[92m   Compiling[0m itoa v1.0.18
-[1m[92m   Compiling[0m memchr v2.8.3
-[1m[92m   Compiling[0m nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
-[1m[92m   Compiling[0m serde_derive v1.0.229
-[1m[92m   Compiling[0m nova-inspect v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-inspect)
-[1m[92m   Compiling[0m nova-cli v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-cli)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 16.96s
-[1m[92m     Running[0m unittests src/main.rs (target/debug/deps/nova-9cafe47ab4193f60)
-
-running 6 tests
-test tests::option_terminator_preserves_option_like_source_operands ... ok
-test tests::parses_commands_and_both_message_format_spellings ... ok
-test tests::parses_explicit_standard_input_display_names ... ok
-test tests::rejects_ambiguous_or_incomplete_invocations ... ok
-test tests::rejects_non_utf8_standard_input_display_names ... ok
-test tests::reports_standard_input_read_failures_as_source_diagnostics ... ok
-
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-[1m[92m     Running[0m tests/bare_unit_return.rs (target/debug/deps/bare_unit_return-c5f45c25ae02ea4c)
-
-running 1 test
-test check_run_ast_and_existing_inspection_schemas_accept_bare_unit_return ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
-
-[1m[92m     Running[0m tests/cli.rs (target/debug/deps/cli-502ae0b25fb73fab)
-
-running 24 tests
-test ast_command_can_inspect_a_semantically_invalid_program ... ok
-test ast_command_prints_a_span_preserving_tree ... ok
-test emits_one_json_object_per_diagnostic ... ok
-test emits_semantic_diagnostics_as_json ... ok
-test commands_accept_standard_input_as_the_source ... ok
-test fail_on_warnings_rejects_warnings_without_promoting_them ... ok
-test fail_on_warnings_preserves_clean_success_and_ordinary_errors ... ok
-test inspect_command_emits_explicit_schema_v2_cfg_facts ... ok
-test inspect_command_matches_the_versioned_golden_document ... ok
-test closures_run_and_require_inspection_schema_v5 ... ok
-test option_terminator_allows_hyphen_prefixed_source_paths ... ok
-test inspect_rejects_invalid_source_without_partial_output ... ok
-test rejects_malformed_utf8_before_lexing ... ok
-test inspect_schema_v3_represents_payload_discard_without_reinterpreting_v1_or_v2 ... ok
-test accepts_positive_fixtures ... ok
-test source_name_is_rejected_for_file_input ... ok
-test standard_input_can_publish_an_explicit_source_name ... ok
-test standard_input_preserves_diagnostics_and_strict_warning_policy ... ok
-test string_lexical_failures_have_structured_cli_diagnostics ... ok
-test rejects_negative_fixtures_with_stable_codes ... ok
-test run_command_executes_checked_program ... ok
-test string_scalars_run_and_require_inspection_schema_v4 ... ok
-test run_command_reports_runtime_failures ... ok
-test warnings_are_nonfatal_for_check_run_and_inspect ... ok
-
-test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
-
-[1m[92m     Running[0m tests/closure_shared_capture.rs (target/debug/deps/closure_shared_capture-d777d5bcfcc63d96)
-
-running 3 tests
-test immutable_capture_assignment_remains_rejected ... ok
-test mutable_write_capture_shares_one_cell_with_outer_scope ... ok
-test read_only_mutable_capture_keeps_creation_time_snapshot ... ok
+test int_sign_predicates_execute_through_the_complete_pipeline ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-[1m[92m     Running[0m tests/closure_snapshot.rs (target/debug/deps/closure_snapshot-10a98b717966908a)
+[1m[92m     Running[0m tests/surface_never_type.rs (target/debug/deps/surface_never_type-8276f839c7b57c3b)
 
-running 2 tests
-test mutable_write_capture_is_no_longer_rejected_as_snapshot_assignment ... ok
-test mutable_source_snapshot_runs_and_requires_schema_v7 ... ok
+running 1 test
+test check_run_and_all_inspection_versions_accept_surface_never ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-[1m[92m     Running[0m tests/generic_functions.rs (target/debug/deps/generic_functions-7e9f6f67bc209b9d)
+[1m[92m     Running[0m tests/uint_numeric.rs (target/debug/deps/uint_numeric-1e5f4d92aed222c9)
+
+running 6 tests
+test uint_boundaries_and_checked_narrowing_execute ... ok
+test explicit_cross_family_conversions_are_checked ... ok
+test uint_executes_through_check_run_and_inspect ... ok
+test uint_arithmetic_is_checked_and_zero_division_is_rejected ... ok
+test uint_has_no_implicit_int_conversion_and_rejects_bad_members ... ok
+test uint_inspection_requires_v7_with_human_and_json_diagnostics ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_diagnostics-ed7cbe3097cc7125)
 
 running 3 tests
-test frozen_inspection_schema_rejects_generic_type_parameters ... ok
-test generic_inference_conflicts_and_missing_arguments_fail_closed ... ok
-test inferred_generic_identity_executes_at_multiple_types ... FAILED
+test tests::json_output_escapes_user_control_characters ... ok
+test tests::renders_exact_human_location_and_caret ... ok
+test tests::warning_severity_is_preserved_by_both_renderers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_inspect-1b9ca8820e28d227)
+
+running 14 tests
+test tests::published_json_schema_is_well_formed_and_names_v2 ... ok
+test tests::projects_control_flow_mutation_records_and_operators ... ok
+test tests::rejects_assignment_to_an_immutable_binding_in_hir ... ok
+test tests::rejects_binding_references_outside_their_owner_or_scope ... ok
+test tests::projects_symbols_types_spans_and_exhaustive_match_facts ... ok
+test tests::rejects_foreign_spans_and_error_types ... ok
+test tests::published_json_schema_is_well_formed_and_names_v1 ... ok
+test tests::rejects_loop_control_outside_a_loop_in_hir ... ok
+test tests::rejects_non_contiguous_declaration_identities ... ok
+test tests::rejects_non_exhaustive_match_hir ... ok
+test tests::published_json_schema_is_well_formed_and_names_v3 ... ok
+test tests::rejects_same_typed_record_member_identity_drift ... ok
+test tests::schema_v2_rejects_failed_or_mismatched_analysis_output ... ok
+test tests::schema_v2_projects_every_verified_cfg_node_and_edge_category ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/bare_return.rs (target/debug/deps/bare_return-816888fca04785ae)
+
+running 1 test
+test all_existing_schemas_preserve_bare_return_as_a_return_without_child_expression ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/binding_reference_identity.rs (target/debug/deps/binding_reference_identity-b37773ed8546795b)
+
+running 2 tests
+test rejects_assignment_target_identity_drift ... ok
+test rejects_same_name_shadow_reference_id_drift ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closures.rs (target/debug/deps/closures-fe8930eb78e372a8)
+
+running 5 tests
+test v5_projects_closure_captures_and_cfgs_while_v1_through_v4_fail_closed ... ok
+test published_v5_schema_names_closure_categories ... ok
+test v5_rejects_capture_type_or_free_reference_drift ... ok
+test v7_rejects_assignment_through_a_malformed_snapshot_capture ... ok
+test mutable_source_snapshot_captures_require_v7 ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/enum_variant_identity.rs (target/debug/deps/enum_variant_identity-0645890b2facd0b2)
+
+running 2 tests
+test rejects_match_arm_variant_name_slot_drift ... ok
+test rejects_constructor_variant_name_slot_drift ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_reference_identity.rs (target/debug/deps/function_reference_identity-ee11ddf133f23d6b)
+
+running 2 tests
+test rejects_function_reference_signature_drift ... ok
+test rejects_same_signature_function_name_id_drift ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/module_identity.rs (target/debug/deps/module_identity-ea99d0363899e055)
+
+running 3 tests
+test v6_rejects_cross_module_reference_and_module_span_drift ... ok
+test published_v6_schema_requires_the_module_fact ... ok
+test v6_exposes_complete_module_ownership_while_legacy_schemas_fail_closed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/pattern_payload_discard.rs (target/debug/deps/pattern_payload_discard-7c11d3bcd181afad)
+
+running 3 tests
+test inspector_rejects_discard_metadata_removed_from_payload_variant ... ok
+test v1_and_v2_refuse_to_reinterpret_payload_binding_null_as_discard ... ok
+test schema_v3_projects_explicit_payload_modes_without_adding_a_binding ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/shared_capture_schema_v8.rs (target/debug/deps/shared_capture_schema_v8-42dd7eb7702cf7ce)
+
+running 3 tests
+test v8_rejects_malformed_by_reference_capture_of_immutable_binding ... ok
+test v8_keeps_read_only_mutable_capture_by_value ... ok
+test v8_projects_by_reference_while_v7_fails_closed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/string_scalars.rs (target/debug/deps/string_scalars-2f8880826491aa41)
+
+running 3 tests
+test published_v4_schema_names_only_the_new_string_categories ... ok
+test schema_v4_rejects_a_string_literal_with_a_forged_hir_type ... ok
+test schema_v4_projects_string_types_and_literals_while_older_schemas_fail_closed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/surface_never_type.rs (target/debug/deps/surface_never_type-54a8970edffc04f0)
+
+running 1 test
+test every_supported_schema_projects_surface_never_without_a_version_bump ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/uint_schema_versioning.rs (target/debug/deps/uint_schema_versioning-67b09c62c8a4cc6f)
+
+running 3 tests
+test v7_rejects_malformed_numeric_conversion_and_literal_hir ... ok
+test v1_through_v6_remain_frozen_and_v7_projects_uint ... ok
+test published_schemas_keep_old_enums_frozen_and_add_uint_only_in_v7 ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_int_semantics-c37503e67d5d49f5)
+
+running 4 tests
+test tests::checked_non_division_arithmetic_uses_the_same_overflow_class ... ok
+test tests::division_edges_have_explicit_failure_classes ... ok
+test tests::division_truncates_toward_zero_for_every_sign_pair ... ok
+test tests::remainder_follows_the_dividend_sign_and_division_identity ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_interpreter-99c740b7b9072317)
+
+running 20 tests
+test tests::boolean_operators_short_circuit_left_to_right ... ok
+test tests::continue_propagates_through_selected_match_arm ... ok
+test tests::executes_arithmetic_calls_recursion_and_if ... ok
+test tests::bounds_recursive_execution ... ok
+test tests::executes_mutation_and_definite_assignment ... ok
+test tests::executes_records_projection_and_function_passing ... ok
+test tests::executes_break_continue_and_nested_loop_targets ... ok
+test tests::executes_while_loop_and_mutation ... ok
+test tests::executes_recursive_enums_and_payload_matching ... ok
+test tests::malformed_non_exhaustive_match_hir_fails_closed ... ok
+test tests::executes_utf8_strings_through_aggregates_and_equality ... ok
+test tests::malformed_string_literal_type_fails_the_runtime_boundary ... ok
+test tests::propagates_return_through_nested_expressions ... ok
+test tests::record_initializers_preserve_source_evaluation_order ... ok
+test tests::match_evaluates_only_the_selected_arm_and_propagates_return ... ok
+test tests::rejects_checked_integer_overflow ... ok
+test tests::requires_zero_argument_main ... ok
+test tests::rejects_zero_divisor ... ok
+test tests::return_propagates_out_of_while_body ... ok
+test tests::bounds_nonterminating_loops ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+[1m[92m     Running[0m tests/aggregate_boundary_integrity.rs (target/debug/deps/aggregate_boundary_integrity-a2e9d186330c8c82)
+
+running 4 tests
+test valid_local_aggregates_remain_executable ... ok
+test recursively_rejects_nested_nominal_record_identity_drift_at_construction ... ok
+test rejects_malformed_record_field_even_when_value_is_discarded_locally ... ok
+test rejects_malformed_enum_payload_even_when_value_is_discarded_locally ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/bare_return.rs (target/debug/deps/bare_return-26043dcf47e7aa32)
+
+running 2 tests
+test runtime_boundary_rejects_bare_return_retyped_to_int ... ok
+test bare_unit_return_executes_as_unit_and_calls_continue_normally ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/binding_reference_identity.rs (target/debug/deps/binding_reference_identity-1c8cea9f52f49505)
+
+running 3 tests
+test rejects_same_name_same_type_shadow_read_retargeting ... ok
+test rejects_same_type_assignment_target_retargeting ... ok
+test assignment_rhs_return_precedes_value_only_target_validation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/block_result_integrity.rs (target/debug/deps/block_result_integrity-89e5837314311c61)
+
+running 5 tests
+test rejects_function_body_block_type_drift ... ok
+test rejects_selected_if_branch_block_type_drift ... ok
+test structured_break_bypasses_block_value_postcondition ... ok
+test rejects_discarded_while_body_block_type_drift ... ok
+test structured_return_bypasses_block_value_postcondition ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closure_shadowing.rs (target/debug/deps/closure_shadowing-e543b11357f123df)
+
+running 3 tests
+test closure_keeps_the_binding_visible_at_creation_across_later_shadowing ... ok
+test closure_created_inside_shadowing_scope_captures_the_inner_binding ... ok
+test nested_closure_preserves_the_shadowed_binding_captured_by_its_creator ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closure_string_capture.rs (target/debug/deps/closure_string_capture-29f270b4f3baaf64)
+
+running 1 test
+test closure_captures_and_returns_the_mainline_string_scalar ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closures.rs (target/debug/deps/closures-d7829c845de32ee7)
+
+running 8 tests
+test malformed_capture_type_fails_closed_before_retargeting_runtime_behavior ... ok
+test malformed_assignment_through_snapshot_capture_fails_closed ... ok
+test executes_an_escaping_capture_and_nested_closure ... ok
+test closure_equality_uses_runtime_instance_identity ... ok
+test mutable_outer_capture_is_a_creation_time_snapshot ... ok
+test missing_capture_cannot_silently_read_an_unrelated_frame_slot ... ok
+test mutable_snapshot_respects_lexical_shadowing ... ok
+test nested_mutable_outer_capture_keeps_the_original_snapshot ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/entry_point.rs (target/debug/deps/entry_point-42a2ce81f8f9859e)
+
+running 2 tests
+test aggregate_main_remains_outside_the_bootstrap_entry_point_contract ... ok
+test unit_main_is_an_executable_entry_point ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/enum_variant_identity.rs (target/debug/deps/enum_variant_identity-e10334881235f08b)
+
+running 4 tests
+test rejects_exhaustive_same_shape_match_arm_swap ... ok
+test constructor_payload_return_precedes_malformed_variant_identity ... ok
+test match_scrutinee_return_precedes_malformed_arm_identity ... ok
+test rejects_same_payload_type_constructor_slot_retargeting ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/equality_integrity.rs (target/debug/deps/equality_integrity-0c1bf6ac7b18b8fb)
+
+running 3 tests
+test malformed_payload_bearing_enum_equality_fails_closed ... ok
+test payload_free_enum_equality_remains_executable ... ok
+test noncontinuing_equality_operand_still_propagates_structured_return ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/expression_result_integrity.rs (target/debug/deps/expression_result_integrity-5a4588a572378d9f)
+
+running 4 tests
+test rejects_discarded_primitive_value_with_drifted_hir_type ... ok
+test rejects_composed_field_result_with_drifted_hir_type ... ok
+test structured_return_bypasses_value_postcondition ... ok
+test structured_loop_transfers_bypass_value_postcondition ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/frame_slot_integrity.rs (target/debug/deps/frame_slot_integrity-b69f1b7dd01d8c58)
+
+running 7 tests
+test rejects_binding_identity_reused_with_incompatible_slot_metadata ... ok
+test rejects_malformed_local_initializer_before_frame_storage ... ok
+test rejects_assignment_retargeted_to_immutable_runtime_slot ... ok
+test rejects_malformed_delayed_assignment_before_frame_storage ... ok
+test rejects_match_payload_binding_type_drift_before_arm_execution ... ok
+test valid_runtime_frame_storage_remains_executable ... ok
+test repeated_lexical_binding_execution_refreshes_the_same_runtime_slot ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_boundary_integrity.rs (target/debug/deps/function_boundary_integrity-aff2509a51c2ac97)
+
+running 4 tests
+test rejects_malformed_runtime_return_type ... ok
+test recursively_validates_nominal_record_slots_at_function_boundaries ... ok
+test rejects_malformed_runtime_argument_type_before_calling_the_function ... ok
+test rejects_nominal_return_identity_drift ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_equality.rs (target/debug/deps/function_equality-b65d2f8faadd3c98)
+
+running 2 tests
+test malformed_function_equality_signature_drift_fails_closed ... ok
+test runtime_function_aliases_compare_by_declaration_identity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_reference_identity.rs (target/debug/deps/function_reference_identity-01ba724d897d0218)
+
+running 2 tests
+test rejects_same_signature_direct_function_retargeting ... ok
+test validated_function_alias_keeps_runtime_declaration_identity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/module_identity.rs (target/debug/deps/module_identity-c584b79879eb1c00)
+
+running 4 tests
+test forged_function_module_cannot_retarget_the_same_local_index ... ok
+test forged_closure_module_is_not_materialized ... ok
+test forged_record_and_binding_modules_fail_before_index_lookup ... ok
+test executes_a_consistently_module_qualified_program ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/nominal_type_identity.rs (target/debug/deps/nominal_type_identity-c90319bcc43a4a0b)
+
+running 5 tests
+test rejects_expression_nominal_name_drift_with_the_same_record_id ... ok
+test rejects_nested_record_field_type_name_drift ... ok
+test rejects_enum_payload_type_name_drift ... ok
+test rejects_nominal_name_drift_nested_in_a_function_signature ... FAILED
+test valid_nested_nominal_types_remain_executable ... ok
 
 failures:
 
----- inferred_generic_identity_executes_at_multiple_types stdout ----
+---- rejects_nominal_name_drift_nested_in_a_function_signature stdout ----
 
-thread 'inferred_generic_identity_executes_at_multiple_types' (5225) panicked at crates/nova-cli/tests/generic_functions.rs:27:5:
-error[N4005]: interpreter invariant violated
- --> /home/runner/work/Nova/Nova/crates/nova-cli/tests/fixtures/valid/generic-identity.nv:4:8
-  |
-4 |     if identity(true) { identity(42) } else { 0 }
-  |        ^^^^^^^^ expression produced a runtime value that does not conform to HIR type fn(T) -> T
-
+thread 'rejects_nominal_name_drift_nested_in_a_function_signature' (5242) panicked at crates/nova-interpreter/tests/nominal_type_identity.rs:122:44:
+nested signature drift must fail closed: Unit
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
 
 failures:
-    inferred_generic_identity_executes_at_multiple_types
+    rejects_nominal_name_drift_nested_in_a_function_signature
 
-test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-[1m[91merror[0m: test failed, to rerun pass `-p nova-cli --test generic_functions`
+[1m[91merror[0m: test failed, to rerun pass `-p nova-interpreter --test nominal_type_identity`

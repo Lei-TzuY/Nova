@@ -3,7 +3,7 @@
 Status: **normative for the syntax accepted by the bootstrap frontend**
 
 This document describes only implemented syntax. It does not reserve syntax for
-planned ownership, effects, concurrency, generics, macros, modules, FFI, or
+planned ownership, effects, concurrency, macros, modules, FFI, or
 backends.
 
 ## Lexical rules

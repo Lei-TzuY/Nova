@@ -1894,6 +1894,25 @@ impl<'program> Interpreter<'program> {
     }
 
     fn value_conforms_to_type(&self, value: &Value, ty: &Type) -> bool {
+        // A generic function symbol is a valid runtime value before call-site
+        // instantiation. Concrete `T` validation begins inside `call_function`.
+        if let (Value::Function(id), Type::Function(expected)) = (value, ty) {
+            if id.module() == self.program.module.id {
+                if let Some(function) = self.program.functions.get(id.index()) {
+                    let signature_matches = function.id == *id
+                        && function.parameters.len() == expected.parameters.len()
+                        && function
+                            .parameters
+                            .iter()
+                            .zip(&expected.parameters)
+                            .all(|(parameter, expected_type)| &parameter.ty == expected_type)
+                        && &function.return_type == expected.return_type.as_ref();
+                    if signature_matches {
+                        return true;
+                    }
+                }
+            }
+        }
         if !self.type_is_runtime_valid(ty) {
             return false;
         }
