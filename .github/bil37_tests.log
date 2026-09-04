@@ -2,10 +2,10 @@
 [1m[92m   Compiling[0m nova-int-semantics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-int-semantics)
 [1m[92m   Compiling[0m serde_core v1.0.229
 [1m[92m   Compiling[0m zmij v1.0.23
-[1m[92m   Compiling[0m memchr v2.8.3
-[1m[92m   Compiling[0m nova-diagnostics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-diagnostics)
-[1m[92m   Compiling[0m nova-lexer v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-lexer)
 [1m[92m   Compiling[0m itoa v1.0.18
+[1m[92m   Compiling[0m nova-diagnostics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-diagnostics)
+[1m[92m   Compiling[0m memchr v2.8.3
+[1m[92m   Compiling[0m nova-lexer v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-lexer)
 [1m[92m   Compiling[0m nova-parser v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-parser)
 [1m[92m   Compiling[0m nova-sema v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-sema)
 [1m[92m   Compiling[0m nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
@@ -13,17 +13,1698 @@
 [1m[92m   Compiling[0m serde_json v1.0.151
 [1m[92m   Compiling[0m nova-inspect v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-inspect)
 [1m[92m   Compiling[0m nova-cli v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-cli)
-[1m[91merror[E0308][0m[1m: mismatched types[0m
-  [1m[94m--> [0mcrates/nova-cli/tests/generic_functions.rs:97:29
-   [1m[94m|[0m
-[1m[94m97[0m [1m[94m|[0m             .args(["check", fixture("invalid", name)])
-   [1m[94m|[0m                             [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^[0m [1m[91mexpected `&str`, found `String`[0m
-   [1m[94m|[0m
-[1m[96mhelp[0m: consider borrowing here
-   [1m[94m|[0m
-[1m[94m97[0m [1m[94m| [0m            .args(["check", [92m&[0mfixture("invalid", name)])
-   [1m[94m|[0m                             [92m+[0m
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 14.63s
+[1m[92m     Running[0m unittests src/main.rs (target/debug/deps/nova-9cafe47ab4193f60)
 
-[1mFor more information about this error, try `rustc --explain E0308`.[0m
-[1m[91merror[0m: could not compile `nova-cli` (test "generic_functions") due to 1 previous error
-[1m[33mwarning[0m: build failed, waiting for other jobs to finish...
+running 6 tests
+test tests::option_terminator_preserves_option_like_source_operands ... ok
+test tests::parses_commands_and_both_message_format_spellings ... ok
+test tests::parses_explicit_standard_input_display_names ... ok
+test tests::rejects_ambiguous_or_incomplete_invocations ... ok
+test tests::rejects_non_utf8_standard_input_display_names ... ok
+test tests::reports_standard_input_read_failures_as_source_diagnostics ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/bare_unit_return.rs (target/debug/deps/bare_unit_return-c5f45c25ae02ea4c)
+
+running 1 test
+test check_run_ast_and_existing_inspection_schemas_accept_bare_unit_return ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/cli.rs (target/debug/deps/cli-502ae0b25fb73fab)
+
+running 24 tests
+test ast_command_can_inspect_a_semantically_invalid_program ... ok
+test ast_command_prints_a_span_preserving_tree ... ok
+test emits_one_json_object_per_diagnostic ... ok
+test emits_semantic_diagnostics_as_json ... ok
+test commands_accept_standard_input_as_the_source ... ok
+test fail_on_warnings_rejects_warnings_without_promoting_them ... ok
+test inspect_command_emits_explicit_schema_v2_cfg_facts ... ok
+test fail_on_warnings_preserves_clean_success_and_ordinary_errors ... ok
+test inspect_command_matches_the_versioned_golden_document ... ok
+test closures_run_and_require_inspection_schema_v5 ... ok
+test inspect_rejects_invalid_source_without_partial_output ... ok
+test option_terminator_allows_hyphen_prefixed_source_paths ... ok
+test rejects_malformed_utf8_before_lexing ... ok
+test inspect_schema_v3_represents_payload_discard_without_reinterpreting_v1_or_v2 ... ok
+test accepts_positive_fixtures ... ok
+test source_name_is_rejected_for_file_input ... ok
+test standard_input_can_publish_an_explicit_source_name ... ok
+test standard_input_preserves_diagnostics_and_strict_warning_policy ... ok
+test string_lexical_failures_have_structured_cli_diagnostics ... ok
+test rejects_negative_fixtures_with_stable_codes ... ok
+test run_command_executes_checked_program ... ok
+test warnings_are_nonfatal_for_check_run_and_inspect ... ok
+test run_command_reports_runtime_failures ... ok
+test string_scalars_run_and_require_inspection_schema_v4 ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+[1m[92m     Running[0m tests/closure_shared_capture.rs (target/debug/deps/closure_shared_capture-d777d5bcfcc63d96)
+
+running 3 tests
+test immutable_capture_assignment_remains_rejected ... ok
+test mutable_write_capture_shares_one_cell_with_outer_scope ... ok
+test read_only_mutable_capture_keeps_creation_time_snapshot ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closure_snapshot.rs (target/debug/deps/closure_snapshot-10a98b717966908a)
+
+running 2 tests
+test mutable_write_capture_is_no_longer_rejected_as_snapshot_assignment ... ok
+test mutable_source_snapshot_runs_and_requires_schema_v7 ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/generic_functions.rs (target/debug/deps/generic_functions-7e9f6f67bc209b9d)
+
+running 4 tests
+test generic_inference_conflicts_and_missing_arguments_fail_closed ... ok
+test frozen_inspection_schema_rejects_generic_type_parameters ... ok
+test inferred_generic_identity_executes_at_multiple_types ... ok
+test explicit_generic_arguments_execute_and_fail_deterministically ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/int_abs.rs (target/debug/deps/int_abs-3d17fc439220c395)
+
+running 4 tests
+test int_abs_preserves_checked_min_overflow ... ok
+test int_abs_evaluates_its_operand_once ... ok
+test int_abs_rejects_non_int_payloads_and_missing_payloads ... ok
+test int_abs_executes_through_the_complete_pipeline ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/int_bool_conversion.rs (target/debug/deps/int_bool_conversion-a77fe7c6c81f35a7)
+
+running 6 tests
+test bool_to_int_conversion_evaluates_its_operand_once ... ok
+test int_to_bool_conversion_evaluates_its_operand_once ... ok
+test bool_to_int_conversion_rejects_non_bool_payloads_and_missing_payloads ... ok
+test bool_to_int_conversion_executes_through_the_complete_pipeline ... ok
+test int_to_bool_conversion_rejects_non_int_payloads_and_missing_payloads ... ok
+test int_to_bool_conversion_executes_through_the_complete_pipeline ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/int_boundary_constants.rs (target/debug/deps/int_boundary_constants-ab1e6d6158c5ab91)
+
+running 2 tests
+test unknown_or_payload_bearing_int_members_remain_rejected ... ok
+test int_min_and_max_execute_through_the_complete_pipeline ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/int_parity_predicates.rs (target/debug/deps/int_parity_predicates-a1b73f89e386e8ab)
+
+running 3 tests
+test int_parity_predicates_evaluate_their_operand_once ... ok
+test int_parity_predicates_reject_non_int_payloads_and_missing_payloads ... ok
+test int_parity_predicates_execute_through_the_complete_pipeline ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/int_sign_predicates.rs (target/debug/deps/int_sign_predicates-0d631fa290fd859e)
+
+running 3 tests
+test int_sign_predicates_evaluate_their_operand_once ... ok
+test int_sign_predicates_reject_non_int_payloads_and_missing_payloads ... ok
+test int_sign_predicates_execute_through_the_complete_pipeline ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/surface_never_type.rs (target/debug/deps/surface_never_type-8276f839c7b57c3b)
+
+running 1 test
+test check_run_and_all_inspection_versions_accept_surface_never ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/uint_numeric.rs (target/debug/deps/uint_numeric-1e5f4d92aed222c9)
+
+running 6 tests
+test uint_boundaries_and_checked_narrowing_execute ... ok
+test explicit_cross_family_conversions_are_checked ... ok
+test uint_arithmetic_is_checked_and_zero_division_is_rejected ... ok
+test uint_executes_through_check_run_and_inspect ... ok
+test uint_has_no_implicit_int_conversion_and_rejects_bad_members ... ok
+test uint_inspection_requires_v7_with_human_and_json_diagnostics ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_diagnostics-ed7cbe3097cc7125)
+
+running 3 tests
+test tests::json_output_escapes_user_control_characters ... ok
+test tests::renders_exact_human_location_and_caret ... ok
+test tests::warning_severity_is_preserved_by_both_renderers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_inspect-1b9ca8820e28d227)
+
+running 14 tests
+test tests::published_json_schema_is_well_formed_and_names_v2 ... ok
+test tests::projects_control_flow_mutation_records_and_operators ... ok
+test tests::published_json_schema_is_well_formed_and_names_v1 ... ok
+test tests::projects_symbols_types_spans_and_exhaustive_match_facts ... ok
+test tests::rejects_assignment_to_an_immutable_binding_in_hir ... ok
+test tests::rejects_foreign_spans_and_error_types ... ok
+test tests::rejects_binding_references_outside_their_owner_or_scope ... ok
+test tests::rejects_non_contiguous_declaration_identities ... ok
+test tests::published_json_schema_is_well_formed_and_names_v3 ... ok
+test tests::rejects_non_exhaustive_match_hir ... ok
+test tests::rejects_loop_control_outside_a_loop_in_hir ... ok
+test tests::rejects_same_typed_record_member_identity_drift ... ok
+test tests::schema_v2_rejects_failed_or_mismatched_analysis_output ... ok
+test tests::schema_v2_projects_every_verified_cfg_node_and_edge_category ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/bare_return.rs (target/debug/deps/bare_return-816888fca04785ae)
+
+running 1 test
+test all_existing_schemas_preserve_bare_return_as_a_return_without_child_expression ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/binding_reference_identity.rs (target/debug/deps/binding_reference_identity-b37773ed8546795b)
+
+running 2 tests
+test rejects_assignment_target_identity_drift ... ok
+test rejects_same_name_shadow_reference_id_drift ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closures.rs (target/debug/deps/closures-fe8930eb78e372a8)
+
+running 5 tests
+test v5_projects_closure_captures_and_cfgs_while_v1_through_v4_fail_closed ... ok
+test published_v5_schema_names_closure_categories ... ok
+test v5_rejects_capture_type_or_free_reference_drift ... ok
+test v7_rejects_assignment_through_a_malformed_snapshot_capture ... ok
+test mutable_source_snapshot_captures_require_v7 ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/enum_variant_identity.rs (target/debug/deps/enum_variant_identity-0645890b2facd0b2)
+
+running 2 tests
+test rejects_match_arm_variant_name_slot_drift ... ok
+test rejects_constructor_variant_name_slot_drift ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_reference_identity.rs (target/debug/deps/function_reference_identity-ee11ddf133f23d6b)
+
+running 2 tests
+test rejects_same_signature_function_name_id_drift ... ok
+test rejects_function_reference_signature_drift ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/module_identity.rs (target/debug/deps/module_identity-ea99d0363899e055)
+
+running 3 tests
+test v6_rejects_cross_module_reference_and_module_span_drift ... ok
+test published_v6_schema_requires_the_module_fact ... ok
+test v6_exposes_complete_module_ownership_while_legacy_schemas_fail_closed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/pattern_payload_discard.rs (target/debug/deps/pattern_payload_discard-7c11d3bcd181afad)
+
+running 3 tests
+test inspector_rejects_discard_metadata_removed_from_payload_variant ... ok
+test v1_and_v2_refuse_to_reinterpret_payload_binding_null_as_discard ... ok
+test schema_v3_projects_explicit_payload_modes_without_adding_a_binding ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/shared_capture_schema_v8.rs (target/debug/deps/shared_capture_schema_v8-42dd7eb7702cf7ce)
+
+running 3 tests
+test v8_rejects_malformed_by_reference_capture_of_immutable_binding ... ok
+test v8_keeps_read_only_mutable_capture_by_value ... ok
+test v8_projects_by_reference_while_v7_fails_closed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/string_scalars.rs (target/debug/deps/string_scalars-2f8880826491aa41)
+
+running 3 tests
+test schema_v4_rejects_a_string_literal_with_a_forged_hir_type ... ok
+test published_v4_schema_names_only_the_new_string_categories ... ok
+test schema_v4_projects_string_types_and_literals_while_older_schemas_fail_closed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/surface_never_type.rs (target/debug/deps/surface_never_type-54a8970edffc04f0)
+
+running 1 test
+test every_supported_schema_projects_surface_never_without_a_version_bump ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/uint_schema_versioning.rs (target/debug/deps/uint_schema_versioning-67b09c62c8a4cc6f)
+
+running 3 tests
+test v7_rejects_malformed_numeric_conversion_and_literal_hir ... ok
+test v1_through_v6_remain_frozen_and_v7_projects_uint ... ok
+test published_schemas_keep_old_enums_frozen_and_add_uint_only_in_v7 ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_int_semantics-c37503e67d5d49f5)
+
+running 4 tests
+test tests::checked_non_division_arithmetic_uses_the_same_overflow_class ... ok
+test tests::division_edges_have_explicit_failure_classes ... ok
+test tests::division_truncates_toward_zero_for_every_sign_pair ... ok
+test tests::remainder_follows_the_dividend_sign_and_division_identity ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_interpreter-99c740b7b9072317)
+
+running 20 tests
+test tests::boolean_operators_short_circuit_left_to_right ... ok
+test tests::continue_propagates_through_selected_match_arm ... ok
+test tests::bounds_recursive_execution ... ok
+test tests::executes_arithmetic_calls_recursion_and_if ... ok
+test tests::executes_mutation_and_definite_assignment ... ok
+test tests::executes_records_projection_and_function_passing ... ok
+test tests::executes_break_continue_and_nested_loop_targets ... ok
+test tests::executes_recursive_enums_and_payload_matching ... ok
+test tests::executes_utf8_strings_through_aggregates_and_equality ... ok
+test tests::malformed_non_exhaustive_match_hir_fails_closed ... ok
+test tests::executes_while_loop_and_mutation ... ok
+test tests::malformed_string_literal_type_fails_the_runtime_boundary ... ok
+test tests::propagates_return_through_nested_expressions ... ok
+test tests::record_initializers_preserve_source_evaluation_order ... ok
+test tests::match_evaluates_only_the_selected_arm_and_propagates_return ... ok
+test tests::rejects_checked_integer_overflow ... ok
+test tests::return_propagates_out_of_while_body ... ok
+test tests::requires_zero_argument_main ... ok
+test tests::rejects_zero_divisor ... ok
+test tests::bounds_nonterminating_loops ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+[1m[92m     Running[0m tests/aggregate_boundary_integrity.rs (target/debug/deps/aggregate_boundary_integrity-a2e9d186330c8c82)
+
+running 4 tests
+test rejects_malformed_record_field_even_when_value_is_discarded_locally ... ok
+test rejects_malformed_enum_payload_even_when_value_is_discarded_locally ... ok
+test valid_local_aggregates_remain_executable ... ok
+test recursively_rejects_nested_nominal_record_identity_drift_at_construction ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/bare_return.rs (target/debug/deps/bare_return-26043dcf47e7aa32)
+
+running 2 tests
+test runtime_boundary_rejects_bare_return_retyped_to_int ... ok
+test bare_unit_return_executes_as_unit_and_calls_continue_normally ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/binding_reference_identity.rs (target/debug/deps/binding_reference_identity-1c8cea9f52f49505)
+
+running 3 tests
+test rejects_same_name_same_type_shadow_read_retargeting ... ok
+test rejects_same_type_assignment_target_retargeting ... ok
+test assignment_rhs_return_precedes_value_only_target_validation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/block_result_integrity.rs (target/debug/deps/block_result_integrity-89e5837314311c61)
+
+running 5 tests
+test rejects_function_body_block_type_drift ... ok
+test structured_break_bypasses_block_value_postcondition ... ok
+test rejects_selected_if_branch_block_type_drift ... ok
+test rejects_discarded_while_body_block_type_drift ... ok
+test structured_return_bypasses_block_value_postcondition ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closure_shadowing.rs (target/debug/deps/closure_shadowing-e543b11357f123df)
+
+running 3 tests
+test closure_keeps_the_binding_visible_at_creation_across_later_shadowing ... ok
+test closure_created_inside_shadowing_scope_captures_the_inner_binding ... ok
+test nested_closure_preserves_the_shadowed_binding_captured_by_its_creator ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closure_string_capture.rs (target/debug/deps/closure_string_capture-29f270b4f3baaf64)
+
+running 1 test
+test closure_captures_and_returns_the_mainline_string_scalar ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closures.rs (target/debug/deps/closures-d7829c845de32ee7)
+
+running 8 tests
+test malformed_capture_type_fails_closed_before_retargeting_runtime_behavior ... ok
+test malformed_assignment_through_snapshot_capture_fails_closed ... ok
+test executes_an_escaping_capture_and_nested_closure ... ok
+test closure_equality_uses_runtime_instance_identity ... ok
+test mutable_outer_capture_is_a_creation_time_snapshot ... ok
+test missing_capture_cannot_silently_read_an_unrelated_frame_slot ... ok
+test mutable_snapshot_respects_lexical_shadowing ... ok
+test nested_mutable_outer_capture_keeps_the_original_snapshot ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/entry_point.rs (target/debug/deps/entry_point-42a2ce81f8f9859e)
+
+running 2 tests
+test aggregate_main_remains_outside_the_bootstrap_entry_point_contract ... ok
+test unit_main_is_an_executable_entry_point ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/enum_variant_identity.rs (target/debug/deps/enum_variant_identity-e10334881235f08b)
+
+running 4 tests
+test constructor_payload_return_precedes_malformed_variant_identity ... ok
+test rejects_exhaustive_same_shape_match_arm_swap ... ok
+test match_scrutinee_return_precedes_malformed_arm_identity ... ok
+test rejects_same_payload_type_constructor_slot_retargeting ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/equality_integrity.rs (target/debug/deps/equality_integrity-0c1bf6ac7b18b8fb)
+
+running 3 tests
+test malformed_payload_bearing_enum_equality_fails_closed ... ok
+test payload_free_enum_equality_remains_executable ... ok
+test noncontinuing_equality_operand_still_propagates_structured_return ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/expression_result_integrity.rs (target/debug/deps/expression_result_integrity-5a4588a572378d9f)
+
+running 4 tests
+test rejects_discarded_primitive_value_with_drifted_hir_type ... ok
+test rejects_composed_field_result_with_drifted_hir_type ... ok
+test structured_return_bypasses_value_postcondition ... ok
+test structured_loop_transfers_bypass_value_postcondition ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/frame_slot_integrity.rs (target/debug/deps/frame_slot_integrity-b69f1b7dd01d8c58)
+
+running 7 tests
+test rejects_binding_identity_reused_with_incompatible_slot_metadata ... ok
+test rejects_assignment_retargeted_to_immutable_runtime_slot ... ok
+test rejects_malformed_local_initializer_before_frame_storage ... ok
+test rejects_malformed_delayed_assignment_before_frame_storage ... ok
+test rejects_match_payload_binding_type_drift_before_arm_execution ... ok
+test valid_runtime_frame_storage_remains_executable ... ok
+test repeated_lexical_binding_execution_refreshes_the_same_runtime_slot ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_boundary_integrity.rs (target/debug/deps/function_boundary_integrity-aff2509a51c2ac97)
+
+running 4 tests
+test rejects_malformed_runtime_return_type ... ok
+test recursively_validates_nominal_record_slots_at_function_boundaries ... ok
+test rejects_malformed_runtime_argument_type_before_calling_the_function ... ok
+test rejects_nominal_return_identity_drift ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_equality.rs (target/debug/deps/function_equality-b65d2f8faadd3c98)
+
+running 2 tests
+test malformed_function_equality_signature_drift_fails_closed ... ok
+test runtime_function_aliases_compare_by_declaration_identity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_reference_identity.rs (target/debug/deps/function_reference_identity-01ba724d897d0218)
+
+running 2 tests
+test rejects_same_signature_direct_function_retargeting ... ok
+test validated_function_alias_keeps_runtime_declaration_identity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/module_identity.rs (target/debug/deps/module_identity-c584b79879eb1c00)
+
+running 4 tests
+test forged_function_module_cannot_retarget_the_same_local_index ... ok
+test forged_closure_module_is_not_materialized ... ok
+test forged_record_and_binding_modules_fail_before_index_lookup ... ok
+test executes_a_consistently_module_qualified_program ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/nominal_type_identity.rs (target/debug/deps/nominal_type_identity-c90319bcc43a4a0b)
+
+running 5 tests
+test rejects_expression_nominal_name_drift_with_the_same_record_id ... ok
+test rejects_enum_payload_type_name_drift ... ok
+test rejects_nested_record_field_type_name_drift ... ok
+test rejects_nominal_name_drift_nested_in_a_function_signature ... ok
+test valid_nested_nominal_types_remain_executable ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/pattern_payload_discard.rs (target/debug/deps/pattern_payload_discard-4fdd4603c1d53339)
+
+running 2 tests
+test deleting_a_real_payload_binding_is_not_reinterpreted_as_discard ... ok
+test discarded_payload_is_not_bound_and_selected_arm_executes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/record_field_identity.rs (target/debug/deps/record_field_identity-57b6dd16ee38ce23)
+
+running 2 tests
+test malformed_same_typed_constructor_slot_retargeting_fails_closed ... ok
+test malformed_same_typed_projection_slot_retargeting_fails_closed ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_lexer-06b3b7f91ed988f3)
+
+running 10 tests
+test tests::checks_integer_shape_and_overflow ... ok
+test tests::diagnoses_unterminated_nested_comment_at_opening ... ok
+test tests::handles_every_ascii_code_point_as_source_input ... ok
+test tests::lexes_keywords_operators_and_exact_spans ... ok
+test tests::handles_arbitrary_valid_utf8_without_panicking_or_losing_eof ... ok
+test tests::rejects_invalid_escapes_and_unescaped_control_characters_exactly ... ok
+test tests::lexes_and_decodes_utf8_strings_with_the_closed_escape_set ... ok
+test tests::rejects_unterminated_strings_at_the_opening_quote_without_eating_the_next_line ... ok
+test tests::rejects_non_ascii_identifiers_with_character_exact_spans ... ok
+test tests::skips_line_and_nested_block_comments ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/radix_integer_literals.rs (target/debug/deps/radix_integer_literals-9e5fe09d10aec0d0)
+
+running 3 tests
+test applies_the_signed_int_magnitude_ceiling_in_every_radix ... ok
+test rejects_invalid_digits_and_separator_placement_as_one_literal ... ok
+test lexes_binary_octal_and_hexadecimal_magnitudes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_parser-0394fbdf1f359e9c)
+
+running 19 tests
+test parser::tests::applies_documented_precedence_and_left_associativity ... ok
+test parser::tests::field_access_binds_as_postfix_before_binary_operators ... ok
+test parser::tests::normalizes_empty_or_truncated_token_streams_without_panicking ... ok
+test parser::tests::parses_break_and_continue_as_statement_only_loop_control ... ok
+test parser::tests::malformed_match_recovery_consumes_input_and_reaches_later_declarations ... ok
+test parser::tests::parses_decoded_string_literals_with_exact_source_spans ... ok
+test parser::tests::parses_enum_construction_and_match_with_exact_pattern_spans ... ok
+test parser::tests::parses_functions_bindings_assignments_calls_blocks_and_if_expressions ... ok
+test parser::tests::parses_surface_unit_type_and_literal ... ok
+test parser::tests::parses_record_declaration_construction_and_projection ... ok
+test parser::tests::parses_typed_uninitialized_var ... ok
+test parser::tests::preserves_token_and_construct_spans_including_parentheses ... ok
+test parser::tests::parses_while_statement_without_trailing_semicolon ... ok
+test parser::tests::recovers_to_later_top_level_declarations ... ok
+test parser::tests::rejects_a_synthetic_string_token_with_invalid_source_contents ... ok
+test parser::tests::bounds_recursive_expression_parsing ... ok
+test parser::tests::rejects_uninitialized_let_and_untyped_var ... ok
+test parser::tests::rejects_empty_enums_and_empty_payload_parentheses ... ok
+test parser::tests::requires_else_for_every_if_expression ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/bare_return.rs (target/debug/deps/bare_return-9f381295875f1ba1)
+
+running 1 test
+test preserves_bare_and_value_return_forms ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/explicit_generic_calls.rs (target/debug/deps/explicit_generic_calls-6407224426909c7d)
+
+running 2 tests
+test ordinary_less_than_remains_a_comparison ... ok
+test parses_explicit_generic_call_without_stealing_less_than ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/expression_depth_guard.rs (target/debug/deps/expression_depth_guard-191259615d05b8eb)
+
+running 2 tests
+test moderate_expression_nesting_remains_accepted ... ok
+test excessive_expression_nesting_fails_closed_before_host_stack_exhaustion ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_types.rs (target/debug/deps/function_types-70c1b3b9222087b5)
+
+running 2 tests
+test parses_recursive_surface_function_types ... ok
+test rejects_pathological_function_type_nesting_without_unbounded_recursion ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/lambda_expressions.rs (target/debug/deps/lambda_expressions-cf4a50cbb8aa7d53)
+
+running 2 tests
+test parses_explicitly_typed_lambda_and_immediate_call ... ok
+test rejects_a_lambda_without_the_required_parameter_parentheses ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/pattern_payload_discard.rs (target/debug/deps/pattern_payload_discard-0a402c45f4912204)
+
+running 1 test
+test parses_underscore_as_an_explicit_payload_discard ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/surface_never_type.rs (target/debug/deps/surface_never_type-4d90fa0e5b44386f)
+
+running 1 test
+test parses_never_in_direct_and_nested_type_positions ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_sema-8be153e8443a605d)
+
+running 80 tests
+test analyzer::tests::checks_enum_constructor_variant_payload_arity_and_type ... ok
+test analyzer::tests::break_and_continue_each_identify_the_first_unreachable_region ... ok
+test analyzer::tests::checks_calls_and_non_callable_values ... ok
+test analyzer::tests::checks_annotations_operators_and_if_branches ... ok
+test analyzer::tests::checks_explicit_and_implicit_returns ... ok
+test analyzer::tests::checks_record_field_initializer_types_and_nominal_identity ... ok
+test analyzer::tests::checks_structured_break_continue_and_continuing_branch_facts ... ok
+test analyzer::tests::constant_selection_and_proven_loops_do_not_expand_warning_policy ... ok
+test analyzer::tests::checks_match_exhaustiveness_duplicates_nominal_identity_and_arm_types ... ok
+test analyzer::tests::checks_while_condition_and_mutation ... ok
+test analyzer::tests::direct_enum_constructor_dead_arms_still_receive_static_checks ... ok
+test analyzer::tests::direct_enum_constructor_payload_binding_can_establish_flow_facts ... ok
+test analyzer::tests::direct_enum_constructor_selected_arm_controls_noncontinuation ... ok
+test analyzer::tests::direct_enum_constructor_selects_only_one_match_arm_for_dataflow ... ok
+test analyzer::tests::guaranteed_true_loop_merges_reachable_break_exit_states ... ok
+test analyzer::tests::equality_accepts_matching_primitives_and_function_signatures ... ok
+test analyzer::tests::dynamic_short_circuit_rhs_is_only_conditionally_executed ... ok
+test analyzer::tests::guaranteed_true_loop_requires_initialization_on_every_break_exit ... ok
+test analyzer::tests::guaranteed_true_loop_without_reachable_break_is_noncontinuing ... ok
+test analyzer::tests::loop_body_initialization_does_not_escape_zero_iteration_path ... ok
+test analyzer::tests::infers_bindings_and_allows_nested_shadowing ... ok
+test analyzer::tests::ignores_noncontinuing_branch_when_merging_initialization ... ok
+test analyzer::tests::loop_condition_initialization_survives_the_pretest ... ok
+test analyzer::tests::match_loop_control_excludes_noncontinuing_arms_from_dataflow ... ok
+test analyzer::tests::never_does_not_hide_static_operator_or_callee_errors ... ok
+test analyzer::tests::merges_definite_assignment_across_if_branches ... ok
+test analyzer::tests::permits_assignment_before_first_read ... ok
+test analyzer::tests::qualified_patterns_type_a_match_with_a_noncontinuing_scrutinee ... ok
+test analyzer::tests::match_merges_definite_assignment_across_only_continuing_arms ... ok
+test analyzer::tests::rejects_duplicate_enum_variants_and_cross_kind_type_definitions ... ok
+test analyzer::tests::rejects_duplicate_record_declarations_fields_and_builtin_names ... ok
+test analyzer::tests::rejects_invalid_record_shapes_and_fields ... ok
+test analyzer::tests::rejects_immutable_and_mistyped_assignments ... ok
+test analyzer::tests::rejects_loop_control_nested_in_while_condition ... ok
+test analyzer::tests::rejects_loop_control_without_enclosing_while_body ... ok
+test analyzer::tests::rejects_projection_from_non_record ... ok
+test analyzer::tests::rejects_non_unit_values_and_reserved_unit_redefinition ... ok
+test analyzer::tests::rejects_unknown_and_function_assignment_targets ... ok
+test analyzer::tests::rejects_read_before_definite_assignment ... ok
+test analyzer::tests::resolves_and_checks_mutable_assignments ... ok
+test analyzer::tests::rejects_unknown_types_names_and_same_scope_duplicates ... ok
+test analyzer::tests::resolves_records_construction_projection_and_signatures ... ok
+test analyzer::tests::resolves_locals_forward_calls_and_recursion ... ok
+test analyzer::tests::resolves_nominal_enums_constructors_payload_bindings_and_recursive_types ... ok
+test analyzer::tests::skipped_short_circuit_rhs_still_reports_static_type_errors ... ok
+test analyzer::tests::short_circuit_literals_control_definite_initialization ... ok
+test analyzer::tests::supports_surface_unit_literals_types_and_fallthrough ... ok
+test analyzer::tests::short_circuit_loop_breaks_follow_runtime_reachability ... ok
+test analyzer::tests::unreachable_warnings_are_nonfatal_and_errors_suppress_them ... ok
+test control_flow::tests::backedges_do_not_erase_first_entry_path ... ok
+test control_flow::tests::builder_fails_closed_on_an_invalid_backedge_endpoint ... ok
+test analyzer::tests::unreachable_statements_after_loop_control_do_not_change_dataflow_facts ... ok
+test control_flow::tests::unreachable_warnings_are_deduplicated_per_executable_transfer ... ok
+test analyzer::tests::unreachable_expression_suffixes_cannot_create_loop_exits ... ok
+test control_flow::tests::joins_initialization_by_intersection ... ok
+test control_flow::tests::verifier_rejects_backward_execution_edge ... ok
+test control_flow::tests::verifier_rejects_break_execution_that_bypasses_a_join ... ok
+test control_flow::tests::verifier_rejects_diagnostic_only_normal_exit ... ok
+test control_flow::tests::verifier_rejects_corrupted_identity_range_reachability_binding_and_exit ... ok
+test control_flow::tests::verifier_rejects_diagnostic_only_reconnection ... ok
+test control_flow::tests::verifier_rejects_cross_module_binding_metadata_and_events ... ok
+test control_flow::tests::verifier_rejects_diagnostic_predecessor_on_executable_join ... ok
+test control_flow::tests::verifier_rejects_duplicate_and_out_of_order_binding_metadata ... ok
+test control_flow::tests::verifier_rejects_duplicate_join_predecessor_edges ... ok
+test control_flow::tests::verifier_rejects_execution_after_return ... ok
+test control_flow::tests::verifier_rejects_forward_edge_marked_as_backedge ... ok
+test control_flow::tests::verifier_rejects_loop_header_without_first_entry_predecessor ... ok
+test control_flow::tests::verifier_rejects_multiple_predecessors_on_non_join_nodes ... ok
+test control_flow::tests::verifier_rejects_root_kind_mismatch_and_duplicate_entry ... ok
+test control_flow::tests::verifier_rejects_successor_after_exit ... ok
+test control_flow::tests::verifier_rejects_unlisted_exit_node ... ok
+test control_flow_backedge_tests::verifier_rejects_backedge_cycle_confined_to_diagnostic_flow ... ok
+test control_flow_backedge_tests::verifier_rejects_backedge_targeting_non_join_node ... ok
+test equality_rules::tests::enum_comparability_is_declaration_context_dependent ... ok
+test equality_rules::tests::function_equality_requires_the_same_fully_resolved_signature ... ok
+test equality_rules::tests::intrinsic_comparability_is_explicit_and_recovery_types_are_excluded ... ok
+test type_rules::tests::expected_type_compatibility_is_recovery_aware_and_nominal ... ok
+test type_rules::tests::strict_binary_result_gives_noncontinuation_precedence_over_recovery_error ... ok
+test type_rules::tests::type_join_keeps_first_concrete_anchor_after_mismatches ... ok
+test type_rules::tests::type_join_treats_never_as_bottom_and_error_as_recovery_neutral ... ok
+
+test result: ok. 80 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/analyzer_block_local_record_tags.rs (target/debug/deps/analyzer_block_local_record_tags-ba535fec1c4db742)
+
+running 8 tests
+test block_local_record_alias_preserves_field_tag ... ok
+test block_local_shadowing_uses_resolved_binding_identity ... ok
+test chained_block_local_record_aliases_preserve_summary ... ok
+test block_local_enum_alias_can_seed_record_field_summary ... ok
+test dynamic_block_local_enum_field_remains_conservative ... ok
+test mutable_block_local_record_alias_remains_conservative ... ok
+test selected_if_block_local_alias_preserves_summary ... ok
+test runtime_statement_before_local_alias_does_not_erase_summary ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_enum_alias_payload_tags.rs (target/debug/deps/analyzer_enum_alias_payload_tags-10c7a87ac50dde3b)
+
+running 9 tests
+test block_local_enum_alias_preserves_payload_summary ... ok
+test dynamically_selected_payload_inside_alias_remains_conservative ... ok
+test chained_enum_aliases_preserve_payload_summary ... ok
+test aliased_record_payload_keeps_known_field_despite_dynamic_sibling ... ok
+test enum_alias_payload_from_mutable_record_source_remains_conservative ... ok
+test enum_payload_tag_survives_through_enum_alias ... ok
+test immutable_enum_alias_preserves_record_payload_summary ... ok
+test inner_same_name_binding_still_shadows_aliased_payload_summary ... ok
+test mutable_enum_alias_remains_conservative ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_immutable_enum_tags.rs (target/debug/deps/analyzer_immutable_enum_tags-be8ff55b30783a31)
+
+running 7 tests
+test dynamic_immutable_enum_initializer_remains_conservative ... ok
+test function_scope_immutable_dynamic_payload_binding_preserves_tag ... ok
+test immutable_selected_if_initializer_records_tag ... ok
+test invalid_annotation_does_not_export_a_tag_fact ... ok
+test nested_shadowing_uses_resolved_immutable_tag_fact ... ok
+test mutable_enum_binding_remains_conservative ... ok
+test immutable_enum_alias_chain_preserves_tag ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_match_payload_tags.rs (target/debug/deps/analyzer_match_payload_tags-609e25d66b6d912b)
+
+running 8 tests
+test direct_constructor_enum_payload_binding_can_seed_record_field ... ok
+test direct_constructor_record_payload_binding_preserves_summary ... ok
+test dynamically_selected_record_payload_remains_conservative ... ok
+test block_shadowing_payload_binding_does_not_reuse_outer_summary ... ok
+test enum_alias_scrutinee_preserves_payload_tag_summary ... ok
+test mutable_record_payload_source_remains_conservative ... ok
+test payload_bearing_enum_payload_preserves_tag_without_closing_inner_payload ... ok
+test record_payload_summary_survives_dynamic_sibling ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_nested_record_tags.rs (target/debug/deps/analyzer_nested_record_tags-f99d842ba0324808)
+
+running 6 tests
+test dynamic_nested_enum_tag_remains_conservative ... ok
+test mutable_nested_record_source_blocks_summary ... ok
+test dynamic_siblings_at_multiple_levels_do_not_block_nested_tag ... ok
+test nested_payload_tag_does_not_close_runtime_payload ... ok
+test three_level_projection_preserves_enum_tag ... ok
+test nested_record_alias_chain_preserves_summary ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_record_field_tags.rs (target/debug/deps/analyzer_record_field_tags-6d119ad73d16ccf7)
+
+running 7 tests
+test immutable_record_alias_chain_preserves_field_tag ... ok
+test dynamic_enum_field_tag_remains_conservative ... ok
+test mutable_record_binding_remains_conservative ... ok
+test immutable_record_field_tag_survives_dynamic_sibling ... ok
+test nested_record_projection_preserves_known_tag ... ok
+test payload_bearing_record_field_preserves_tag_without_closing_payload ... ok
+test record_field_can_reuse_an_immutable_enum_alias_tag ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_recursive_structural_tags.rs (target/debug/deps/analyzer_recursive_structural_tags-bfc000d48a57aaa2)
+
+running 8 tests
+test dynamic_nested_payload_selection_remains_conservative ... ok
+test dynamic_record_sibling_does_not_erase_nested_tree ... ok
+test mutable_nested_enum_source_remains_conservative ... ok
+test inner_shadowing_does_not_reuse_recursive_payload_facts ... ok
+test nested_enum_payload_preserves_record_summary ... ok
+test nested_enum_payload_preserves_inner_enum_tag ... ok
+test record_field_preserves_payload_bearing_enum_tree ... ok
+test selected_if_payload_preserves_recursive_tree ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_selected_enum_payload_tags.rs (target/debug/deps/analyzer_selected_enum_payload_tags-0ed57767aec60d59)
+
+running 8 tests
+test selected_false_if_preserves_else_payload_summary ... ok
+test dynamic_if_payload_selection_remains_conservative ... ok
+test dynamic_match_scrutinee_keeps_payload_summary_conservative ... ok
+test selected_if_branch_block_local_alias_preserves_payload_summary ... ok
+test selected_match_can_forward_enum_payload_tag ... ok
+test payload_dependent_selected_match_result_remains_conservative ... ok
+test selected_match_preserves_enum_result_payload_summary ... ok
+test selected_true_if_preserves_record_payload_summary ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_selected_payload_lowering_facts.rs (target/debug/deps/analyzer_selected_payload_lowering_facts-d14781d267fea147)
+
+running 9 tests
+test enum_alias_scrutinee_seeds_selected_payload ... ok
+test bool_payload_does_not_become_a_value_fact ... ok
+test mutable_payload_source_remains_conservative ... ok
+test dynamic_outer_scrutinee_remains_conservative ... ok
+test record_field_scrutinee_seeds_selected_payload ... ok
+test selected_record_payload_seeds_field_match ... ok
+test same_name_shadowing_overrides_seeded_payload_fact ... ok
+test three_level_selected_payloads_seed_nested_lowering ... ok
+test unselected_arm_does_not_receive_payload_facts ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_selected_record_tags.rs (target/debug/deps/analyzer_selected_record_tags-11bbbf6daceee44d)
+
+running 7 tests
+test selected_false_if_record_initializer_preserves_else_tag ... ok
+test block_local_record_alias_participates_in_record_summary ... ok
+test dynamic_if_record_initializer_remains_conservative ... ok
+test payload_dependent_selected_match_record_result_remains_conservative ... ok
+test selected_match_record_initializer_preserves_result_tag ... ok
+test statement_bearing_block_can_expose_record_tail_summary ... ok
+test selected_true_if_record_initializer_preserves_field_tag ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/analyzer_structural_tag_depth_hardening.rs (target/debug/deps/analyzer_structural_tag_depth_hardening-da64060ea4dc7b90)
+
+running 5 tests
+test nominally_distinct_isomorphic_structures_keep_separate_tags ... ok
+test deep_dynamic_leaf_cuts_off_only_the_unknown_suffix ... ok
+test deep_recursive_enum_payload_chain_reaches_the_leaf ... ok
+test shadow_after_long_alias_chain_does_not_reuse_stale_summary ... ok
+test long_immutable_alias_chain_preserves_recursive_summary ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+[1m[92m     Running[0m tests/assignment_proof_local_arithmetic_failures.rs (target/debug/deps/assignment_proof_local_arithmetic_failures-5e03e66a80b9ff0a)
+
+running 8 tests
+test continue_stops_following_execution_failure_collection ... ok
+test assignment_preserves_following_reachable_failure ... ok
+test break_stops_following_execution_failure_collection ... ok
+test dynamic_assignment_divisor_remains_runtime_only ... ok
+test selected_payload_assignment_reports_overflow ... ok
+test selected_payload_assignment_reports_each_sibling_failure ... ok
+test uninitialized_binding_preserves_following_reachable_failure ... ok
+test selected_payload_assignment_reports_zero_divisor ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/assignment_reachability_integration.rs (target/debug/deps/assignment_reachability_integration-3b8a8797577063bf)
+
+running 3 tests
+test noncontinuing_assignment_rhs_suppresses_following_execution_failure ... ok
+test dynamic_if_assignment_reports_each_potential_failure ... ok
+test static_tag_assignment_collects_only_the_selected_match_arm ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/bare_return.rs (target/debug/deps/bare_return-a89b35d555792c34)
+
+running 3 tests
+test explicit_unit_return_remains_value_bearing_hir ... ok
+test bare_return_is_unit_typed_noncontinuation_without_a_synthetic_expression ... ok
+test bare_return_reuses_ordinary_return_type_mismatch_for_non_unit_functions ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/binding_reference_identity.rs (target/debug/deps/binding_reference_identity-9b51333f99339467)
+
+running 2 tests
+test binding_read_retains_resolved_declaration_identity_under_shadowing ... ok
+test assignment_retains_resolved_target_identity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/cfg_only_initialization.rs (target/debug/deps/cfg_only_initialization-d65c795cfbdbe3db)
+
+running 3 tests
+test type_mismatch_and_definite_initialization_are_orthogonal ... ok
+test uninitialized_read_keeps_its_declared_hir_type ... ok
+test noncontinuing_initializer_does_not_create_an_initialization_event ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_aggregate_arithmetic_failures.rs (target/debug/deps/closed_aggregate_arithmetic_failures-ae5eaf0e654f0dd5)
+
+running 6 tests
+test direct_enum_record_payload_propagates_projected_overflow ... ok
+test closed_record_binding_propagates_nested_projection_failure ... ok
+test dynamic_sibling_does_not_hide_reachable_closed_failure ... ok
+test dynamic_projection_divisor_remains_runtime_only ... ok
+test proven_unselected_aggregate_branch_does_not_report_failure ... ok
+test nested_record_closure_propagates_deep_overflow ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_arithmetic_diagnostic_contract.rs (target/debug/deps/closed_arithmetic_diagnostic_contract-4c20e18252a6ffae)
+
+running 4 tests
+test direct_literal_failure_keeps_the_outer_operation_span ... ok
+test block_local_zero_divisor_points_at_the_failing_expression ... ok
+test distinct_failures_keep_distinct_primary_spans ... ok
+test selected_nested_overflow_points_at_the_failing_expression ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_block_multiple_arithmetic_failures.rs (target/debug/deps/closed_block_multiple_arithmetic_failures-fd00d4427ae97734)
+
+running 3 tests
+test one_closed_block_reports_each_distinct_zero_divisor ... ok
+test one_closed_block_reports_distinct_failure_classes ... ok
+test proven_unselected_block_still_reports_no_execution_failures ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_condition_arithmetic_failures.rs (target/debug/deps/closed_condition_arithmetic_failures-205973030a070594)
+
+running 5 tests
+test closed_bool_block_discarded_expression_reports_zero_division ... ok
+test closed_bool_block_binding_reports_overflow ... ok
+test closed_bool_block_binding_reports_zero_division ... ok
+test dynamic_block_local_divisor_remains_runtime_checked ... ok
+test selected_match_condition_propagates_closed_payload_arithmetic_failure ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_constant_int_selection_failures.rs (target/debug/deps/closed_constant_int_selection_failures-4dc795c0d3d55e51)
+
+running 6 tests
+test int_comparison_projection_base_propagates_overflow ... ok
+test int_comparison_match_selector_propagates_zero_division ... ok
+test int_selected_if_condition_propagates_zero_division ... ok
+test dynamic_nested_selector_remains_runtime_only ... ok
+test unselected_int_branch_does_not_report_arithmetic_failure ... ok
+test ordinary_constant_arithmetic_propagates_nested_selector_failure ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_identity_arithmetic_failures.rs (target/debug/deps/closed_identity_arithmetic_failures-99a6661d9db7143f)
+
+running 5 tests
+test closed_unit_identity_operand_propagates_zero_division ... ok
+test closed_enum_identity_operand_propagates_overflow ... ok
+test closed_function_identity_operand_propagates_zero_division ... ok
+test dynamic_identity_operand_remains_runtime_only ... ok
+test short_circuit_control_path_propagates_closed_arithmetic_failure ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_identity_selection_proof.rs (target/debug/deps/closed_identity_selection_proof-a40874fc59b9e4cf)
+
+running 8 tests
+test selected_empty_unit_if_can_prove_a_guaranteed_loop ... ok
+test selected_enum_if_can_prove_identity_equality ... ok
+test dynamic_match_scrutinees_remain_outside_identity_proofs ... ok
+test selected_function_if_can_prove_declaration_identity ... ok
+test selected_mutable_enum_binding_branch_stops_the_proof ... ok
+test selected_immutable_enum_binding_branch_can_be_proven ... ok
+test selected_match_can_produce_a_closed_enum_identity ... ok
+test statement_bearing_unselected_identity_branch_does_not_block_the_proof ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_if_condition_proof.rs (target/debug/deps/closed_if_condition_proof-b652ff4607577c19)
+
+running 5 tests
+test selected_mutable_bool_binding_branch_remains_outside_the_closed_proof ... ok
+test selected_statement_free_if_can_prove_a_guaranteed_loop ... ok
+test selected_immutable_bool_binding_branch_can_be_proven ... ok
+test false_condition_selects_and_recurses_into_the_else_expression ... ok
+test unselected_statement_bearing_branch_does_not_block_the_proof ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_int_let_block_proof.rs (target/debug/deps/closed_int_let_block_proof-1508a31ee80c5339)
+
+running 9 tests
+test closed_int_binding_block_feeds_static_arithmetic_preflight ... ok
+test closed_discarded_int_expression_preserves_the_proof ... ok
+test chained_immutable_int_bindings_compose_in_source_order ... ok
+test dynamic_discarded_expression_keeps_the_block_runtime_only ... ok
+test dynamic_initializer_block_remains_runtime_only ... ok
+test immutable_int_binding_block_can_prove_a_guaranteed_loop ... ok
+test closed_int_binding_payload_can_select_a_match ... ok
+test mutable_binding_block_remains_runtime_only ... ok
+test mutable_int_binding_payload_remains_runtime_only ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_int_selection_proof.rs (target/debug/deps/closed_int_selection_proof-5812266dd8d689a1)
+
+running 5 tests
+test selected_if_int_value_composes_with_arithmetic_condition_proof ... ok
+test selected_match_int_value_composes_with_comparison_proof ... ok
+test dynamic_match_scrutinee_remains_outside_the_int_proof ... ok
+test selected_immutable_binding_int_branch_can_be_proven ... ok
+test selected_mutable_binding_int_branch_remains_outside_the_proof ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_let_block_value_proof.rs (target/debug/deps/closed_let_block_value_proof-3a52ca5d6730b0cb)
+
+running 11 tests
+test closed_discarded_non_int_expression_preserves_a_later_int_proof ... ok
+test closed_bool_let_block_can_prove_a_guaranteed_loop ... ok
+test closed_bool_binding_can_select_an_int_if_tail ... ok
+test closed_enum_binding_block_can_drive_match_selection ... ok
+test closed_enum_binding_block_preserves_variant_identity ... ok
+test closed_record_binding_block_can_feed_projection ... ok
+test closed_function_binding_block_preserves_declaration_identity ... ok
+test closed_unit_binding_block_composes_with_unit_equality ... ok
+test dynamic_initializer_in_a_bool_block_remains_runtime_only ... ok
+test mutable_bool_binding_block_remains_runtime_only ... ok
+test mixed_int_and_bool_bindings_compose_in_source_order ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_match_condition_proof.rs (target/debug/deps/closed_match_condition_proof-afc37274f190484b)
+
+running 5 tests
+test local_scrutinee_remains_outside_the_closed_match_proof ... ok
+test selected_mutable_bool_binding_arm_remains_outside_the_closed_proof ... ok
+test direct_payload_free_match_can_prove_a_guaranteed_loop ... ok
+test unselected_statement_bearing_arm_does_not_block_the_proof ... ok
+test selected_immutable_bool_binding_arm_can_be_proven ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_match_payload_binding_proof.rs (target/debug/deps/closed_match_payload_binding_proof-dabfb37b064beebe)
+
+running 9 tests
+test dynamic_payload_binding_does_not_create_static_arithmetic_failure ... ok
+test dynamic_payload_binding_remains_runtime_only ... ok
+test mutable_binding_payload_block_remains_runtime_only ... ok
+test closed_immutable_binding_payload_can_be_proven ... ok
+test selected_int_payload_binding_feeds_static_arithmetic_preflight ... ok
+test selected_int_payload_binding_can_prove_a_guaranteed_loop ... ok
+test selected_bool_payload_binding_can_be_the_closed_condition ... ok
+test selected_int_payload_binding_composes_with_arithmetic ... ok
+test unselected_dynamic_payload_branch_does_not_block_the_proof ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_nested_match_selection.rs (target/debug/deps/closed_nested_match_selection-68be886fd2f7ac05)
+
+running 6 tests
+test selected_if_enum_scrutinee_can_drive_a_closed_int_match ... ok
+test dynamic_if_condition_keeps_nested_match_runtime_only ... ok
+test selected_match_enum_scrutinee_can_drive_another_closed_match ... ok
+test selected_immutable_enum_binding_scrutinee_branch_can_drive_nested_match ... ok
+test selected_mutable_enum_binding_scrutinee_branch_stops_nested_match_proof ... ok
+test statement_bearing_unselected_scrutinee_branch_does_not_block_nested_match_proof ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_payload_match_selection.rs (target/debug/deps/closed_payload_match_selection-255f40ab283b5e49)
+
+running 7 tests
+test closed_record_payload_can_select_a_discarding_match_arm ... ok
+test closed_integer_payload_can_select_a_discarding_match_arm ... ok
+test closed_payload_can_select_an_arm_even_when_the_payload_is_bound_but_unused ... ok
+test dynamic_call_payload_keeps_match_selection_runtime_only ... ok
+test immutable_binding_payload_block_can_select_a_match_arm ... ok
+test mutable_binding_payload_block_keeps_match_selection_runtime_only ... ok
+test dynamic_payload_in_an_unselected_if_branch_does_not_block_selection ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_payload_value_composition.rs (target/debug/deps/closed_payload_value_composition-685c04533ddeff50)
+
+running 7 tests
+test selected_payload_free_enum_binding_preserves_variant_identity ... ok
+test dynamic_record_payload_sibling_keeps_projection_runtime_only ... ok
+test selected_enum_payload_binding_can_be_a_nested_match_scrutinee ... ok
+test selected_function_payload_binding_preserves_declaration_identity ... ok
+test selected_record_payload_projection_feeds_static_arithmetic_preflight ... ok
+test selected_record_payload_binding_can_feed_field_projection_proof ... ok
+test selected_unit_payload_binding_can_participate_in_equality_proof ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_preflight_diagnostic_dedup.rs (target/debug/deps/closed_preflight_diagnostic_dedup-0a076e086e5da350)
+
+running 6 tests
+test direct_constant_failure_inside_nested_block_is_not_reported_twice ... ok
+test distinct_reachable_failures_at_distinct_spans_are_both_reported ... ok
+test nested_closed_blocks_report_one_zero_divisor ... ok
+test dynamic_and_proven_unselected_nested_failures_remain_suppressed ... ok
+test selected_if_with_nested_closed_block_reports_one_overflow ... ok
+test selected_match_with_nested_closed_block_reports_one_zero_divisor ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_proof_scope_hardening.rs (target/debug/deps/closed_proof_scope_hardening-37e96bb682b83e06)
+
+running 9 tests
+test mutable_shadow_keeps_the_condition_runtime_only_without_poisoning_outer_identity ... ok
+test nested_block_environment_does_not_leak_into_following_statement ... ok
+test cross_type_shadowing_uses_resolved_binding_identity ... ok
+test nested_same_name_match_payloads_resolve_to_innermost_binding ... ok
+test shadowed_closed_divisor_still_reaches_static_zero_division_preflight ... ok
+test shadowed_closed_operand_still_reaches_static_overflow_preflight ... ok
+test selected_if_environment_does_not_leak_into_following_statement ... ok
+test selected_match_payload_environment_does_not_leak_after_match_statement ... ok
+test shadowing_initializer_reads_outer_binding_but_tail_reads_inner_binding ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_record_projection_arithmetic.rs (target/debug/deps/closed_record_projection_arithmetic-e41d4a069b5a9d88)
+
+running 4 tests
+test closed_projected_operand_can_prove_overflow ... ok
+test closed_projected_zero_divisor_is_rejected_before_execution ... ok
+test dynamic_sibling_initializer_keeps_projected_arithmetic_runtime_checked ... ok
+test dynamic_unselected_sibling_branch_does_not_hide_projected_zero_divisor ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_record_projection_proof.rs (target/debug/deps/closed_record_projection_proof-292987bf42291c95)
+
+running 9 tests
+test closed_bool_projection_can_be_a_condition_directly ... ok
+test closed_enum_projection_participates_in_identity_equality ... ok
+test closed_enum_projection_can_select_a_payload_match_arm ... ok
+test closed_function_projection_participates_in_identity_equality ... ok
+test closed_int_projection_can_prove_a_guaranteed_loop ... ok
+test closed_unit_projection_participates_in_equality_proof ... ok
+test dynamic_sibling_initializer_blocks_projection_proof ... ok
+test dynamic_unselected_initializer_branch_does_not_block_projection_proof ... ok
+test nested_closed_record_projections_compose ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closed_selector_arithmetic_failures.rs (target/debug/deps/closed_selector_arithmetic_failures-ad67fa25ff749060)
+
+running 5 tests
+test direct_static_match_scrutinee_propagates_zero_division ... ok
+test closed_record_projection_base_propagates_overflow ... ok
+test closed_match_condition_scrutinee_propagates_zero_division ... ok
+test dynamic_selector_arithmetic_remains_runtime_only ... ok
+test unselected_selector_branch_does_not_report_arithmetic_failure ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closures.rs (target/debug/deps/closures-dfe8ea305d6e573f)
+
+running 11 tests
+test closure_initializer_cannot_self_reference_before_its_binding_exists ... ok
+test by_reference_assignment_preserves_noncontinuing_rhs_flow ... ok
+test by_reference_assignment_preserves_rhs_initialization ... ok
+test closure_is_a_return_and_loop_control_boundary ... ok
+test lowers_an_escaping_immutable_capture_with_its_own_verified_cfg ... ok
+test mutable_outer_reads_lower_as_creation_time_snapshot_captures ... ok
+test mutable_snapshot_is_read_at_creation_for_definite_initialization ... ok
+test mutable_outer_write_upgrades_capture_to_by_reference ... ok
+test nested_closure_propagates_a_transitive_capture_to_its_creator ... ok
+test nested_closure_propagates_a_mutable_snapshot_capture_transitively ... ok
+test write_capture_does_not_initialize_outer_binding_before_call ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/composite_short_circuit_never.rs (target/debug/deps/composite_short_circuit_never-08b980e681646776)
+
+running 6 tests
+test closed_immutable_true_and_noncontinuing_rhs_is_noncontinuing ... ok
+test closed_immutable_false_or_noncontinuing_rhs_is_noncontinuing ... ok
+test composite_skipped_rhs_remains_continuing ... ok
+test dynamic_short_circuit_left_remains_conservative ... ok
+test selected_match_bool_proof_propagates_required_rhs_never ... ok
+test selected_if_and_record_projection_proofs_propagate_required_rhs_never ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/constant_condition_reachability.rs (target/debug/deps/constant_condition_reachability-162b255a4ebb6df8)
+
+running 8 tests
+test known_false_comparison_makes_dead_if_branch_diagnostic_only ... ok
+test closed_integer_comparison_selects_if_flow_without_folding_hir ... ok
+test closed_discarded_statement_block_can_drive_reachability ... ok
+test derived_short_circuit_truth_controls_flow_and_dead_rhs_diagnostics ... ok
+test known_true_comparison_makes_loop_noncontinuing ... ok
+test literal_false_while_body_is_diagnostic_only_for_execution_failures ... ok
+test pure_unit_blocks_participate_in_closed_equality_reachability ... ok
+test names_and_calls_remain_dynamic_conditions ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/constant_integer_failures.rs (target/debug/deps/constant_integer_failures-c4762ae81e2977bf)
+
+running 6 tests
+test invalid_constant_arithmetic_is_error_typed ... ok
+test rejects_closed_literal_zero_divisors_during_semantic_analysis ... ok
+test diagnostic_only_unreachable_arithmetic_does_not_create_execution_failures ... ok
+test dynamic_equivalents_remain_runtime_checked ... ok
+test successful_constant_arithmetic_is_validated_but_not_folded ... ok
+test rejects_closed_literal_arithmetic_overflow_during_semantic_analysis ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/control_flow.rs (target/debug/deps/control_flow-4b88df01af6348b3)
+
+running 8 tests
+test closed_condition_refinements_shape_execution_edges ... ok
+test analyzed_graphs_expose_only_in_range_verified_references ... ok
+test definite_initialization_is_decided_from_branch_intersection ... ok
+test unreachable_constant_failures_do_not_become_execution_diagnostics ... ok
+test loops_record_transfers_and_a_condition_backedge ... ok
+test returning_loop_branch_initialization_does_not_mask_break_path_self_read ... ok
+test unreachable_reads_stay_diagnostic_only_in_the_graph ... ok
+test returning_loop_branch_initialization_does_not_mask_continue_backedge_self_read ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/dynamic_composite_proof_local_failures.rs (target/debug/deps/dynamic_composite_proof_local_failures-e04d9b2a24c922c6)
+
+running 5 tests
+test dynamic_match_collects_failures_from_each_reachable_arm ... ok
+test dynamic_match_payload_binding_shadows_outer_closed_binding ... ok
+test dynamic_if_collects_failures_from_both_reachable_branches ... ok
+test dynamic_if_reachable_branch_reports_outer_payload_failure ... ok
+test proven_unselected_if_branch_remains_diagnostic_only ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/enum_variant_identity.rs (target/debug/deps/enum_variant_identity-2654298144423b9e)
+
+running 1 test
+test enum_hir_retains_resolved_variant_spelling_and_slot ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_equality.rs (target/debug/deps/function_equality-1182a67d8cd22c12)
+
+running 4 tests
+test different_function_signatures_remain_non_comparable ... ok
+test direct_function_identity_refines_reachability_through_empty_blocks ... ok
+test local_function_alias_equality_remains_dynamic_for_flow ... ok
+test matching_function_signatures_are_equality_comparable ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/function_reference_identity.rs (target/debug/deps/function_reference_identity-cca7fad2ba1d0aac)
+
+running 1 test
+test direct_function_reference_retains_resolved_name_and_identity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/generic_closed_value_arithmetic_preflight.rs (target/debug/deps/generic_closed_value_arithmetic_preflight-8a3768e2d61f7f60)
+
+running 8 tests
+test closed_standalone_unit_expression_reports_zero_division ... ok
+test closed_bool_binding_initializer_reports_overflow ... ok
+test closed_int_binding_initializer_reports_zero_division ... ok
+test closed_function_tail_value_reports_zero_division ... ok
+test closed_unit_binding_initializer_reports_overflow ... ok
+test closed_unit_call_argument_reports_zero_division ... ok
+test proven_unselected_closed_value_does_not_report_failure ... ok
+test dynamic_closed_shape_remains_runtime_only ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/integer_boundaries.rs (target/debug/deps/integer_boundaries-0ace19e6c719d996)
+
+running 3 tests
+test rejects_positive_two_to_the_sixty_third_semantically ... ok
+test double_negation_of_min_is_preflighted_without_folding_hir ... ok
+test accepts_both_signed_int_endpoints ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/invalid_aggregate_flow.rs (target/debug/deps/invalid_aggregate_flow-c00e71dac146dbf7)
+
+running 10 tests
+test invalid_enum_arity_does_not_initialize_outer_binding ... ok
+test enum_used_as_record_does_not_initialize_outer_binding ... ok
+test invalid_enum_payload_type_does_not_initialize_outer_binding ... ok
+test invalid_record_field_type_does_not_initialize_outer_binding ... ok
+test invalid_aggregate_rollback_discards_conditional_break_exits ... ok
+test noncontinuing_invalid_record_heads_keep_their_never_flow ... ok
+test invalid_record_heads_discard_conditional_break_exits ... ok
+test structurally_invalid_record_does_not_initialize_outer_binding ... ok
+test unknown_record_type_does_not_initialize_outer_binding ... ok
+test noncontinuing_valid_aggregate_inputs_keep_their_never_flow ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/invalid_call_flow.rs (target/debug/deps/invalid_call_flow-3dd8d999a37d9f78)
+
+running 9 tests
+test call_hir_still_preserves_lowered_children_for_diagnostics ... ok
+test erroneous_argument_does_not_export_earlier_argument_flow ... ok
+test argument_type_mismatch_does_not_initialize_outer_binding ... ok
+test noncallable_callee_does_not_export_argument_initialization ... ok
+test noncontinuing_argument_dominates_error_callee_recovery ... ok
+test noncontinuing_argument_dominates_noncallable_callee_recovery ... ok
+test noncontinuing_wrong_arity_argument_keeps_never_flow ... ok
+test wrong_arity_call_does_not_initialize_outer_binding ... ok
+test rejected_call_discards_conditional_break_exits ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/invalid_condition_flow.rs (target/debug/deps/invalid_condition_flow-2b26607bff8bb026)
+
+running 9 tests
+test invalid_if_condition_discards_branch_break_exits ... ok
+test invalid_if_condition_does_not_export_branch_initialization ... ok
+test erroneous_if_condition_is_error_typed_and_fail_closed ... ok
+test invalid_if_condition_does_not_export_condition_initialization ... ok
+test invalid_while_condition_does_not_export_pretest_initialization ... ok
+test noncontinuing_if_condition_keeps_never_precedence ... ok
+test invalid_nested_while_condition_discards_outer_break_exit ... ok
+test noncontinuing_while_condition_still_diverges ... ok
+test valid_while_pretest_initialization_still_survives ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/invalid_field_access_flow.rs (target/debug/deps/invalid_field_access_flow-13c52ae79f79b85b)
+
+running 4 tests
+test unknown_field_does_not_initialize_outer_binding ... ok
+test nonrecord_field_access_does_not_initialize_outer_binding ... ok
+test noncontinuing_base_keeps_never_flow_without_field_type_cascade ... ok
+test rejected_field_access_discards_conditional_break_exits ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/invalid_operator_flow.rs (target/debug/deps/invalid_operator_flow-0053b21f91d34183)
+
+running 12 tests
+test boolean_mismatch_is_error_and_does_not_initialize_outer_binding ... ok
+test arithmetic_mismatch_is_error_and_does_not_initialize_outer_binding ... ok
+test equality_error_does_not_export_operand_initialization ... ok
+test comparison_mismatch_is_error_and_does_not_initialize_outer_binding ... ok
+test forced_short_circuit_rhs_noncontinuation_keeps_never ... ok
+test optional_short_circuit_rhs_noncontinuation_does_not_force_divergence ... ok
+test strict_binary_noncontinuation_keeps_never_precedence ... ok
+test rejected_binary_discards_conditional_break_exits ... ok
+test string_arithmetic_mismatch_rolls_back_rhs_initialization ... ok
+test string_short_circuit_mismatch_rolls_back_rhs_initialization ... ok
+test unary_mismatch_is_error_and_does_not_initialize_outer_binding ... ok
+test unary_noncontinuation_keeps_never_precedence ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/invalid_while_continue_flow.rs (target/debug/deps/invalid_while_continue_flow-67d4ab3158211c2b)
+
+running 3 tests
+test invalid_while_fallthrough_does_not_form_a_recovery_backedge ... ok
+test invalid_while_condition_keeps_continue_on_discarded_recovery_path ... ok
+test valid_dynamic_while_continue_still_has_a_backedge ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/literal_if_dataflow.rs (target/debug/deps/literal_if_dataflow-af6429b9e5caa1f9)
+
+running 5 tests
+test literal_if_dead_branches_remain_statically_checked ... ok
+test literal_if_live_breaks_remain_guaranteed_loop_exits ... ok
+test literal_if_dead_breaks_do_not_create_guaranteed_loop_exits ... ok
+test literal_if_uses_the_live_branch_for_noncontinuation ... ok
+test literal_if_selects_definite_initialization_from_the_live_branch ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/match_condition_assignment.rs (target/debug/deps/match_condition_assignment-b1b59a66b4aff0df)
+
+running 13 tests
+test earlier_invalid_read_does_not_block_later_valid_assignment ... ok
+test invalid_compound_self_assignment_does_not_initialize_delayed_binding ... ok
+test dynamic_match_rhs_self_read_keeps_outer_assignment_uninitialized ... ok
+test initialized_rhs_self_read_does_not_block_outer_assignment ... ok
+test invalid_self_assignment_does_not_initialize_delayed_binding ... ok
+test nested_if_initialized_self_read_stays_valid_through_match_merge ... ok
+test nested_if_noncontinuing_self_read_does_not_poison_match_assignment ... ok
+test nested_if_mixed_self_read_keeps_match_assignment_uninitialized ... ok
+test nested_match_mixed_self_read_keeps_outer_assignment_uninitialized ... ok
+test unreachable_rhs_self_read_does_not_block_initialization ... ok
+test noncontinuing_match_rhs_self_read_does_not_poison_outer_assignment ... ok
+test selected_match_rhs_unreachable_self_read_does_not_poison_initialization ... ok
+test reachable_rhs_self_read_still_blocks_initialization ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/module_identity.rs (target/debug/deps/module_identity-700099b6f8ffc29c)
+
+running 1 test
+test one_ast_can_be_resolved_under_distinct_module_qualified_identities ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/nested_loop_flow.rs (target/debug/deps/nested_loop_flow-9c87a644d3fe9de2)
+
+running 3 tests
+test inner_continue_backedge_does_not_leak_returning_initialization_to_outer_break ... ok
+test loop_carried_initialization_does_not_retroactively_initialize_first_iteration ... ok
+test inner_break_initialization_does_not_leak_into_outer_continue_backedge ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/nested_match_noncontinuing_assignment.rs (target/debug/deps/nested_match_noncontinuing_assignment-47f8fd3fadb8002e)
+
+running 6 tests
+test nested_match_noncontinuing_self_read_does_not_poison_outer_assignment ... ok
+test if_match_returning_initialization_does_not_leak_into_continuing_flow ... ok
+test if_match_returning_target_initialization_does_not_mask_continuing_self_read ... ok
+test match_if_returning_initialization_does_not_leak_into_continuing_flow ... ok
+test returning_target_initialization_does_not_mask_continuing_self_read ... ok
+test nested_match_returning_initialization_does_not_leak_into_continuing_flow ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/noncontinuing_return_expression.rs (target/debug/deps/noncontinuing_return_expression-af44e23d27476adc)
+
+running 3 tests
+test nested_return_expression_does_not_append_a_second_return_transfer ... ok
+test ordinary_return_still_emits_exactly_one_return_transfer ... ok
+test break_from_return_expression_consumes_the_parent_return ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/noncontinuing_successors.rs (target/debug/deps/noncontinuing_successors-dd6ffd9d73e8451e)
+
+running 5 tests
+test noncontinuing_while_condition_makes_body_diagnostic_only_but_keeps_loop_control_legal ... ok
+test noncontinuing_if_condition_suppresses_execution_failures_in_both_branches ... ok
+test noncontinuing_match_scrutinee_suppresses_execution_failures_in_arms ... ok
+test ordinary_reachable_successors_keep_constant_execution_failures ... ok
+test unreachable_successors_still_receive_static_diagnostics ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/pattern_payload_discard.rs (target/debug/deps/pattern_payload_discard-b458cd63c9fe74e3)
+
+running 2 tests
+test hir_distinguishes_payload_discard_from_absent_payload ... ok
+test payload_free_variant_cannot_use_discard_syntax ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/payload_expression_multiple_arithmetic_failures.rs (target/debug/deps/payload_expression_multiple_arithmetic_failures-b4b4eb08b85e7807)
+
+running 5 tests
+test payload_dependent_binary_tree_reports_each_failure ... ok
+test payload_dependent_record_fields_report_each_failure ... ok
+test payload_dependent_call_arguments_report_each_failure ... ok
+test dynamic_payload_expression_siblings_remain_runtime_only ... ok
+test unselected_payload_expression_siblings_report_no_failures ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/payload_free_enum_equality.rs (target/debug/deps/payload_free_enum_equality-9083ee4724a3b1d7)
+
+running 5 tests
+test different_nominal_enums_cannot_be_compared ... ok
+test enum_with_any_payload_remains_non_comparable ... ok
+test direct_payload_free_enum_comparison_refines_reachability ... ok
+test enum_returning_calls_remain_dynamic_conditions ... ok
+test payload_free_enum_values_are_equality_comparable ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/reachable_state.rs (target/debug/deps/reachable_state-6f95458043db30a4)
+
+running 3 tests
+test unreachable_tail_break_does_not_create_a_loop_exit ... ok
+test unreachable_break_after_continue_does_not_create_a_loop_exit ... ok
+test diagnostic_only_expression_paths_restore_enclosing_loop_state ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/record_field_identity.rs (target/debug/deps/record_field_identity-816d04faf19ff47d)
+
+running 1 test
+test hir_preserves_resolved_record_field_name_and_slot ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/rejected_short_circuit_loop_transfer.rs (target/debug/deps/rejected_short_circuit_loop_transfer-fdfbbd28a44e538b)
+
+running 1 test
+test rejected_string_short_circuit_rolls_back_conditional_break_transfer ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/rejected_while_condition_assignment.rs (target/debug/deps/rejected_while_condition_assignment-51acf77af602c0ef)
+
+running 1 test
+test rejected_while_condition_does_not_export_assignment_initialization ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/return_proof_local_arithmetic_failures.rs (target/debug/deps/return_proof_local_arithmetic_failures-27dab7efa14b42a4)
+
+running 8 tests
+test return_stops_following_execution_failure_collection ... ok
+test proven_unselected_return_does_not_report_failure ... ok
+test dynamic_if_returns_report_each_potential_failure ... ok
+test dynamic_return_divisor_remains_runtime_only ... ok
+test selected_payload_return_reports_each_sibling_failure ... ok
+test selected_payload_return_reports_zero_divisor ... ok
+test selected_payload_return_reports_overflow ... ok
+test static_tag_selects_only_the_reachable_return_arm ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/selected_match_multiple_arithmetic_failures.rs (target/debug/deps/selected_match_multiple_arithmetic_failures-9fd6cef39e66c1a8)
+
+running 6 tests
+test proven_unselected_payload_arm_reports_no_execution_failures ... ok
+test selected_if_inside_payload_arm_reports_each_failure ... ok
+test nested_selected_payload_environment_reports_each_failure ... ok
+test dynamic_payload_remains_runtime_only ... ok
+test selected_int_payload_reports_distinct_failure_classes ... ok
+test selected_int_payload_reports_each_zero_divisor ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/short_circuit.rs (target/debug/deps/short_circuit-1d6cb8eaca263fe7)
+
+running 3 tests
+test dynamic_and_or_rhs_breaks_remain_reachable_loop_exits ... ok
+test dynamic_and_or_rhs_initialization_is_conditional ... ok
+test dynamic_and_or_noncontinuing_rhs_does_not_make_expression_noncontinuing ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/statement_free_closed_blocks.rs (target/debug/deps/statement_free_closed_blocks-01c30c004ab5e61f)
+
+running 6 tests
+test statement_free_enum_blocks_preserve_direct_constructor_proofs ... ok
+test closed_statement_bearing_blocks_participate_in_proofs ... ok
+test statement_free_bool_blocks_refine_if_and_while_flow ... ok
+test mutable_and_dynamic_statement_bearing_blocks_remain_runtime_only ... ok
+test transparent_blocks_are_not_folded_out_of_hir ... ok
+test statement_free_int_blocks_participate_in_closed_arithmetic ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/static_match_arithmetic_failure_reachability.rs (target/debug/deps/static_match_arithmetic_failure_reachability-79be0ea54589b893)
+
+running 6 tests
+test direct_known_variant_still_reports_selected_outer_failure ... ok
+test direct_known_variant_with_dynamic_payload_prunes_unselected_failure ... ok
+test immutable_block_alias_preserves_static_variant_reachability ... ok
+test immutable_record_alias_preserves_static_field_reachability ... ok
+test mutable_alias_keeps_both_match_arms_potentially_executable ... ok
+test selected_dynamic_payload_binding_shadows_outer_closed_binding ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/static_match_arm_usefulness.rs (target/debug/deps/static_match_arm_usefulness-c8d8515c8da1a983)
+
+running 3 tests
+test semantic_errors_suppress_static_match_usefulness_warnings ... ok
+test warns_for_nonselected_arms_of_a_direct_enum_constructor ... ok
+test does_not_guess_usefulness_for_a_dynamic_scrutinee ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/static_match_composite_usefulness.rs (target/debug/deps/static_match_composite_usefulness-dccbd97a2534774e)
+
+running 7 tests
+test closed_record_projection_scrutinee_drives_match_selection ... ok
+test closed_immutable_binding_block_scrutinee_drives_match_selection ... ok
+test direct_constructor_with_dynamic_payload_keeps_existing_fast_path ... ok
+test dynamic_call_scrutinee_remains_conservative ... ok
+test selected_if_enum_scrutinee_drives_match_dataflow_and_usefulness ... ok
+test selected_if_payload_constructor_keeps_payload_binding_flow ... ok
+test static_errors_in_nonselected_composite_arm_still_suppress_usefulness_warning ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/static_match_dynamic_payload_usefulness.rs (target/debug/deps/static_match_dynamic_payload_usefulness-4e57adffa742b557)
+
+running 5 tests
+test selected_if_dynamic_payload_preserves_nonselected_arm_type_checking ... ok
+test dynamic_payload_value_is_not_promoted_to_closed_value_proof ... ok
+test selected_false_if_with_dynamic_payload_still_proves_variant_tag ... ok
+test dynamic_if_condition_remains_conservative_even_with_known_branch_tags ... ok
+test selected_if_with_dynamic_payload_still_proves_variant_tag ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/static_match_tag_bindings.rs (target/debug/deps/static_match_tag_bindings-bcb305e95416865c)
+
+running 7 tests
+test block_local_record_alias_projects_tag_with_dynamic_sibling ... ok
+test block_local_dynamic_payload_alias_preserves_static_tag ... ok
+test closed_binding_survives_later_dynamic_statement_in_tag_block ... ok
+test selected_payload_alias_with_dynamic_tag_remains_conservative ... ok
+test static_binding_identity_respects_shadowed_immutable_names ... ok
+test tag_alias_does_not_promote_runtime_bool_payload_to_constant_condition ... ok
+test selected_payload_enum_alias_preserves_known_nested_tag ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/static_match_tag_projection.rs (target/debug/deps/static_match_tag_projection-6e4d59aba6e2f9a0)
+
+running 7 tests
+test mutable_binding_tail_remains_conservative ... ok
+test record_projection_ignores_dynamic_sibling_for_variant_tag ... ok
+test nested_match_result_depending_on_dynamic_payload_remains_conservative ... ok
+test nested_selected_match_with_dynamic_payload_projects_result_tag ... ok
+test record_projection_preserves_dynamic_payload_tag ... ok
+test statement_bearing_block_can_expose_direct_tail_tag ... ok
+test selected_if_branch_can_expose_tag_after_dynamic_statement ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/static_tag_loop_boundaries.rs (target/debug/deps/static_tag_loop_boundaries-116d3791c287706b)
+
+running 3 tests
+test nonterminating_loop_blocks_diagnostic_only_tail_tag ... ok
+test loop_with_reachable_break_preserves_tail_tag_selection ... ok
+test statically_skipped_loop_preserves_tail_tag_selection ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/string_scalars.rs (target/debug/deps/string_scalars-4e42aa6d3e9e301f)
+
+running 5 tests
+test rejected_mixed_equality_does_not_leak_rhs_initialization ... ok
+test closed_string_equality_drives_definite_initialization_without_folding_hir ... ok
+test mutable_string_equality_does_not_manufacture_definite_initialization ... ok
+test rejects_mixed_string_equality_and_redefinition_of_the_builtin_type ... ok
+test lowers_strings_through_functions_records_enums_and_match ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/surface_function_types.rs (target/debug/deps/surface_function_types-8490b6cd7c8f4900)
+
+running 2 tests
+test higher_order_calls_are_checked_through_surface_function_annotations ... ok
+test resolves_nested_surface_function_types_to_existing_hir_signatures ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/surface_never_type.rs (target/debug/deps/surface_never_type-69613418474ea492)
+
+running 2 tests
+test never_function_rejects_continuing_fallthrough_and_tail_values ... ok
+test surface_never_reuses_existing_bottom_type_and_branch_join ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/unit_equality.rs (target/debug/deps/unit_equality-39f16670d2e4a8dc)
+
+running 4 tests
+test literal_unit_equality_drives_closed_condition_reachability ... ok
+test unit_returning_calls_do_not_become_constant_conditions ... ok
+test aggregate_equality_remains_rejected ... ok
+test unit_values_are_equality_comparable ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/while_condition_assignment.rs (target/debug/deps/while_condition_assignment-57e3aa1dc099d5b8)
+
+running 4 tests
+test valid_while_condition_exports_mandatory_assignment_initialization ... ok
+test while_condition_partial_assignment_does_not_initialize_post_loop_state ... ok
+test while_condition_never_branch_does_not_erase_reachable_initialization ... ok
+test while_condition_terminated_branch_does_not_erase_reachable_initialization ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/while_condition_break_reachability.rs (target/debug/deps/while_condition_break_reachability-bf6a21bc99fe35ad)
+
+running 6 tests
+test invalid_nested_while_condition_break_does_not_exit_outer_loop ... ok
+test arithmetic_failure_in_invalid_nested_while_condition_preserves_error_and_rolls_back_break ... ok
+test nested_while_condition_break_can_exit_outer_loop ... ok
+test statically_skipped_nested_while_condition_break_does_not_exit_outer_loop ... ok
+test nested_while_condition_continue_does_not_exit_outer_loop ... ok
+test nested_while_condition_return_does_not_exit_outer_loop ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/while_proof_local_arithmetic_failures.rs (target/debug/deps/while_proof_local_arithmetic_failures-d812e86d3bfce70d)
+
+running 16 tests
+test body_local_shadow_does_not_reuse_outer_closed_payload ... ok
+test dynamic_divisor_inside_loop_body_remains_runtime_only ... ok
+test dynamic_while_body_reports_outer_payload_failure ... ok
+test dynamic_while_body_reports_each_outer_payload_failure ... ok
+test dynamic_while_preserves_reachable_following_failure ... ok
+test forced_short_circuit_break_exits_proven_true_loop ... ok
+test proven_false_while_preserves_reachable_following_failure ... ok
+test nested_loop_break_does_not_exit_proven_true_outer_loop ... ok
+test proven_false_while_skips_body_failure ... ok
+test proven_true_while_with_reachable_break_preserves_following_failure ... ok
+test proven_true_while_with_potential_break_preserves_following_failure ... ok
+test unreachable_break_does_not_exit_proven_true_loop ... ok
+test statically_unselected_match_break_does_not_exit_proven_true_loop ... ok
+test rejected_call_does_not_create_a_loop_exit_for_following_failure ... ok
+test short_circuited_break_does_not_exit_proven_true_loop ... ok
+test while_condition_reports_proof_local_failure_before_body ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nova_source-89a44eb0f0245b54)
+
+running 3 tests
+test tests::combines_spans_only_within_one_source ... ok
+test tests::rejects_invalid_or_foreign_spans ... ok
+test tests::resolves_unicode_columns_and_crlf_lines ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
