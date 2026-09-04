@@ -1,0 +1,127 @@
+[1m[92m    Updating[0m crates.io index
+[1m[92m Downloading[0m crates ...
+[1m[92m  Downloaded[0m proc-macro2 v1.0.107
+[1m[92m  Downloaded[0m itoa v1.0.18
+[1m[92m  Downloaded[0m memchr v2.8.3
+[1m[92m  Downloaded[0m quote v1.0.47
+[1m[92m  Downloaded[0m zmij v1.0.23
+[1m[92m  Downloaded[0m serde v1.0.229
+[1m[92m  Downloaded[0m unicode-ident v1.0.24
+[1m[92m  Downloaded[0m serde_core v1.0.229
+[1m[92m  Downloaded[0m serde_derive v1.0.229
+[1m[92m  Downloaded[0m serde_json v1.0.151
+[1m[92m  Downloaded[0m syn v3.0.4
+[1m[92m   Compiling[0m nova-source v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-source)
+[1m[92m   Compiling[0m nova-int-semantics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-int-semantics)
+[1m[92m   Compiling[0m proc-macro2 v1.0.107
+[1m[92m   Compiling[0m quote v1.0.47
+[1m[92m   Compiling[0m unicode-ident v1.0.24
+[1m[92m   Compiling[0m nova-diagnostics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-diagnostics)
+[1m[92m   Compiling[0m serde_core v1.0.229
+[1m[92m   Compiling[0m zmij v1.0.23
+[1m[92m   Compiling[0m nova-lexer v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-lexer)
+[1m[92m   Compiling[0m nova-parser v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-parser)
+[1m[92m   Compiling[0m serde_json v1.0.151
+[1m[92m   Compiling[0m nova-sema v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-sema)
+[1m[92m   Compiling[0m serde v1.0.229
+[1m[92m   Compiling[0m syn v3.0.4
+[1m[92m   Compiling[0m itoa v1.0.18
+[1m[92m   Compiling[0m memchr v2.8.3
+[1m[92m   Compiling[0m nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
+[1m[92m   Compiling[0m serde_derive v1.0.229
+[1m[92m   Compiling[0m nova-inspect v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-inspect)
+[1m[92m   Compiling[0m nova-cli v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-cli)
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 16.96s
+[1m[92m     Running[0m unittests src/main.rs (target/debug/deps/nova-9cafe47ab4193f60)
+
+running 6 tests
+test tests::option_terminator_preserves_option_like_source_operands ... ok
+test tests::parses_commands_and_both_message_format_spellings ... ok
+test tests::parses_explicit_standard_input_display_names ... ok
+test tests::rejects_ambiguous_or_incomplete_invocations ... ok
+test tests::rejects_non_utf8_standard_input_display_names ... ok
+test tests::reports_standard_input_read_failures_as_source_diagnostics ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/bare_unit_return.rs (target/debug/deps/bare_unit_return-c5f45c25ae02ea4c)
+
+running 1 test
+test check_run_ast_and_existing_inspection_schemas_accept_bare_unit_return ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/cli.rs (target/debug/deps/cli-502ae0b25fb73fab)
+
+running 24 tests
+test ast_command_can_inspect_a_semantically_invalid_program ... ok
+test ast_command_prints_a_span_preserving_tree ... ok
+test emits_one_json_object_per_diagnostic ... ok
+test emits_semantic_diagnostics_as_json ... ok
+test commands_accept_standard_input_as_the_source ... ok
+test fail_on_warnings_rejects_warnings_without_promoting_them ... ok
+test fail_on_warnings_preserves_clean_success_and_ordinary_errors ... ok
+test inspect_command_emits_explicit_schema_v2_cfg_facts ... ok
+test inspect_command_matches_the_versioned_golden_document ... ok
+test closures_run_and_require_inspection_schema_v5 ... ok
+test option_terminator_allows_hyphen_prefixed_source_paths ... ok
+test inspect_rejects_invalid_source_without_partial_output ... ok
+test rejects_malformed_utf8_before_lexing ... ok
+test inspect_schema_v3_represents_payload_discard_without_reinterpreting_v1_or_v2 ... ok
+test accepts_positive_fixtures ... ok
+test source_name_is_rejected_for_file_input ... ok
+test standard_input_can_publish_an_explicit_source_name ... ok
+test standard_input_preserves_diagnostics_and_strict_warning_policy ... ok
+test string_lexical_failures_have_structured_cli_diagnostics ... ok
+test rejects_negative_fixtures_with_stable_codes ... ok
+test run_command_executes_checked_program ... ok
+test string_scalars_run_and_require_inspection_schema_v4 ... ok
+test run_command_reports_runtime_failures ... ok
+test warnings_are_nonfatal_for_check_run_and_inspect ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+[1m[92m     Running[0m tests/closure_shared_capture.rs (target/debug/deps/closure_shared_capture-d777d5bcfcc63d96)
+
+running 3 tests
+test immutable_capture_assignment_remains_rejected ... ok
+test mutable_write_capture_shares_one_cell_with_outer_scope ... ok
+test read_only_mutable_capture_keeps_creation_time_snapshot ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/closure_snapshot.rs (target/debug/deps/closure_snapshot-10a98b717966908a)
+
+running 2 tests
+test mutable_write_capture_is_no_longer_rejected_as_snapshot_assignment ... ok
+test mutable_source_snapshot_runs_and_requires_schema_v7 ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/generic_functions.rs (target/debug/deps/generic_functions-7e9f6f67bc209b9d)
+
+running 3 tests
+test frozen_inspection_schema_rejects_generic_type_parameters ... ok
+test generic_inference_conflicts_and_missing_arguments_fail_closed ... ok
+test inferred_generic_identity_executes_at_multiple_types ... FAILED
+
+failures:
+
+---- inferred_generic_identity_executes_at_multiple_types stdout ----
+
+thread 'inferred_generic_identity_executes_at_multiple_types' (5225) panicked at crates/nova-cli/tests/generic_functions.rs:27:5:
+error[N4005]: interpreter invariant violated
+ --> /home/runner/work/Nova/Nova/crates/nova-cli/tests/fixtures/valid/generic-identity.nv:4:8
+  |
+4 |     if identity(true) { identity(42) } else { 0 }
+  |        ^^^^^^^^ expression produced a runtime value that does not conform to HIR type fn(T) -> T
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    inferred_generic_identity_executes_at_multiple_types
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[91merror[0m: test failed, to rerun pass `-p nova-cli --test generic_functions`
