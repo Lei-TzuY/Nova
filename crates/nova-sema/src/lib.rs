@@ -26,7 +26,10 @@ pub fn analyze(program: &nova_parser::ast::Program) -> AnalysisOutput {
 /// name/type resolution so they share the exact same signed-64 literal contract as
 /// source integer literals.
 #[must_use]
-pub fn analyze_in_module(program: &nova_parser::ast::Program, module: hir::ModuleId) -> AnalysisOutput {
+pub fn analyze_in_module(
+    program: &nova_parser::ast::Program,
+    module: hir::ModuleId,
+) -> AnalysisOutput {
     let program = numeric_surface::canonicalize_int_constants(program);
     analyzer::analyze_in_module(&program, module)
 }
