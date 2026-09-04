@@ -86,3 +86,72 @@ fn bool_to_int_conversion_rejects_non_bool_payloads_and_missing_payloads() {
         );
     }
 }
+
+#[test]
+fn int_to_bool_conversion_executes_through_the_complete_pipeline() {
+    let source = "fn main() -> Bool { Bool::from(Int::MIN) && !Bool::from(0) && Bool::from(42) }";
+
+    let check = run_stdin(&["check", "-"], source);
+    assert!(
+        check.status.success(),
+        "{}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+
+    let run = run_stdin(&["run", "-"], source);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "true\n");
+
+    let inspect = run_stdin(
+        &["inspect", "-", "--format=json", "--schema-version", "6"],
+        source,
+    );
+    assert!(
+        inspect.status.success(),
+        "{}",
+        String::from_utf8_lossy(&inspect.stderr)
+    );
+    assert!(!inspect.stdout.is_empty());
+}
+
+#[test]
+fn int_to_bool_conversion_evaluates_its_operand_once() {
+    let source = r#"
+fn main() -> Int {
+    var x: Int = 0;
+    let converted = Bool::from({ x = x + 1; x });
+    if converted { x + 41 } else { 0 }
+}
+"#;
+
+    let run = run_stdin(&["run", "-"], source);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
+}
+
+#[test]
+fn int_to_bool_conversion_rejects_non_int_payloads_and_missing_payloads() {
+    for source in [
+        "fn main() -> Bool { Bool::from(true) }",
+        "fn main() -> Bool { Bool::from(\"1\") }",
+        "fn main() -> Bool { Bool::from }",
+    ] {
+        let output = run_stdin(&["check", "-"], source);
+        assert!(
+            !output.status.success(),
+            "source unexpectedly accepted: {source}"
+        );
+        assert!(
+            !String::from_utf8_lossy(&output.stderr).trim().is_empty(),
+            "rejection should retain a deterministic diagnostic"
+        );
+    }
+}
