@@ -106,17 +106,12 @@ fn explicit_generic_arguments_execute_and_fail_deterministically() {
     }
 
     let inspect = Command::new(env!("CARGO_BIN_EXE_nova"))
-        .args([
-            "inspect",
-            &path,
-            "--format=json",
-            "--schema-version",
-            "8",
-        ])
+        .args(["inspect", &path, "--format=json", "--schema-version", "8"])
         .output()
         .unwrap();
     assert!(!inspect.status.success());
     assert!(
-        String::from_utf8_lossy(&inspect.stderr).contains("cannot represent generic type parameter")
+        String::from_utf8_lossy(&inspect.stderr)
+            .contains("cannot represent generic type parameter")
     );
 }

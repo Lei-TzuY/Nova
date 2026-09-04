@@ -12,9 +12,8 @@ fn parse_text(text: &str) -> nova_parser::ParseOutput {
 
 #[test]
 fn parses_explicit_generic_call_without_stealing_less_than() {
-    let parsed = parse_text(
-        "fn id<T>(value: T) -> T { value } fn main() -> Bool { id<Int>(1) < 2 }",
-    );
+    let parsed =
+        parse_text("fn id<T>(value: T) -> T { value } fn main() -> Bool { id<Int>(1) < 2 }");
     assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
     let tail = parsed.program.functions[1]
         .body
