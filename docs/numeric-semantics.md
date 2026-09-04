@@ -43,17 +43,19 @@ same operation cannot be accepted at compile time and fail differently at runtim
 
 `Int` supports `==`, `!=`, `<`, `<=`, `>`, and `>=`.
 
-The bootstrap language has one explicit conversion into `Int`:
+The bootstrap language has explicit conversions between `Bool` and `Int`:
 
 - `Int::from(false)` evaluates to `0`;
-- `Int::from(true)` evaluates to `1`.
+- `Int::from(true)` evaluates to `1`;
+- `Bool::from(0)` evaluates to `false`;
+- `Bool::from(n)` evaluates to `true` for every non-zero `Int`, including `Int::MIN`.
 
-The conversion operand must have type `Bool`, is evaluated exactly once, and retains the
-ordinary control-flow and side-effect semantics of any other expression. Semantic
-canonicalization lowers the conversion to ordinary typed conditional HIR, so the
-interpreter does not carry a parallel conversion opcode or a second source of truth.
-A missing payload or a non-`Bool` payload is rejected by normal semantic diagnostics.
-There are no implicit conversions.
+Each conversion operand is evaluated exactly once and retains the ordinary control-flow
+and side-effect semantics of any other expression. Semantic canonicalization lowers
+`Int::from(Bool)` to ordinary typed conditional HIR and `Bool::from(Int)` to an ordinary
+`!= 0` comparison, so the interpreter does not carry parallel conversion opcodes or a
+second source of truth. Missing payloads and operands of the wrong type are rejected by
+normal semantic diagnostics. There are no implicit conversions.
 
 Literal suffixes, floating-point semantics, additional numeric families,
 widening/narrowing policy, and backend representation beyond this signed-64 contract
