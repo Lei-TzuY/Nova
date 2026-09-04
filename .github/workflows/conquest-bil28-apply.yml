@@ -17,7 +17,9 @@ jobs:
           ref: conquest/bil-28-shared-mutable-capture
           fetch-depth: 0
       - name: Apply implementation
-        run: python3 scripts/bil28_apply.py
+        run: |
+          python3 scripts/bil28_apply.py
+          python3 scripts/bil28_fix.py
       - name: Format
         run: cargo fmt --all
       - name: Test workspace
@@ -27,7 +29,7 @@ jobs:
       - name: Commit implementation
         shell: bash
         run: |
-          rm -f scripts/bil28_apply.py .github/workflows/conquest-bil28-apply.yml
+          rm -f scripts/bil28_apply.py scripts/bil28_fix.py .github/workflows/conquest-bil28-apply.yml
           git config user.name 'LeiZ'
           git config user.email '52287354+Lei-TzuY@users.noreply.github.com'
           git add -A
