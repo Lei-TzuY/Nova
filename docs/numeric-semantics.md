@@ -39,11 +39,22 @@ overflow because the exact quotient is outside the `Int` range. Semantic constan
 preflight and runtime execution share the same `nova-int-semantics` truth table so the
 same operation cannot be accepted at compile time and fail differently at runtime.
 
-## Comparison and conversions
+## Comparison, classification, and conversions
 
 `Int` supports `==`, `!=`, `<`, `<=`, `>`, and `>=`.
 
-The bootstrap language has explicit conversions between `Bool` and `Int`:
+Three explicit sign predicates classify an `Int` relative to zero:
+
+- `Int::is_negative(n)` is equivalent to `n < 0`;
+- `Int::is_zero(n)` is equivalent to `n == 0`;
+- `Int::is_positive(n)` is equivalent to `n > 0`.
+
+Each predicate evaluates its operand exactly once. Semantic canonicalization lowers the
+spellings to the ordinary typed comparison HIR, so comparison typing, control-flow,
+diagnostics, and runtime behavior remain the single source of truth. A missing payload
+or a payload whose type is not `Int` is rejected rather than coerced.
+
+The bootstrap language also has explicit conversions between `Bool` and `Int`:
 
 - `Int::from(false)` evaluates to `0`;
 - `Int::from(true)` evaluates to `1`;

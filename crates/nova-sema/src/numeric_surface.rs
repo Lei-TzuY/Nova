@@ -6,9 +6,9 @@ use nova_parser::ast::{self, BinaryOperator, Block, ExpressionKind, StatementKin
 /// The parser intentionally keeps `Qualifier::Member` syntax generic. `Int` and
 /// `Bool` are already reserved primitive types, so the built-in spellings handled
 /// here cannot conflict with a user-defined enum. Boundary constants lower to the
-/// same literal HIR used by source integers, while explicit conversions lower to
-/// ordinary typed expressions so operands are evaluated exactly once and normal
-/// type checking remains authoritative.
+/// same literal HIR used by source integers, while explicit conversions and numeric
+/// predicates lower to ordinary typed expressions so operands are evaluated exactly
+/// once and normal type checking remains authoritative.
 pub(crate) fn canonicalize_int_constants(program: &ast::Program) -> ast::Program {
     let mut program = program.clone();
     for function in &mut program.functions {
@@ -53,6 +53,18 @@ fn rewrite_expression(expression: &mut ast::Expression) {
             ("MAX", None) => Some(NumericBuiltin::IntBoundary(IntBoundary::Max)),
             ("MIN", None) => Some(NumericBuiltin::IntBoundary(IntBoundary::Min)),
             ("from", Some(payload)) => Some(NumericBuiltin::IntFromBool((**payload).clone())),
+            ("is_negative", Some(payload)) => Some(NumericBuiltin::IntPredicate(
+                IntPredicate::Negative,
+                (**payload).clone(),
+            )),
+            ("is_zero", Some(payload)) => Some(NumericBuiltin::IntPredicate(
+                IntPredicate::Zero,
+                (**payload).clone(),
+            )),
+            ("is_positive", Some(payload)) => Some(NumericBuiltin::IntPredicate(
+                IntPredicate::Positive,
+                (**payload).clone(),
+            )),
             _ => None,
         },
         ExpressionKind::EnumConstructor {
@@ -82,10 +94,7 @@ fn rewrite_expression(expression: &mut ast::Expression) {
                 ExpressionKind::If {
                     condition: Box::new(condition),
                     then_branch: int_literal_block(1, expression.span),
-                    else_branch: Box::new(ast::Expression {
-                        kind: ExpressionKind::Integer(0),
-                        span: expression.span,
-                    }),
+                    else_branch: Box::new(int_literal(0, expression.span)),
                 }
             }
             NumericBuiltin::BoolFromInt(mut operand) => {
@@ -93,10 +102,19 @@ fn rewrite_expression(expression: &mut ast::Expression) {
                 ExpressionKind::Binary {
                     operator: BinaryOperator::NotEqual,
                     left: Box::new(operand),
-                    right: Box::new(ast::Expression {
-                        kind: ExpressionKind::Integer(0),
-                        span: expression.span,
-                    }),
+                    right: Box::new(int_literal(0, expression.span)),
+                }
+            }
+            NumericBuiltin::IntPredicate(predicate, mut operand) => {
+                rewrite_expression(&mut operand);
+                ExpressionKind::Binary {
+                    operator: match predicate {
+                        IntPredicate::Negative => BinaryOperator::Less,
+                        IntPredicate::Zero => BinaryOperator::Equal,
+                        IntPredicate::Positive => BinaryOperator::Greater,
+                    },
+                    left: Box::new(operand),
+                    right: Box::new(int_literal(0, expression.span)),
                 }
             }
         };
@@ -153,13 +171,17 @@ fn rewrite_expression(expression: &mut ast::Expression) {
     }
 }
 
+fn int_literal(value: u64, span: nova_source::Span) -> ast::Expression {
+    ast::Expression {
+        kind: ExpressionKind::Integer(value),
+        span,
+    }
+}
+
 fn int_literal_block(value: u64, span: nova_source::Span) -> Block {
     Block {
         statements: Vec::new(),
-        tail: Some(Box::new(ast::Expression {
-            kind: ExpressionKind::Integer(value),
-            span,
-        })),
+        tail: Some(Box::new(int_literal(value, span))),
         span,
     }
 }
@@ -169,10 +191,18 @@ enum NumericBuiltin {
     IntBoundary(IntBoundary),
     IntFromBool(ast::Expression),
     BoolFromInt(ast::Expression),
+    IntPredicate(IntPredicate, ast::Expression),
 }
 
 #[derive(Clone, Copy)]
 enum IntBoundary {
     Min,
     Max,
+}
+
+#[derive(Clone, Copy)]
+enum IntPredicate {
+    Negative,
+    Zero,
+    Positive,
 }
