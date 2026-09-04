@@ -47,6 +47,24 @@ jobs:
             exit 1
           fi
           rm -f .github/bil34-error.txt
+      - name: Complete inspection fail-closed handling
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('crates/nova-inspect/src/lib.rs')
+          text = p.read_text()
+          old = '''                    Type::Bool => (v1::TypeKind::Bool, None, Vec::new(), None),
+                              Type::String => (v1::TypeKind::String, None, Vec::new(), None),'''
+          new = '''                    Type::Bool => (v1::TypeKind::Bool, None, Vec::new(), None),
+                              Type::TypeParameter(name) => {
+                                  return Err(InspectionError::invalid(format!(
+                                      "semantic-inspection schema v1-v8 cannot encode generic type parameter `{name}`"
+                                  )));
+                              }
+                              Type::String => (v1::TypeKind::String, None, Vec::new(), None),'''
+          assert old in text
+          p.write_text(text.replace(old, new, 1))
+          PY
       - run: cargo fmt --all
       - name: Compile candidate
         run: |
