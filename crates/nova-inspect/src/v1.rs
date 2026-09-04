@@ -103,6 +103,7 @@ pub enum TypeKind {
     /// Surface `Int`.
     Int,
     /// Surface `UInt`.
+    #[serde(rename = "uint")]
     UInt,
     /// Surface `Bool`.
     Bool,

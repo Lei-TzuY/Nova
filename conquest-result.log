@@ -3,15 +3,15 @@ exit=0
 ### cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 [1m[92m    Updating[0m crates.io index
 [1m[92m Downloading[0m crates ...
-[1m[92m  Downloaded[0m serde v1.0.229
+[1m[92m  Downloaded[0m serde_derive v1.0.229
 [1m[92m  Downloaded[0m itoa v1.0.18
-[1m[92m  Downloaded[0m memchr v2.8.3
 [1m[92m  Downloaded[0m quote v1.0.47
 [1m[92m  Downloaded[0m proc-macro2 v1.0.107
-[1m[92m  Downloaded[0m zmij v1.0.23
-[1m[92m  Downloaded[0m serde_derive v1.0.229
 [1m[92m  Downloaded[0m unicode-ident v1.0.24
+[1m[92m  Downloaded[0m zmij v1.0.23
 [1m[92m  Downloaded[0m serde_core v1.0.229
+[1m[92m  Downloaded[0m memchr v2.8.3
+[1m[92m  Downloaded[0m serde v1.0.229
 [1m[92m  Downloaded[0m serde_json v1.0.151
 [1m[92m  Downloaded[0m syn v3.0.4
 [1m[92m    Checking[0m nova-source v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-source)
@@ -22,19 +22,19 @@ exit=0
 [1m[92m    Checking[0m nova-diagnostics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-diagnostics)
 [1m[92m   Compiling[0m serde_core v1.0.229
 [1m[92m    Checking[0m nova-lexer v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-lexer)
-[1m[92m   Compiling[0m zmij v1.0.23
 [1m[92m    Checking[0m nova-parser v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-parser)
+[1m[92m   Compiling[0m zmij v1.0.23
 [1m[92m   Compiling[0m serde_json v1.0.151
-[1m[92m   Compiling[0m serde v1.0.229
 [1m[92m    Checking[0m nova-sema v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-sema)
-[1m[92m    Checking[0m itoa v1.0.18
-[1m[92m    Checking[0m memchr v2.8.3
+[1m[92m   Compiling[0m serde v1.0.229
 [1m[92m   Compiling[0m syn v3.0.4
 [1m[92m    Checking[0m nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
+[1m[92m    Checking[0m itoa v1.0.18
+[1m[92m    Checking[0m memchr v2.8.3
 [1m[92m   Compiling[0m serde_derive v1.0.229
 [1m[92m    Checking[0m nova-inspect v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-inspect)
 [1m[92m    Checking[0m nova-cli v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-cli)
-[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 6.46s
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 6.00s
 exit=0
 ### cargo +1.85.0 check --workspace --all-targets --locked
 [1m[32m    Checking[0m nova-source v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-source)
@@ -48,42 +48,42 @@ exit=0
 [1m[32m    Checking[0m nova-parser v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-parser)
 [1m[32m   Compiling[0m zmij v1.0.23
 [1m[32m    Checking[0m nova-sema v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-sema)
-[1m[32m   Compiling[0m serde_json v1.0.151
 [1m[32m   Compiling[0m serde v1.0.229
-[1m[32m    Checking[0m nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
 [1m[32m   Compiling[0m syn v3.0.4
-[1m[32m    Checking[0m itoa v1.0.18
+[1m[32m   Compiling[0m serde_json v1.0.151
+[1m[32m    Checking[0m nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
 [1m[32m    Checking[0m memchr v2.8.3
+[1m[32m    Checking[0m itoa v1.0.18
 [1m[32m   Compiling[0m serde_derive v1.0.229
 [1m[32m    Checking[0m nova-inspect v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-inspect)
 [1m[32m    Checking[0m nova-cli v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-cli)
-[1m[32m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 6.61s
+[1m[32m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 6.42s
 exit=0
 ### cargo test --workspace --all-targets --locked
 [1m[92m   Compiling[0m nova-source v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-source)
 [1m[92m   Compiling[0m nova-int-semantics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-int-semantics)
 [1m[92m   Compiling[0m serde_core v1.0.229
 [1m[92m   Compiling[0m zmij v1.0.23
-[1m[92m   Compiling[0m memchr v2.8.3
-[1m[92m   Compiling[0m nova-diagnostics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-diagnostics)
-[1m[92m   Compiling[0m nova-lexer v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-lexer)
 [1m[92m   Compiling[0m itoa v1.0.18
+[1m[92m   Compiling[0m nova-diagnostics v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-diagnostics)
+[1m[92m   Compiling[0m memchr v2.8.3
+[1m[92m   Compiling[0m nova-lexer v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-lexer)
 [1m[92m   Compiling[0m nova-parser v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-parser)
 [1m[92m   Compiling[0m nova-sema v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-sema)
 [1m[92m   Compiling[0m nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
-[1m[92m   Compiling[0m serde v1.0.229
 [1m[92m   Compiling[0m serde_json v1.0.151
+[1m[92m   Compiling[0m serde v1.0.229
 [1m[92m   Compiling[0m nova-inspect v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-inspect)
 [1m[92m   Compiling[0m nova-cli v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-cli)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 14.52s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 13.84s
 [1m[92m     Running[0m unittests src/main.rs (target/debug/deps/nova-9cafe47ab4193f60)
 
 running 6 tests
 test tests::option_terminator_preserves_option_like_source_operands ... ok
-test tests::parses_explicit_standard_input_display_names ... ok
 test tests::parses_commands_and_both_message_format_spellings ... ok
-test tests::rejects_non_utf8_standard_input_display_names ... ok
+test tests::parses_explicit_standard_input_display_names ... ok
 test tests::rejects_ambiguous_or_incomplete_invocations ... ok
+test tests::rejects_non_utf8_standard_input_display_names ... ok
 test tests::reports_standard_input_read_failures_as_source_diagnostics ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -104,12 +104,12 @@ test emits_one_json_object_per_diagnostic ... ok
 test emits_semantic_diagnostics_as_json ... ok
 test commands_accept_standard_input_as_the_source ... ok
 test fail_on_warnings_rejects_warnings_without_promoting_them ... ok
+test inspect_command_emits_explicit_schema_v2_cfg_facts ... ok
 test fail_on_warnings_preserves_clean_success_and_ordinary_errors ... ok
-test inspect_command_emits_explicit_schema_v2_cfg_facts ... FAILED
 test closures_run_and_require_inspection_schema_v5 ... ok
-test inspect_command_matches_the_versioned_golden_document ... FAILED
-test inspect_rejects_invalid_source_without_partial_output ... ok
+test inspect_command_matches_the_versioned_golden_document ... ok
 test option_terminator_allows_hyphen_prefixed_source_paths ... ok
+test inspect_rejects_invalid_source_without_partial_output ... ok
 test rejects_malformed_utf8_before_lexing ... ok
 test inspect_schema_v3_represents_payload_discard_without_reinterpreting_v1_or_v2 ... ok
 test accepts_positive_fixtures ... ok
@@ -123,31 +123,97 @@ test run_command_reports_runtime_failures ... ok
 test warnings_are_nonfatal_for_check_run_and_inspect ... ok
 test string_scalars_run_and_require_inspection_schema_v4 ... ok
 
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+[1m[92m     Running[0m tests/int_abs.rs (target/debug/deps/int_abs-3d17fc439220c395)
+
+running 4 tests
+test int_abs_preserves_checked_min_overflow ... ok
+test int_abs_evaluates_its_operand_once ... ok
+test int_abs_rejects_non_int_payloads_and_missing_payloads ... ok
+test int_abs_executes_through_the_complete_pipeline ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/int_bool_conversion.rs (target/debug/deps/int_bool_conversion-a77fe7c6c81f35a7)
+
+running 6 tests
+test bool_to_int_conversion_evaluates_its_operand_once ... ok
+test int_to_bool_conversion_evaluates_its_operand_once ... ok
+test bool_to_int_conversion_rejects_non_bool_payloads_and_missing_payloads ... ok
+test bool_to_int_conversion_executes_through_the_complete_pipeline ... ok
+test int_to_bool_conversion_rejects_non_int_payloads_and_missing_payloads ... ok
+test int_to_bool_conversion_executes_through_the_complete_pipeline ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/int_boundary_constants.rs (target/debug/deps/int_boundary_constants-ab1e6d6158c5ab91)
+
+running 2 tests
+test unknown_or_payload_bearing_int_members_remain_rejected ... ok
+test int_min_and_max_execute_through_the_complete_pipeline ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/int_parity_predicates.rs (target/debug/deps/int_parity_predicates-a1b73f89e386e8ab)
+
+running 3 tests
+test int_parity_predicates_evaluate_their_operand_once ... ok
+test int_parity_predicates_reject_non_int_payloads_and_missing_payloads ... ok
+test int_parity_predicates_execute_through_the_complete_pipeline ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/int_sign_predicates.rs (target/debug/deps/int_sign_predicates-0d631fa290fd859e)
+
+running 3 tests
+test int_sign_predicates_evaluate_their_operand_once ... ok
+test int_sign_predicates_reject_non_int_payloads_and_missing_payloads ... ok
+test int_sign_predicates_execute_through_the_complete_pipeline ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/surface_never_type.rs (target/debug/deps/surface_never_type-8276f839c7b57c3b)
+
+running 1 test
+test check_run_and_all_inspection_versions_accept_surface_never ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/uint_numeric.rs (target/debug/deps/uint_numeric-1e5f4d92aed222c9)
+
+running 5 tests
+test uint_boundaries_and_checked_narrowing_execute ... FAILED
+test explicit_cross_family_conversions_are_checked ... ok
+test uint_executes_through_check_run_and_inspect ... FAILED
+test uint_arithmetic_is_checked_and_zero_division_is_rejected ... ok
+test uint_has_no_implicit_int_conversion_and_rejects_bad_members ... ok
+
 failures:
 
----- inspect_command_emits_explicit_schema_v2_cfg_facts stdout ----
+---- uint_boundaries_and_checked_narrowing_execute stdout ----
 
-thread 'inspect_command_emits_explicit_schema_v2_cfg_facts' (6882) panicked at crates/nova-cli/tests/cli.rs:616:5:
+thread 'uint_boundaries_and_checked_narrowing_execute' (6926) panicked at crates/nova-cli/tests/uint_numeric.rs:58:5:
 assertion `left == right` failed
-  left: "{\n  \"schema\": \"nova.semantic-inspection\",\n  \"schema_version\": 2,\n  \"producer\": {\n    \"name\": \"nova\",\n    \"version\": \"0.1.0\"\n  },\n  \"source\": {\n    \"id\": \"source:0\",\n    \"name\": \"tests/fixtures/valid/inspection-v2.nv\",\n    \"byte_length\": 21\n  },\n  \"program\": {\n    \"span\": {\n      \"source\": \"source:0\",\n      \"start\": 0,\n      \"end\": 21\n    },\n    \"types\": [\n      {\n        \"id\": \"type:0\",\n        \"kind\": \"int\",\n        \"display\": \"Int\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:1\",\n        \"kind\": \"u_int\",\n        \"display\": \"UInt\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:2\",\n        \"kind\": \"bool\",\n        \"display\": \"Bool\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:3\",\n        \"kind\": \"unit\",\n        \"display\": \"Unit\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:4\",\n        \"kind\": \"never\",\n        \"display\": \"!\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:5\",\n        \"kind\": \"function\",\n        \"display\": \"fn() -> Unit\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": \"type:3\"\n      }\n    ],\n    \"records\": [],\n    \"enums\": [],\n    \"functions\": [\n      {\n        \"id\": \"function:0\",\n        \"name\": \"main\",\n        \"type_id\": \"type:5\",\n        \"return_type\": \"type:3\",\n        \"parameters\": [],\n        \"body\": \"block:0\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 0,\n          \"end\": 20\n        }\n      }\n    ],\n    \"bindings\": [],\n    \"blocks\": [\n      {\n        \"id\": \"block:0\",\n        \"owner\": \"function:0\",\n        \"type_id\": \"type:3\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 18,\n          \"end\": 20\n        },\n        \"statements\": [],\n        \"tail_expression\": null\n      }\n    ],\n    \"statements\": [],\n    \"expressions\": [],\n    \"matches\": []\n  },\n  \"control_flow\": [\n    {\n      \"id\": \"cfg:function:0\",\n      \"function\": \"function:0\",\n      \"entry\": \"cfg:function:0.node:0\",\n      \"bindings\": [],\n      \"normal_exits\": [\n        \"cfg:function:0.node:1\"\n      ],\n      \"nodes\": [\n        {\n          \"id\": \"cfg:function:0.node:0\",\n          \"kind\": \"entry\",\n          \"binding\": null,\n          \"predecessors\": [],\n          \"span\": {\n            \"source\": \"source:0\",\n            \"start\": 0,\n            \"end\": 20\n          }\n        },\n        {\n          \"id\": \"cfg:function:0.node:1\",\n          \"kind\": \"exit\",\n          \"binding\": null,\n          \"predecessors\": [\n            {\n              \"from\": \"cfg:function:0.node:0\",\n              \"kind\": \"execution\"\n            }\n          ],\n          \"span\": {\n            \"source\": \"source:0\",\n            \"start\": 0,\n            \"end\": 20\n          }\n        }\n      ]\n    }\n  ]\n}\n"
- right: "{\n  \"schema\": \"nova.semantic-inspection\",\n  \"schema_version\": 2,\n  \"producer\": {\n    \"name\": \"nova\",\n    \"version\": \"0.1.0\"\n  },\n  \"source\": {\n    \"id\": \"source:0\",\n    \"name\": \"tests/fixtures/valid/inspection-v2.nv\",\n    \"byte_length\": 21\n  },\n  \"program\": {\n    \"span\": {\n      \"source\": \"source:0\",\n      \"start\": 0,\n      \"end\": 21\n    },\n    \"types\": [\n      {\n        \"id\": \"type:0\",\n        \"kind\": \"int\",\n        \"display\": \"Int\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:1\",\n        \"kind\": \"bool\",\n        \"display\": \"Bool\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:2\",\n        \"kind\": \"unit\",\n        \"display\": \"Unit\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:3\",\n        \"kind\": \"never\",\n        \"display\": \"!\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:4\",\n        \"kind\": \"function\",\n        \"display\": \"fn() -> Unit\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": \"type:2\"\n      }\n    ],\n    \"records\": [],\n    \"enums\": [],\n    \"functions\": [\n      {\n        \"id\": \"function:0\",\n        \"name\": \"main\",\n        \"type_id\": \"type:4\",\n        \"return_type\": \"type:2\",\n        \"parameters\": [],\n        \"body\": \"block:0\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 0,\n          \"end\": 20\n        }\n      }\n    ],\n    \"bindings\": [],\n    \"blocks\": [\n      {\n        \"id\": \"block:0\",\n        \"owner\": \"function:0\",\n        \"type_id\": \"type:2\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 18,\n          \"end\": 20\n        },\n        \"statements\": [],\n        \"tail_expression\": null\n      }\n    ],\n    \"statements\": [],\n    \"expressions\": [],\n    \"matches\": []\n  },\n  \"control_flow\": [\n    {\n      \"id\": \"cfg:function:0\",\n      \"function\": \"function:0\",\n      \"entry\": \"cfg:function:0.node:0\",\n      \"bindings\": [],\n      \"normal_exits\": [\n        \"cfg:function:0.node:1\"\n      ],\n      \"nodes\": [\n        {\n          \"id\": \"cfg:function:0.node:0\",\n          \"kind\": \"entry\",\n          \"binding\": null,\n          \"predecessors\": [],\n          \"span\": {\n            \"source\": \"source:0\",\n            \"start\": 0,\n            \"end\": 20\n          }\n        },\n        {\n          \"id\": \"cfg:function:0.node:1\",\n          \"kind\": \"exit\",\n          \"binding\": null,\n          \"predecessors\": [\n            {\n              \"from\": \"cfg:function:0.node:0\",\n              \"kind\": \"execution\"\n            }\n          ],\n          \"span\": {\n            \"source\": \"source:0\",\n            \"start\": 0,\n            \"end\": 20\n          }\n        }\n      ]\n    }\n  ]\n}\n"
+  left: "18446744073709551615\n"
+ right: "18446744073709551615"
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
----- inspect_command_matches_the_versioned_golden_document stdout ----
+---- uint_executes_through_check_run_and_inspect stdout ----
 
-thread 'inspect_command_matches_the_versioned_golden_document' (6885) panicked at crates/nova-cli/tests/cli.rs:581:5:
+thread 'uint_executes_through_check_run_and_inspect' (6928) panicked at crates/nova-cli/tests/uint_numeric.rs:31:5:
 assertion `left == right` failed
-  left: "{\n  \"schema\": \"nova.semantic-inspection\",\n  \"schema_version\": 1,\n  \"producer\": {\n    \"name\": \"nova\",\n    \"version\": \"0.1.0\"\n  },\n  \"source\": {\n    \"id\": \"source:0\",\n    \"name\": \"tests/fixtures/valid/enums-match.nv\",\n    \"byte_length\": 225\n  },\n  \"program\": {\n    \"span\": {\n      \"source\": \"source:0\",\n      \"start\": 0,\n      \"end\": 225\n    },\n    \"types\": [\n      {\n        \"id\": \"type:0\",\n        \"kind\": \"int\",\n        \"display\": \"Int\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:1\",\n        \"kind\": \"u_int\",\n        \"display\": \"UInt\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:2\",\n        \"kind\": \"bool\",\n        \"display\": \"Bool\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:3\",\n        \"kind\": \"unit\",\n        \"display\": \"Unit\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:4\",\n        \"kind\": \"never\",\n        \"display\": \"!\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:5\",\n        \"kind\": \"enum\",\n        \"display\": \"Result\",\n        \"declaration\": \"enum:0\",\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:6\",\n        \"kind\": \"function\",\n        \"display\": \"fn(Result) -> Int\",\n        \"declaration\": null,\n        \"parameters\": [\n          \"type:5\"\n        ],\n        \"return_type\": \"type:0\"\n      },\n      {\n        \"id\": \"type:7\",\n        \"kind\": \"function\",\n        \"display\": \"fn() -> Int\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": \"type:0\"\n      }\n    ],\n    \"records\": [],\n    \"enums\": [\n      {\n        \"id\": \"enum:0\",\n        \"name\": \"Result\",\n        \"type_id\": \"type:5\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 0,\n          \"end\": 42\n        },\n        \"variants\": [\n          {\n            \"id\": \"enum:0.variant:0\",\n            \"name\": \"Empty\",\n            \"payload_type\": null,\n            \"span\": {\n              \"source\": \"source:0\",\n              \"start\": 18,\n              \"end\": 23\n            }\n          },\n          {\n            \"id\": \"enum:0.variant:1\",\n            \"name\": \"Value\",\n            \"payload_type\": \"type:0\",\n            \"span\": {\n              \"source\": \"source:0\",\n              \"start\": 29,\n              \"end\": 39\n            }\n          }\n        ]\n      }\n    ],\n    \"functions\": [\n      {\n        \"id\": \"function:0\",\n        \"name\": \"unwrap\",\n        \"type_id\": \"type:6\",\n        \"return_type\": \"type:0\",\n        \"parameters\": [\n          \"binding:0\"\n        ],\n        \"body\": \"block:0\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 44,\n          \"end\": 172\n        }\n      },\n      {\n        \"id\": \"function:1\",\n        \"name\": \"main\",\n        \"type_id\": \"type:7\",\n        \"return_type\": \"type:0\",\n        \"parameters\": [],\n        \"body\": \"block:1\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 174,\n          \"end\": 224\n        }\n      }\n    ],\n    \"bindings\": [\n      {\n        \"id\": \"binding:0\",\n        \"name\": \"result\",\n        \"role\": \"parameter\",\n        \"owner\": \"function:0\",\n        \"scope\": \"function:0\",\n        \"type_id\": \"type:5\",\n        \"mutable\": false,\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 54,\n          \"end\": 60\n        }\n      },\n      {\n        \"id\": \"binding:1\",\n        \"name\": \"value\",\n        \"role\": \"match_payload\",\n        \"owner\": \"function:0\",\n        \"scope\": \"match:0.arm:1\",\n        \"type_id\": \"type:0\",\n        \"mutable\": false,\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 148,\n          \"end\": 153\n        }\n      }\n    ],\n    \"blocks\": [\n      {\n        \"id\": \"block:0\",\n        \"owner\": \"function:0\",\n        \"type_id\": \"type:0\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 77,\n          \"end\": 172\n        },\n        \"statements\": [],\n        \"tail_expression\": \"expression:0\"\n      },\n      {\n        \"id\": \"block:1\",\n        \"owner\": \"function:1\",\n        \"type_id\": \"type:0\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 191,\n          \"end\": 224\n        },\n        \"statements\": [],\n        \"tail_expression\": \"expression:4\"\n      }\n    ],\n    \"statements\": [],\n    \"expressions\": [\n      {\n        \"id\": \"expression:0\",\n        \"owner\": \"function:0\",\n        \"kind\": \"match\",\n        \"type_id\": \"type:0\",\n        \"target\": \"match:0\",\n        \"operator\": null,\n        \"children\": [\n          \"expression:1\",\n          \"expression:2\",\n          \"expression:3\"\n        ],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 83,\n          \"end\": 170\n        }\n      },\n      {\n        \"id\": \"expression:1\",\n        \"owner\": \"function:0\",\n        \"kind\": \"binding_reference\",\n        \"type_id\": \"type:5\",\n        \"target\": \"binding:0\",\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 89,\n          \"end\": 95\n        }\n      },\n      {\n        \"id\": \"expression:2\",\n        \"owner\": \"function:0\",\n        \"kind\": \"integer\",\n        \"type_id\": \"type:0\",\n        \"target\": null,\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 123,\n          \"end\": 124\n        }\n      },\n      {\n        \"id\": \"expression:3\",\n        \"owner\": \"function:0\",\n        \"kind\": \"binding_reference\",\n        \"type_id\": \"type:0\",\n        \"target\": \"binding:1\",\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 158,\n          \"end\": 163\n        }\n      },\n      {\n        \"id\": \"expression:4\",\n        \"owner\": \"function:1\",\n        \"kind\": \"call\",\n        \"type_id\": \"type:0\",\n        \"target\": null,\n        \"operator\": null,\n        \"children\": [\n          \"expression:5\",\n          \"expression:6\"\n        ],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 197,\n          \"end\": 222\n        }\n      },\n      {\n        \"id\": \"expression:5\",\n        \"owner\": \"function:1\",\n        \"kind\": \"function_reference\",\n        \"type_id\": \"type:6\",\n        \"target\": \"function:0\",\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 197,\n          \"end\": 203\n        }\n      },\n      {\n        \"id\": \"expression:6\",\n        \"owner\": \"function:1\",\n        \"kind\": \"enum_construction\",\n        \"type_id\": \"type:5\",\n        \"target\": \"enum:0.variant:1\",\n        \"operator\": null,\n        \"children\": [\n          \"expression:7\"\n        ],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 204,\n          \"end\": 221\n        }\n      },\n      {\n        \"id\": \"expression:7\",\n        \"owner\": \"function:1\",\n        \"kind\": \"integer\",\n        \"type_id\": \"type:0\",\n        \"target\": null,\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 218,\n          \"end\": 220\n        }\n      }\n    ],\n    \"matches\": [\n      {\n        \"id\": \"match:0\",\n        \"owner\": \"function:0\",\n        \"expression\": \"expression:0\",\n        \"enumeration\": \"enum:0\",\n        \"exhaustive\": true,\n        \"scrutinee\": \"expression:1\",\n        \"scrutinee_type\": \"type:5\",\n        \"arms\": [\n          {\n            \"id\": \"match:0.arm:0\",\n            \"variant\": \"enum:0.variant:0\",\n            \"binding\": null,\n            \"value\": \"expression:2\",\n            \"result_type\": \"type:0\",\n            \"span\": {\n              \"source\": \"source:0\",\n              \"start\": 106,\n              \"end\": 124\n            }\n          },\n          {\n            \"id\": \"match:0.arm:1\",\n            \"variant\": \"enum:0.variant:1\",\n            \"binding\": \"binding:1\",\n            \"value\": \"expression:3\",\n            \"result_type\": \"type:0\",\n            \"span\": {\n              \"source\": \"source:0\",\n              \"start\": 134,\n              \"end\": 163\n            }\n          }\n        ],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 83,\n          \"end\": 170\n        }\n      }\n    ]\n  }\n}\n"
- right: "{\n  \"schema\": \"nova.semantic-inspection\",\n  \"schema_version\": 1,\n  \"producer\": {\n    \"name\": \"nova\",\n    \"version\": \"0.1.0\"\n  },\n  \"source\": {\n    \"id\": \"source:0\",\n    \"name\": \"tests/fixtures/valid/enums-match.nv\",\n    \"byte_length\": 225\n  },\n  \"program\": {\n    \"span\": {\n      \"source\": \"source:0\",\n      \"start\": 0,\n      \"end\": 225\n    },\n    \"types\": [\n      {\n        \"id\": \"type:0\",\n        \"kind\": \"int\",\n        \"display\": \"Int\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:1\",\n        \"kind\": \"bool\",\n        \"display\": \"Bool\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:2\",\n        \"kind\": \"unit\",\n        \"display\": \"Unit\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:3\",\n        \"kind\": \"never\",\n        \"display\": \"!\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:4\",\n        \"kind\": \"enum\",\n        \"display\": \"Result\",\n        \"declaration\": \"enum:0\",\n        \"parameters\": [],\n        \"return_type\": null\n      },\n      {\n        \"id\": \"type:5\",\n        \"kind\": \"function\",\n        \"display\": \"fn(Result) -> Int\",\n        \"declaration\": null,\n        \"parameters\": [\n          \"type:4\"\n        ],\n        \"return_type\": \"type:0\"\n      },\n      {\n        \"id\": \"type:6\",\n        \"kind\": \"function\",\n        \"display\": \"fn() -> Int\",\n        \"declaration\": null,\n        \"parameters\": [],\n        \"return_type\": \"type:0\"\n      }\n    ],\n    \"records\": [],\n    \"enums\": [\n      {\n        \"id\": \"enum:0\",\n        \"name\": \"Result\",\n        \"type_id\": \"type:4\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 0,\n          \"end\": 42\n        },\n        \"variants\": [\n          {\n            \"id\": \"enum:0.variant:0\",\n            \"name\": \"Empty\",\n            \"payload_type\": null,\n            \"span\": {\n              \"source\": \"source:0\",\n              \"start\": 18,\n              \"end\": 23\n            }\n          },\n          {\n            \"id\": \"enum:0.variant:1\",\n            \"name\": \"Value\",\n            \"payload_type\": \"type:0\",\n            \"span\": {\n              \"source\": \"source:0\",\n              \"start\": 29,\n              \"end\": 39\n            }\n          }\n        ]\n      }\n    ],\n    \"functions\": [\n      {\n        \"id\": \"function:0\",\n        \"name\": \"unwrap\",\n        \"type_id\": \"type:5\",\n        \"return_type\": \"type:0\",\n        \"parameters\": [\n          \"binding:0\"\n        ],\n        \"body\": \"block:0\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 44,\n          \"end\": 172\n        }\n      },\n      {\n        \"id\": \"function:1\",\n        \"name\": \"main\",\n        \"type_id\": \"type:6\",\n        \"return_type\": \"type:0\",\n        \"parameters\": [],\n        \"body\": \"block:1\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 174,\n          \"end\": 224\n        }\n      }\n    ],\n    \"bindings\": [\n      {\n        \"id\": \"binding:0\",\n        \"name\": \"result\",\n        \"role\": \"parameter\",\n        \"owner\": \"function:0\",\n        \"scope\": \"function:0\",\n        \"type_id\": \"type:4\",\n        \"mutable\": false,\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 54,\n          \"end\": 60\n        }\n      },\n      {\n        \"id\": \"binding:1\",\n        \"name\": \"value\",\n        \"role\": \"match_payload\",\n        \"owner\": \"function:0\",\n        \"scope\": \"match:0.arm:1\",\n        \"type_id\": \"type:0\",\n        \"mutable\": false,\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 148,\n          \"end\": 153\n        }\n      }\n    ],\n    \"blocks\": [\n      {\n        \"id\": \"block:0\",\n        \"owner\": \"function:0\",\n        \"type_id\": \"type:0\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 77,\n          \"end\": 172\n        },\n        \"statements\": [],\n        \"tail_expression\": \"expression:0\"\n      },\n      {\n        \"id\": \"block:1\",\n        \"owner\": \"function:1\",\n        \"type_id\": \"type:0\",\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 191,\n          \"end\": 224\n        },\n        \"statements\": [],\n        \"tail_expression\": \"expression:4\"\n      }\n    ],\n    \"statements\": [],\n    \"expressions\": [\n      {\n        \"id\": \"expression:0\",\n        \"owner\": \"function:0\",\n        \"kind\": \"match\",\n        \"type_id\": \"type:0\",\n        \"target\": \"match:0\",\n        \"operator\": null,\n        \"children\": [\n          \"expression:1\",\n          \"expression:2\",\n          \"expression:3\"\n        ],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 83,\n          \"end\": 170\n        }\n      },\n      {\n        \"id\": \"expression:1\",\n        \"owner\": \"function:0\",\n        \"kind\": \"binding_reference\",\n        \"type_id\": \"type:4\",\n        \"target\": \"binding:0\",\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 89,\n          \"end\": 95\n        }\n      },\n      {\n        \"id\": \"expression:2\",\n        \"owner\": \"function:0\",\n        \"kind\": \"integer\",\n        \"type_id\": \"type:0\",\n        \"target\": null,\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 123,\n          \"end\": 124\n        }\n      },\n      {\n        \"id\": \"expression:3\",\n        \"owner\": \"function:0\",\n        \"kind\": \"binding_reference\",\n        \"type_id\": \"type:0\",\n        \"target\": \"binding:1\",\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 158,\n          \"end\": 163\n        }\n      },\n      {\n        \"id\": \"expression:4\",\n        \"owner\": \"function:1\",\n        \"kind\": \"call\",\n        \"type_id\": \"type:0\",\n        \"target\": null,\n        \"operator\": null,\n        \"children\": [\n          \"expression:5\",\n          \"expression:6\"\n        ],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 197,\n          \"end\": 222\n        }\n      },\n      {\n        \"id\": \"expression:5\",\n        \"owner\": \"function:1\",\n        \"kind\": \"function_reference\",\n        \"type_id\": \"type:5\",\n        \"target\": \"function:0\",\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 197,\n          \"end\": 203\n        }\n      },\n      {\n        \"id\": \"expression:6\",\n        \"owner\": \"function:1\",\n        \"kind\": \"enum_construction\",\n        \"type_id\": \"type:4\",\n        \"target\": \"enum:0.variant:1\",\n        \"operator\": null,\n        \"children\": [\n          \"expression:7\"\n        ],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 204,\n          \"end\": 221\n        }\n      },\n      {\n        \"id\": \"expression:7\",\n        \"owner\": \"function:1\",\n        \"kind\": \"integer\",\n        \"type_id\": \"type:0\",\n        \"target\": null,\n        \"operator\": null,\n        \"children\": [],\n        \"blocks\": [],\n        \"field_initializers\": [],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 218,\n          \"end\": 220\n        }\n      }\n    ],\n    \"matches\": [\n      {\n        \"id\": \"match:0\",\n        \"owner\": \"function:0\",\n        \"expression\": \"expression:0\",\n        \"enumeration\": \"enum:0\",\n        \"exhaustive\": true,\n        \"scrutinee\": \"expression:1\",\n        \"scrutinee_type\": \"type:4\",\n        \"arms\": [\n          {\n            \"id\": \"match:0.arm:0\",\n            \"variant\": \"enum:0.variant:0\",\n            \"binding\": null,\n            \"value\": \"expression:2\",\n            \"result_type\": \"type:0\",\n            \"span\": {\n              \"source\": \"source:0\",\n              \"start\": 106,\n              \"end\": 124\n            }\n          },\n          {\n            \"id\": \"match:0.arm:1\",\n            \"variant\": \"enum:0.variant:1\",\n            \"binding\": \"binding:1\",\n            \"value\": \"expression:3\",\n            \"result_type\": \"type:0\",\n            \"span\": {\n              \"source\": \"source:0\",\n              \"start\": 134,\n              \"end\": 163\n            }\n          }\n        ],\n        \"span\": {\n          \"source\": \"source:0\",\n          \"start\": 83,\n          \"end\": 170\n        }\n      }\n    ]\n  }\n}\n"
+  left: "42\n"
+ right: "42"
 
 
 failures:
-    inspect_command_emits_explicit_schema_v2_cfg_facts
-    inspect_command_matches_the_versioned_golden_document
+    uint_boundaries_and_checked_narrowing_execute
+    uint_executes_through_check_run_and_inspect
 
-test result: FAILED. 22 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-[1m[91merror[0m: test failed, to rerun pass `-p nova-cli --test cli`
+[1m[91merror[0m: test failed, to rerun pass `-p nova-cli --test uint_numeric`
 exit=101
 ### cargo build --workspace --all-targets --locked
 [1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
@@ -165,11 +231,11 @@ exit=0
 [1m[92m Documenting[0m nova-sema v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-sema)
 [1m[92m Documenting[0m nova-parser v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-parser)
 [1m[92m Documenting[0m nova-lexer v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-lexer)
-[1m[92m    Checking[0m nova-inspect v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-inspect)
 [1m[92m    Checking[0m nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
+[1m[92m    Checking[0m nova-inspect v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-inspect)
 [1m[92m Documenting[0m nova-interpreter v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-interpreter)
 [1m[92m Documenting[0m nova-inspect v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-inspect)
 [1m[92m Documenting[0m nova-cli v0.1.0 (/home/runner/work/Nova/Nova/crates/nova-cli)
-[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1.75s
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1.78s
 [1m[92m   Generated[0m /home/runner/work/Nova/Nova/target/doc/nova/index.html and 8 other files
 overall_failed=1

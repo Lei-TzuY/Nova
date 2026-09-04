@@ -484,7 +484,7 @@ impl<'a> Builder<'a> {
     }
 
     fn prepare_type_order(&mut self) -> Result<(), InspectionError> {
-        for ty in [Type::Int, Type::UInt, Type::Bool] {
+        for ty in [Type::Int, Type::Bool] {
             self.intern_type(&ty)?;
         }
         if self.allow_string {
