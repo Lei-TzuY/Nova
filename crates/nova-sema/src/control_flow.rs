@@ -964,7 +964,7 @@ mod tests {
         FlowEdgeKind, FlowNodeKind, FlowTransfer, FunctionFlowBuilder,
         definite_initialization_diagnostics, unreachable_code_diagnostics,
     };
-    use crate::hir::{Binding, BindingId, FunctionId, Type};
+    use crate::hir::{Binding, BindingId, FunctionId, ModuleId, Type};
     use nova_diagnostics::Severity;
     use nova_source::{SourceId, Span};
 
@@ -1290,6 +1290,38 @@ mod tests {
         let error = super::verify(&out_of_order, span(0, 20))
             .expect_err("binding metadata must remain in strict semantic identity order");
         assert!(error.message().contains("binding metadata"));
+    }
+
+    #[test]
+    fn verifier_rejects_cross_module_binding_metadata_and_events() {
+        let mut builder = FunctionFlowBuilder::new(FunctionId::new(0), span(0, 20));
+        let value = binding(0, "value", 1);
+        builder.register_binding(&value);
+        builder.advance(
+            FlowNodeKind::Initialize(value.id),
+            Some(value.span),
+            FlowEdgeKind::Execution,
+        );
+        let exit = builder.cursor();
+        let graph = builder.finish(Some(exit)).expect("valid seed graph");
+        let foreign = BindingId::in_module(ModuleId::new(9), value.id.index());
+
+        let mut metadata_drift = graph.clone();
+        metadata_drift.bindings[0].id = foreign;
+        let error = super::verify(&metadata_drift, span(0, 20))
+            .expect_err("foreign binding metadata must fail before dataflow");
+        assert!(error.message().contains("different module"));
+
+        let mut event_drift = graph;
+        let initialization = event_drift
+            .nodes
+            .iter_mut()
+            .find(|node| matches!(node.kind, FlowNodeKind::Initialize(_)))
+            .expect("initialization node");
+        initialization.kind = FlowNodeKind::Initialize(foreign);
+        let error = super::verify(&event_drift, span(0, 20))
+            .expect_err("foreign binding event must fail before dataflow");
+        assert!(error.message().contains("different module"));
     }
 
     #[test]
