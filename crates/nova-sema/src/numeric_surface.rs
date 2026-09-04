@@ -1,6 +1,4 @@
-use nova_parser::ast::{
-    self, BinaryOperator, Block, ExpressionKind, StatementKind, UnaryOperator,
-};
+use nova_parser::ast::{self, BinaryOperator, Block, ExpressionKind, StatementKind, UnaryOperator};
 
 /// Canonicalizes the bootstrap numeric surface before ordinary name/type
 /// resolution.
