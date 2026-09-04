@@ -1,98 +1,26 @@
 name: BIL-37 implementation
+
 on:
   push:
-    branches: [conquest/bil-37-explicit-generic-arguments]
+    branches:
+      - conquest/bil-37-explicit-generic-arguments
+
 permissions:
   contents: write
+
 jobs:
   implement:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply parser change
+      - name: Apply parser patch
+        run: python3 .github/bil37_patch.py
+      - name: Format and persist
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('crates/nova-parser/src/parser.rs')
-          s = p.read_text()
-          old = '''            if self.at(TokenKind::LeftParen) {
-                if POSTFIX_BINDING_POWER < minimum {
-                    break;
-                }
-                left = self.parse_call_expression(left)?;
-                continue;
-            }
-            if self.at(TokenKind::Dot) {'''
-          new = '''            if self.at(TokenKind::LeftParen) {
-                if POSTFIX_BINDING_POWER < minimum {
-                    break;
-                }
-                left = self.parse_call_expression(left, Vec::new())?;
-                continue;
-            }
-            if self.at(TokenKind::Less)
-                && POSTFIX_BINDING_POWER >= minimum
-                && matches!(left.kind, ExpressionKind::Name(_))
-            {
-                let checkpoint = self.position;
-                let diagnostic_checkpoint = self.diagnostics.len();
-                if let Some(type_arguments) = self.parse_explicit_call_type_arguments() {
-                    if self.at(TokenKind::LeftParen) {
-                        left = self.parse_call_expression(left, type_arguments)?;
-                        continue;
-                    }
-                }
-                self.position = checkpoint;
-                self.diagnostics.truncate(diagnostic_checkpoint);
-            }
-            if self.at(TokenKind::Dot) {'''
-          if old not in s: raise SystemExit('postfix anchor missing')
-          s = s.replace(old, new, 1)
-          old = '''    fn parse_call_expression(&mut self, callee: Expression) -> Option<Expression> {
-        self.expect(TokenKind::LeftParen, "to start the argument list")?;'''
-          new = '''    fn parse_explicit_call_type_arguments(&mut self) -> Option<Vec<TypeRef>> {
-        self.expect(TokenKind::Less, "to start explicit call type arguments")?;
-        if self.at(TokenKind::Greater) {
-            return None;
-        }
-        let mut arguments = Vec::new();
-        loop {
-            arguments.push(self.parse_type_ref("as an explicit call type argument")?);
-            if self.consume(TokenKind::Comma).is_none() {
-                break;
-            }
-            if self.at(TokenKind::Greater) {
-                break;
-            }
-        }
-        self.expect(TokenKind::Greater, "to close explicit call type arguments")?;
-        Some(arguments)
-    }
-
-    fn parse_call_expression(
-        &mut self,
-        callee: Expression,
-        type_arguments: Vec<TypeRef>,
-    ) -> Option<Expression> {
-        self.expect(TokenKind::LeftParen, "to start the argument list")?;'''
-          if old not in s: raise SystemExit('call function anchor missing')
-          s = s.replace(old, new, 1)
-          old = '''            kind: ExpressionKind::Call {
-                callee: Box::new(callee),
-                arguments,
-            },'''
-          new = '''            kind: ExpressionKind::Call {
-                callee: Box::new(callee),
-                type_arguments,
-                arguments,
-            },'''
-          if old not in s: raise SystemExit('call construction anchor missing')
-          p.write_text(s.replace(old, new, 1))
-          PY
           cargo fmt --all
           git config user.name LeiZ
           git config user.email 52287354+Lei-TzuY@users.noreply.github.com
           git add crates/nova-parser/src/parser.rs
-          git commit -m 'feat: parse explicit generic call arguments'
+          git commit -m "feat: parse explicit generic call arguments"
           git push origin HEAD:conquest/bil-37-explicit-generic-arguments
