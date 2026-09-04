@@ -591,8 +591,23 @@ impl<'source> Parser<'source> {
                 if POSTFIX_BINDING_POWER < minimum {
                     break;
                 }
-                left = self.parse_call_expression(left)?;
+                left = self.parse_call_expression(left, Vec::new())?;
                 continue;
+            }
+            if self.at(TokenKind::Less)
+                && POSTFIX_BINDING_POWER >= minimum
+                && matches!(left.kind, ExpressionKind::Name(_))
+            {
+                let checkpoint = self.position;
+                let diagnostic_checkpoint = self.diagnostics.len();
+                if let Some(type_arguments) = self.parse_explicit_call_type_arguments() {
+                    if self.at(TokenKind::LeftParen) {
+                        left = self.parse_call_expression(left, type_arguments)?;
+                        continue;
+                    }
+                }
+                self.position = checkpoint;
+                self.diagnostics.truncate(diagnostic_checkpoint);
             }
             if self.at(TokenKind::Dot) {
                 if POSTFIX_BINDING_POWER < minimum {
@@ -800,7 +815,30 @@ impl<'source> Parser<'source> {
         })
     }
 
-    fn parse_call_expression(&mut self, callee: Expression) -> Option<Expression> {
+    fn parse_explicit_call_type_arguments(&mut self) -> Option<Vec<TypeRef>> {
+        self.expect(TokenKind::Less, "to start explicit call type arguments")?;
+        if self.at(TokenKind::Greater) {
+            return None;
+        }
+        let mut arguments = Vec::new();
+        loop {
+            arguments.push(self.parse_type_ref("as an explicit call type argument")?);
+            if self.consume(TokenKind::Comma).is_none() {
+                break;
+            }
+            if self.at(TokenKind::Greater) {
+                break;
+            }
+        }
+        self.expect(TokenKind::Greater, "to close explicit call type arguments")?;
+        Some(arguments)
+    }
+
+    fn parse_call_expression(
+        &mut self,
+        callee: Expression,
+        type_arguments: Vec<TypeRef>,
+    ) -> Option<Expression> {
         self.expect(TokenKind::LeftParen, "to start the argument list")?;
         let mut arguments = Vec::new();
 
@@ -830,6 +868,7 @@ impl<'source> Parser<'source> {
             span: self.cover(callee.span, closing.span),
             kind: ExpressionKind::Call {
                 callee: Box::new(callee),
+                type_arguments,
                 arguments,
             },
         })
