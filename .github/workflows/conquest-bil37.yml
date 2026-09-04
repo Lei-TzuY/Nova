@@ -14,13 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply parser patch
+      - name: Apply semantic patch
         run: python3 .github/bil37_patch.py
-      - name: Format and persist
+      - name: Format, persist, and compile
         run: |
           cargo fmt --all
           git config user.name LeiZ
           git config user.email 52287354+Lei-TzuY@users.noreply.github.com
-          git add crates/nova-parser/src/parser.rs
-          git commit -m "feat: parse explicit generic call arguments"
+          git add crates/nova-sema/src/analyzer.rs crates/nova-sema/src/numeric_surface.rs
+          git commit -m "feat: type explicit generic call arguments"
           git push origin HEAD:conquest/bil-37-explicit-generic-arguments
+          cargo check --workspace --all-targets
