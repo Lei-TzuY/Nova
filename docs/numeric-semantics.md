@@ -49,10 +49,17 @@ Three explicit sign predicates classify an `Int` relative to zero:
 - `Int::is_zero(n)` is equivalent to `n == 0`;
 - `Int::is_positive(n)` is equivalent to `n > 0`.
 
-Each predicate evaluates its operand exactly once. Semantic canonicalization lowers the
-spellings to the ordinary typed comparison HIR, so comparison typing, control-flow,
-diagnostics, and runtime behavior remain the single source of truth. A missing payload
-or a payload whose type is not `Int` is rejected rather than coerced.
+Two explicit parity predicates classify the remainder modulo two:
+
+- `Int::is_even(n)` is equivalent to `n % 2 == 0`;
+- `Int::is_odd(n)` is equivalent to `n % 2 != 0`.
+
+These predicates follow Nova's signed remainder contract, so negative odd values remain
+odd and both `Int::MIN` and zero are even. Each predicate evaluates its operand exactly
+once. Semantic canonicalization lowers the spellings to ordinary typed arithmetic and
+comparison HIR, so arithmetic checking, comparison typing, control-flow, diagnostics,
+and runtime behavior remain the single source of truth. A missing payload or a payload
+whose type is not `Int` is rejected rather than coerced.
 
 The bootstrap language also has explicit conversions between `Bool` and `Int`:
 

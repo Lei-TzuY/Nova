@@ -65,6 +65,14 @@ fn rewrite_expression(expression: &mut ast::Expression) {
                 IntPredicate::Positive,
                 (**payload).clone(),
             )),
+            ("is_even", Some(payload)) => Some(NumericBuiltin::IntParityPredicate(
+                IntParityPredicate::Even,
+                (**payload).clone(),
+            )),
+            ("is_odd", Some(payload)) => Some(NumericBuiltin::IntParityPredicate(
+                IntParityPredicate::Odd,
+                (**payload).clone(),
+            )),
             _ => None,
         },
         ExpressionKind::EnumConstructor {
@@ -114,6 +122,25 @@ fn rewrite_expression(expression: &mut ast::Expression) {
                         IntPredicate::Positive => BinaryOperator::Greater,
                     },
                     left: Box::new(operand),
+                    right: Box::new(int_literal(0, expression.span)),
+                }
+            }
+            NumericBuiltin::IntParityPredicate(predicate, mut operand) => {
+                rewrite_expression(&mut operand);
+                let remainder = ast::Expression {
+                    kind: ExpressionKind::Binary {
+                        operator: BinaryOperator::Remainder,
+                        left: Box::new(operand),
+                        right: Box::new(int_literal(2, expression.span)),
+                    },
+                    span: expression.span,
+                };
+                ExpressionKind::Binary {
+                    operator: match predicate {
+                        IntParityPredicate::Even => BinaryOperator::Equal,
+                        IntParityPredicate::Odd => BinaryOperator::NotEqual,
+                    },
+                    left: Box::new(remainder),
                     right: Box::new(int_literal(0, expression.span)),
                 }
             }
@@ -192,6 +219,7 @@ enum NumericBuiltin {
     IntFromBool(ast::Expression),
     BoolFromInt(ast::Expression),
     IntPredicate(IntPredicate, ast::Expression),
+    IntParityPredicate(IntParityPredicate, ast::Expression),
 }
 
 #[derive(Clone, Copy)]
@@ -205,4 +233,10 @@ enum IntPredicate {
     Negative,
     Zero,
     Positive,
+}
+
+#[derive(Clone, Copy)]
+enum IntParityPredicate {
+    Even,
+    Odd,
 }
