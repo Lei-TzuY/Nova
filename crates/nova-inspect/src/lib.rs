@@ -9,6 +9,7 @@ pub mod v3;
 pub mod v4;
 pub mod v5;
 pub mod v6;
+pub mod v7;
 
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::AnalysisOutput;
@@ -350,6 +351,101 @@ pub fn render_json_v6(
         .map_err(|error| InspectionError::invalid(format!("could not encode schema v6: {error}")))
 }
 
+/// Builds a schema-v7 document from one successful semantic analysis.
+///
+/// Version 7 is the first tooling contract that can represent the `UInt` type,
+/// unsigned literal values, checked `Int`/`UInt` conversion expressions, and
+/// by-value capture mode for mutable-source snapshots. It otherwise preserves
+/// the complete schema-v6 module, program, CFG, pattern, and closure projections.
+/// Schemas v1-v6 reject facts they cannot represent instead of widening their
+/// frozen contracts in place.
+pub fn build_document_v7(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<v7::Document, InspectionError> {
+    if !analysis.is_success() {
+        return Err(InspectionError::invalid(
+            "schema v7 requires a successful semantic analysis",
+        ));
+    }
+
+    let (program_document, match_patterns, closures) = Builder::new(&analysis.program, source)
+        .with_payload_discard()
+        .with_string()
+        .with_closures()
+        .with_module_identity()
+        .with_unsigned()
+        .with_mutable_captures()
+        .build_parts()?;
+    let control_flow = project_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        analysis.program.module.id,
+        source,
+    )?;
+    let closure_control_flow = project_closure_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        &closures,
+        analysis.program.module.id,
+        source,
+    )?;
+    let module = v6::Module {
+        id: module_id(analysis.program.module.id),
+        source: program_document.source.id.clone(),
+        implicit_root: analysis.program.module.id == hir::ModuleId::ROOT,
+        span: program_document.program.span.clone(),
+        records: program_document
+            .program
+            .records
+            .iter()
+            .map(|record| record.id.clone())
+            .collect(),
+        enums: program_document
+            .program
+            .enums
+            .iter()
+            .map(|enumeration| enumeration.id.clone())
+            .collect(),
+        functions: program_document
+            .program
+            .functions
+            .iter()
+            .map(|function| function.id.clone())
+            .collect(),
+        bindings: program_document
+            .program
+            .bindings
+            .iter()
+            .map(|binding| binding.id.clone())
+            .collect(),
+        closures: closures.iter().map(|closure| closure.id.clone()).collect(),
+    };
+    let closures = closures.into_iter().map(v7::Closure::from).collect();
+    Ok(v7::Document {
+        schema: v7::SCHEMA_NAME.to_owned(),
+        schema_version: v7::SCHEMA_VERSION,
+        producer: program_document.producer,
+        source: program_document.source,
+        module,
+        program: program_document.program,
+        control_flow,
+        match_patterns,
+        closures,
+        closure_control_flow,
+    })
+}
+
+/// Renders one successful analysis as deterministic, pretty-printed schema-v7 JSON.
+pub fn render_json_v7(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<String, InspectionError> {
+    let document = build_document_v7(analysis, source)?;
+    serde_json::to_string_pretty(&document)
+        .map_err(|error| InspectionError::invalid(format!("could not encode schema v7: {error}")))
+}
+
 struct Builder<'a> {
     program: &'a hir::Program,
     source: &'a SourceFile,
@@ -365,6 +461,8 @@ struct Builder<'a> {
     allow_string: bool,
     allow_closures: bool,
     allow_module_identity: bool,
+    allow_unsigned: bool,
+    allow_mutable_captures: bool,
     active_scopes: Vec<String>,
     active_capture_bindings: Vec<BTreeSet<hir::BindingId>>,
     active_capture_uses: Vec<BTreeSet<hir::BindingId>>,
@@ -388,6 +486,8 @@ impl<'a> Builder<'a> {
             allow_string: false,
             allow_closures: false,
             allow_module_identity: false,
+            allow_unsigned: false,
+            allow_mutable_captures: false,
             active_scopes: Vec::new(),
             active_capture_bindings: Vec::new(),
             active_capture_uses: Vec::new(),
@@ -412,6 +512,16 @@ impl<'a> Builder<'a> {
 
     fn with_module_identity(mut self) -> Self {
         self.allow_module_identity = true;
+        self
+    }
+
+    fn with_unsigned(mut self) -> Self {
+        self.allow_unsigned = true;
+        self
+    }
+
+    fn with_mutable_captures(mut self) -> Self {
+        self.allow_mutable_captures = true;
         self
     }
 
@@ -484,9 +594,11 @@ impl<'a> Builder<'a> {
     }
 
     fn prepare_type_order(&mut self) -> Result<(), InspectionError> {
-        for ty in [Type::Int, Type::Bool] {
-            self.intern_type(&ty)?;
+        self.intern_type(&Type::Int)?;
+        if self.allow_unsigned {
+            self.intern_type(&Type::UInt)?;
         }
+        self.intern_type(&Type::Bool)?;
         if self.allow_string {
             self.intern_type(&Type::String)?;
         }
@@ -699,6 +811,12 @@ impl<'a> Builder<'a> {
                     ))
                 })?;
                 let binding = self.require_binding_reference(resolved, owner)?;
+                if binding.owner != owner {
+                    return Err(InspectionError::invalid(format!(
+                        "assignment targets captured snapshot {}",
+                        binding_id(resolved.binding.index())
+                    )));
+                }
                 if !binding.mutable {
                     return Err(InspectionError::invalid(format!(
                         "assignment targets immutable {}",
@@ -769,6 +887,11 @@ impl<'a> Builder<'a> {
         let kind = match &expression.kind {
             hir::ExpressionKind::Integer(_) => v1::ExpressionKind::Integer,
             hir::ExpressionKind::Unsigned(_) => {
+                if !self.allow_unsigned {
+                    return Err(InspectionError::invalid(
+                        "semantic-inspection schema v1-v6 cannot represent `UInt`; select schema v7",
+                    ));
+                }
                 if expression.ty != Type::UInt {
                     return Err(InspectionError::invalid(format!(
                         "unsigned literal expression has HIR type {} instead of UInt",
@@ -831,11 +954,10 @@ impl<'a> Builder<'a> {
                 let mut previous_first_use = None;
                 for capture in &closure.captures {
                     let binding = self.require_binding_reference(&capture.reference, owner)?;
-                    if binding.mutable {
-                        return Err(InspectionError::invalid(format!(
-                            "{} captures mutable {}",
-                            closure_owner, binding.id
-                        )));
+                    if binding.mutable && !self.allow_mutable_captures {
+                        return Err(InspectionError::invalid(
+                            "semantic-inspection schema v5/v6 cannot represent a mutable-source snapshot capture; select schema v7",
+                        ));
                     }
                     if !capture_ids.insert(capture.reference.binding) {
                         return Err(InspectionError::invalid(format!(
@@ -1042,6 +1164,11 @@ impl<'a> Builder<'a> {
                 v1::ExpressionKind::FieldAccess
             }
             hir::ExpressionKind::IntToUInt { operand } => {
+                if !self.allow_unsigned {
+                    return Err(InspectionError::invalid(
+                        "semantic-inspection schema v1-v6 cannot represent `UInt`; select schema v7",
+                    ));
+                }
                 if expression.ty != Type::UInt || operand.ty != Type::Int {
                     return Err(InspectionError::invalid(
                         "IntToUInt HIR conversion has inconsistent types",
@@ -1052,6 +1179,11 @@ impl<'a> Builder<'a> {
                 v1::ExpressionKind::NumericConversion
             }
             hir::ExpressionKind::UIntToInt { operand } => {
+                if !self.allow_unsigned {
+                    return Err(InspectionError::invalid(
+                        "semantic-inspection schema v1-v6 cannot represent `UInt`; select schema v7",
+                    ));
+                }
                 if expression.ty != Type::Int || operand.ty != Type::UInt {
                     return Err(InspectionError::invalid(
                         "UIntToInt HIR conversion has inconsistent types",
@@ -1499,6 +1631,11 @@ impl<'a> Builder<'a> {
             Type::String if !self.allow_string => {
                 return Err(InspectionError::invalid(
                     "semantic-inspection schema v1/v2/v3 cannot represent `String`; select schema v4",
+                ));
+            }
+            Type::UInt if !self.allow_unsigned => {
+                return Err(InspectionError::invalid(
+                    "semantic-inspection schema v1-v6 cannot represent `UInt`; select schema v7",
                 ));
             }
             Type::Int

@@ -144,14 +144,14 @@ dynamic enum matches.
 
 ## `N3035` mutable lexical capture
 
-The bootstrap closure model captures immutable outer `let` and parameter values by value.
-If an anonymous function reads or assigns a lexically enclosing `var`, semantic analysis
-reports `N3035` at the first attempted capture and points back to the mutable declaration.
+The bootstrap closure model captures outer values by value. Reading a lexically enclosing
+`var` takes a creation-time snapshot, so later assignments in the outer scope do not update
+the closure environment. If an anonymous function assigns through such an outer `var`, semantic
+analysis reports `N3035` at the assignment and points back to the mutable declaration.
 The rejected reference lowers as Error HIR and cannot create a capture entry or export
 definite-initialization facts. This diagnostic is intentionally fail closed: until Nova has
-ownership, lifetime, and shared-cell rules, the compiler does not guess whether mutable
-capture should mean a creation-time snapshot, a private mutable copy, or shared by-reference
-state.
+ownership, lifetime, and shared-cell rules, the compiler does not guess whether assignment
+should mutate a private snapshot, the outer binding, or a shared by-reference cell.
 
 ## Module-identity invariant failures
 
@@ -163,11 +163,15 @@ It strengthens existing trust-boundary diagnostics instead:
 - `N4005` rejects executable HIR that supplies a foreign-module function, record,
   enum, closure, or binding identity even when its local index exists; and
 - `N5001` rejects semantic inspection when HIR/CFG module ownership is inconsistent,
-  or when v1-v5 are asked to erase a non-root module that only v6 can represent.
+  when v1-v5 are asked to erase a non-root module that only v6 can represent, or
+  when v1-v6 are asked to encode `UInt` facts or v5/v6 are asked to encode a
+  mutable-source snapshot capture introduced only by schema v7.
 
 These are compiler-invariant failures, not recoverable Nova program errors. Human and
 JSON renderers retain their existing structured behavior and no partial runtime or
-inspection result is produced.
+inspection result is produced. An unsupported inspection version is instead a CLI usage
+error with status `2`; selecting an older valid schema for accepted but unrepresentable
+HIR is the fail-closed status-`1` `N5001` path.
 
 ## Deliberate limits
 

@@ -31,13 +31,14 @@ interpreter slices. The toolchain is written in Rust and can:
 - resolve top-level functions and nominal types through an explicit per-module
   namespace, plus parameters, lexical local bindings, record-field and enum-variant
   name/slot identities, and match payload bindings;
-- check bootstrap `Int`, `Bool`, `String`, `Unit`, the uninhabited `!` bottom type, and nominal aggregate types, function
+- check bootstrap `Int`, `UInt`, `Bool`, `String`, `Unit`, the uninhabited `!`
+  bottom type, nominal aggregate types, function
   signatures, local inference and annotations, calls, operators, block tails, branches,
   returns, loop conditions, loop-control legality, record construction/projection,
   enum construction, match exhaustiveness and arm types, direct-constructor arm
   usefulness, assignment mutability/type constraints, and CFG-based definite initialization;
 - execute semantically accepted programs through a deterministic bootstrap
-  interpreter with named functions, typed closures and immutable capture-by-value environments,
+  interpreter with named functions, typed closures and capture-by-value environments,
   recursion, Unit-valued procedures, records, enums, UTF-8 strings, pattern matching, mutation,
   blocks, conditionals, bounded loops, and structured `break`/`continue`;
 - emit structured, coded compile-time and runtime diagnostics rendered as human
@@ -49,7 +50,10 @@ interpreter slices. The toolchain is written in Rust and can:
   that additionally expose explicit match payload modes without reinterpreting v1/v2 fields,
   v4 documents that extend the program projection with String type/literal categories,
   v5 documents that add closure definitions, captures, callable ownership, and verified closure CFGs,
-  and v6 documents that expose single-module ownership without inventing import semantics.
+  v6 documents that expose single-module ownership without inventing import semantics,
+  and v7 documents that add the checked `UInt` type, unsigned constants, explicit
+  `Int`/`UInt` conversion expressions, and explicit by-value capture mode without
+  mutating the frozen v1-v6 contracts.
 
 `nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
 definite-assignment validation. `nova run` performs those same checks and then
@@ -94,8 +98,10 @@ behavior,
 [v3 pattern extension](docs/semantic-introspection-v3.md), and
 [v4 String extension](docs/semantic-introspection-v4.md), and
 [v5 closure extension](docs/semantic-introspection-v5.md), and
-[v6 module-identity extension](docs/semantic-introspection-v6.md) for the machine-readable
+[v6 module-identity extension](docs/semantic-introspection-v6.md), and
+[v7 UInt extension](docs/semantic-introspection-v7.md) for the machine-readable
 tooling boundary,
+[the implemented numeric contract](docs/numeric-semantics.md),
 [the module-ready identity contract](docs/modules.md),
 [the bootstrap control-flow contract](docs/control-flow.md) for CFG verification
 and definite-initialization dataflow, and
@@ -123,8 +129,9 @@ Explicit function types use `fn(T1, T2) -> U` and may nest recursively in any ty
 position. Named top-level functions and explicitly typed anonymous functions share those
 structural callable signatures, so either can be passed, returned, stored in typed locals,
 and invoked through values. Anonymous functions use `fn(name: Type, ...) -> Type { ... }`
-and capture outer immutable `let` bindings and parameters by value in first lexical-use order.
-Capturing a mutable `var` fails closed as `N3035`; no shared-cell or by-reference mutation
+and capture outer bindings by value in first lexical-use order. Reading an enclosing mutable
+`var` takes a creation-time snapshot; later outer assignments do not change that captured value.
+Assigning through such a snapshot fails closed as `N3035`; no shared-cell or by-reference mutation
 semantics are inferred. Each anonymous-function evaluation creates a distinct closure instance,
 while aliases retain that instance identity. Methods and implicit callable conversions remain
 outside the bootstrap subset.
@@ -173,7 +180,7 @@ a continuing rejected operator are rolled back. Non-continuation from an operand
 must be evaluated keeps `!` precedence; short-circuit operators retain their existing
 conditional right-hand evaluation rules.
 
-Matching `Int`, `Bool`, `String`, and `Unit` values support `==` and `!=`. `Unit` has a
+Matching `Int`, `UInt`, `Bool`, `String`, and `Unit` values support `==` and `!=`. `Unit` has a
 single runtime value, so Unit equality is always true and Unit inequality is always false
 once both operands have evaluated normally. A nominal enum also supports equality when
 every declared variant is payload-free; operands must have the same enum identity and
@@ -305,19 +312,21 @@ surface types today. `()` is the sole Unit literal, and a block with no tail als
 produces Unit. A function declared `-> Unit` may fall through such a body or use
 the explicit `return ();` form; non-Unit functions still need a compatible tail or
 an explicit return on every continuing path. Arithmetic and ordered comparisons
-require `Int`; boolean operators require `Bool`; equality accepts matching `Int`, `Bool`, `String`, `Unit`, the same function signature, or
+require matching `Int` or matching `UInt` operands; unary negation remains `Int`-only.
+Boolean operators require `Bool`; equality accepts matching `Int`, `UInt`, `Bool`,
+`String`, `Unit`, the same function signature, or
 the same nominal payload-free enum type; function equality compares declaration
 identity rather than addresses or code layout, and calls require matching arity and
 argument types.
 `if` conditions require `Bool`, and continuing branches or match arms must remain
-type-compatible. The internal `!` bottom type still has no surface spelling.
+type-compatible. The surface `!` bottom type has no ordinary runtime value.
 
 These rules are bootstrap semantics, not a promise that Nova's broader type,
 mutation, control-flow, aggregate, and shadowing policies are frozen.
 
 ## Bootstrap execution rules
 
-`nova run` requires one top-level `main` with no parameters and an `Int`, `Bool`,
+`nova run` requires one top-level `main` with no parameters and an `Int`, `UInt`, `Bool`,
 `String`, or `Unit` return type. A Unit-valued `main` prints `()` like any other returned
 bootstrap value. Execution evaluates expressions left to
 right. Record initializer
@@ -454,6 +463,12 @@ optional boxed payload. Those interpreter-owned nominal representations are not
 stabilized source layouts, allocation promises, ownership rules, or ABI
 contracts.
 
+`UInt` is a distinct unsigned 64-bit family. Unsuffixed literals still default to
+`Int`; `UInt::MIN` and `UInt::MAX` expose `0` and `2^64 - 1`, and
+`UInt::from(Int)` / `Int::from_uint(UInt)` are the only implemented cross-family
+conversions. Same-family `UInt` arithmetic is checked, mixed-family operators are
+type errors, and failed conversions report `N4007` instead of wrapping or saturating.
+
 ## Build and use
 
 Nova declares Rust 1.85 as its bootstrap minimum and also tracks current stable
@@ -469,6 +484,7 @@ cargo run -p nova-cli -- inspect examples/enums.nv --format json
 cargo run -p nova-cli -- inspect examples/enums.nv --format json --schema-version 2
 cargo run -p nova-cli -- inspect examples/strings.nv --format json --schema-version 4
 cargo run -p nova-cli -- inspect examples/closures.nv --format json --schema-version 6
+printf 'fn main() -> UInt { UInt::MAX }\n' | cargo run -p nova-cli -- inspect - --format json --schema-version 7
 printf 'fn main() -> Int { 42 }\n' | cargo run -p nova-cli -- check - --source-name scratch/main.nv
 ```
 
@@ -487,7 +503,7 @@ The installed binary is named `nova`:
 nova check [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 nova run [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 nova ast [--source-name name] [--message-format human|json] [--] <file|->
-nova inspect --format json [--schema-version 1|2|3|4|5|6] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
+nova inspect --format json [--schema-version 1|2|3|4|5|6|7] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 ```
 
 Each command accepts exactly one source operand. A filesystem path retains its written
@@ -510,7 +526,10 @@ even when `nova check` or `nova run` would reject that program later.
 writes no partial document when source diagnostics or an inspection invariant
 failure occurs. Non-fatal warnings are written to standard error without changing
 status `0`, runtime output, or a successful inspection document. Schema v1 remains
-the default; v2 through v6 must be requested explicitly. With `--fail-on-warnings`, semantic
+the default; v2 through v7 must be requested explicitly. A program containing `UInt`
+or a mutable-source snapshot capture requires v7; older representationally incomplete
+schemas fail closed with `N5001` rather than silently changing their contracts.
+With `--fail-on-warnings`, semantic
 warnings instead produce status `1` while retaining warning severity; `run` and `inspect`
 suppress their ordinary standard output. The option is invalid with `ast`, which does not
 perform semantic analysis.

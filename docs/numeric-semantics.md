@@ -1,17 +1,19 @@
 # Nova numeric semantics
 
-Status: **normative for the implemented bootstrap `Int` behavior**
+Status: **normative for the implemented bootstrap `Int` and `UInt` behavior**
 
-Nova currently has one numeric type, `Int`. It is a signed 64-bit integer with the
-closed range `-9223372036854775808` through `9223372036854775807`. This document
-promotes that executable behavior from an interpreter accident to the language-level
-contract for the current single-`Int` subset; it does not reserve the design of future
-numeric families, implicit conversions, suffixes, or backend ABIs.
+Nova currently has two numeric types: signed 64-bit `Int`, with the closed range
+`-9223372036854775808` through `9223372036854775807`, and unsigned 64-bit `UInt`,
+with the closed range `0` through `18446744073709551615`. This document promotes
+their executable behavior from an interpreter accident to the language-level contract
+for the current two-family subset; it does not reserve additional numeric families,
+literal suffixes, implicit conversions, or backend ABIs.
 
 ## Literals and boundaries
 
-Decimal, binary, octal, and hexadecimal integer literals decode to one radix-independent
-magnitude. Positive literals are limited to `Int::MAX`. Magnitude `2^63` is accepted only
+Decimal, binary, octal, and hexadecimal unsuffixed integer literals decode to one
+radix-independent magnitude and default to `Int`. Positive literals are limited to
+`Int::MAX`. Magnitude `2^63` is accepted only
 as the operand of prefix negation, producing `Int::MIN`; larger magnitudes are rejected.
 
 Two payload-free associated constants expose the exact language boundaries:
@@ -94,6 +96,14 @@ underflow report runtime `N4002`; zero divisors report `N4003`. Unary negation r
 with runtime `N4007`. `Int::from_uint(UInt)` is the explicit narrowing conversion and
 rejects values above `Int::MAX` with `N4007`. Both evaluate their operand exactly once,
 never wrap or saturate, and mixed-family arithmetic remains a type error.
+
+## Tooling representation
+
+Semantic-inspection schema v7 is the first version that represents `UInt`. Its type
+table adds `uint`; expressions add `unsigned_integer` for canonical boundary constants
+and `numeric_conversion` with operator `int_to_uint` or `uint_to_int`. Schemas v1-v6
+remain frozen and reject any accepted HIR containing `UInt` with `N5001`; callers must
+explicitly select v7. Inspection never invents an implicit conversion or literal suffix.
 
 Literal suffixes, floating-point semantics, additional numeric families, richer defaulting,
 and backend representation beyond these 64-bit contracts remain future BIL-5 work.

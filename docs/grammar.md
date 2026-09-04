@@ -148,7 +148,8 @@ tail expression also has type `Unit`. A function declared `-> Unit` may therefor
 fall through a value-less body, return Unit explicitly as `return ();`, or use the
 compact `return;` spelling. Bare `return;` is semantically a Unit return rather than a
 valueless control operation, so it is rejected by the ordinary return-type check in
-`Int`, `Bool`, nominal, function-valued, or `!`-returning functions. The AST and HIR
+`Int`, `UInt`, `Bool`, `String`, nominal, function-valued, or `!`-returning
+functions. The AST and HIR
 nevertheless preserve whether source wrote a bare return instead of manufacturing a
 synthetic `()` expression. Other return types still require a compatible tail or an
 explicit value-returning path. Parenthesized non-empty expressions retain ordinary
@@ -162,6 +163,14 @@ Unicode scalar sequence. No concatenation, indexing, interpolation, conversion,
 method, standard-library, layout, allocation, ownership, or ABI contract is
 defined by this scalar slice.
 
+`UInt` is also a built-in surface type, but this grammar adds no unsigned literal
+suffix: every unsuffixed integer literal remains `Int`. The parser keeps qualified
+member syntax generic; semantic analysis recognizes `UInt::MIN`, `UInt::MAX`,
+`UInt::from(Int)`, and `Int::from_uint(UInt)` and lowers them to resolved typed HIR.
+Matching `UInt` operands support checked arithmetic, equality, and ordering; mixed
+`Int`/`UInt` operators and unary negation of `UInt` are rejected. The exact numeric
+contract is specified in [`numeric-semantics.md`](numeric-semantics.md).
+
 Function types use the recursive surface form `fn(T1, T2) -> U`; zero parameters and
 a trailing comma are allowed, and parameter/return positions may themselves be function
 types. The form is accepted anywhere a type reference is accepted, including function
@@ -172,16 +181,17 @@ its own finite nesting budget and reports `N2009` rather than recursing without 
 
 An anonymous function expression is written `fn(name: Type, ...) -> Type { ... }`; every
 parameter and the return type are explicit. Evaluating it produces a closure and copies
-each referenced outer immutable `let` or parameter value into an environment in first
-lexical-use order. Captures are by value: a closure may escape its creating call, and
-aliases of the same closure value retain one runtime instance identity. Evaluating the
-same anonymous-function expression again creates a distinct identity. Capturing a `var`
-is `N3035`; Nova does not silently choose snapshot, shared-cell, or by-reference mutation
-semantics. A local initializer is still checked before its binding enters scope, so a
-closure cannot recursively refer to the binding being initialized. `return` targets the
+each referenced outer binding value into an environment in first lexical-use order.
+Captures are by value: reading an enclosing `var` snapshots its value at closure creation,
+so later outer assignments do not change the capture. A closure may escape its creating
+call, and aliases of the same closure value retain one runtime instance identity. Evaluating the
+same anonymous-function expression again creates a distinct identity. Assigning through a
+captured outer `var` is `N3035`; shared-cell and by-reference mutation remain unspecified.
+A local initializer is still checked before its binding enters scope, so a closure cannot
+recursively refer to the binding being initialized. `return` targets the
 closure itself, and an outer loop does not make `break` or `continue` legal inside the
-closure. Methods, implicit callable conversions, capture lists, mutable/shared captures,
-closure layout, allocation, ownership, and ABI remain unspecified.
+closure. Methods, implicit callable conversions, capture lists, mutable capture slots,
+shared/by-reference capture, closure layout, allocation, ownership, and ABI remain unspecified.
 
 `!` is the surface spelling of Nova's uninhabited bottom type. It is accepted anywhere a
 type reference is accepted, including nested function signatures. A continuing expression

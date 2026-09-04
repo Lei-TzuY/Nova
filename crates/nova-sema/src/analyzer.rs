@@ -860,6 +860,7 @@ impl Analyzer {
                 (StatementKind::UninitializedBinding(binding), false)
             }
             ast::StatementKind::Assignment { target, value } => {
+                let assignment_entry_state = self.capture_reachable_state();
                 let local = self.find_local_with_scope(&target.text);
                 let function_span = self
                     .module
@@ -868,7 +869,28 @@ impl Analyzer {
                     .map(|symbol| symbol.span);
                 let value = self.lower_expression(value, return_type);
                 let target_id = if let Some((scope_index, symbol)) = local {
-                    if !self.capture_binding_if_needed(
+                    let writes_through_snapshot = self
+                        .closure_stack
+                        .last()
+                        .is_some_and(|context| scope_index < context.scope_base && symbol.mutable);
+                    if writes_through_snapshot {
+                        self.diagnostics.push(
+                            Diagnostic::error("N3035", "cannot assign through a lexical snapshot capture")
+                                .with_primary(
+                                    target.span,
+                                    format!("`{}` is captured by value and cannot be assigned here", target.text),
+                                )
+                                .with_secondary(symbol.span, "mutable binding declared here")
+                                .with_note(
+                                    "reading an enclosing `var` snapshots its value when the closure is created; shared-cell mutation is not yet defined",
+                                ),
+                        );
+                        self.require_type(&value.ty, &symbol.ty, value.span, "assigned value");
+                        if !value.ty.is_never() {
+                            self.restore_reachable_state(assignment_entry_state);
+                        }
+                        None
+                    } else if !self.capture_binding_if_needed(
                         scope_index,
                         &target.text,
                         target.span,
@@ -2514,21 +2536,6 @@ impl Analyzer {
         if scope_index >= scope_base {
             return true;
         }
-        if symbol.mutable {
-            self.diagnostics.push(
-                Diagnostic::error("N3035", "mutable lexical capture is not supported")
-                    .with_primary(
-                        use_span,
-                        format!("`{name}` is mutable and cannot be captured by this closure"),
-                    )
-                    .with_secondary(symbol.span, "mutable binding declared here")
-                    .with_note(
-                        "the bootstrap closure slice captures immutable values by value; shared or mutable capture semantics are not yet defined",
-                    ),
-            );
-            return false;
-        }
-
         let is_new = self
             .closure_stack
             .last()

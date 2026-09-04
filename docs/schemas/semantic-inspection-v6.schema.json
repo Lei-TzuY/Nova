@@ -250,9 +250,9 @@
         "owner": { "$ref": "#/$defs/callableId" },
         "kind": {
           "enum": [
-            "integer", "unsigned_integer", "string", "boolean", "unit", "closure", "binding_reference",
+            "integer", "string", "boolean", "unit", "closure", "binding_reference",
             "function_reference", "record_construction", "enum_construction", "field_access",
-            "unary", "binary", "numeric_conversion", "call", "block", "if", "match"
+            "unary", "binary", "call", "block", "if", "match"
           ]
         },
         "type_id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/typeId" },

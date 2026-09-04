@@ -97,7 +97,7 @@ return category; functions with other return types therefore reject it through t
 return-type compatibility rule that governs explicit expressions. AST/HIR retain the
 source distinction instead of synthesizing a Unit expression. Functions with other return
 types still require a compatible value on every continuing path.
-`String` and `Unit` are reserved alongside `Int` and `Bool` and cannot be redefined as
+`UInt`, `String`, and `Unit` are reserved alongside `Int` and `Bool` and cannot be redefined as
 nominal records or enums.
 
 The bootstrap `String` scalar contains immutable UTF-8 text. Source literals preserve
@@ -112,15 +112,18 @@ The bootstrap surface also admits explicit recursive function types written
 `fn(T1, T2) -> U`. These lower directly to the resolved `FunctionType`, so named top-level
 functions and explicitly typed anonymous functions may be passed, returned, stored, and
 called through one structural signature. `fn(name: Type, ...) -> Type { ... }` creates a
-closure whose referenced outer immutable `let` and parameter values are copied at creation
-in first lexical-use order. Closure aliases preserve opaque runtime instance identity;
+closure whose referenced outer binding values are copied at creation in first lexical-use
+order. Reading an enclosing mutable `var` therefore snapshots its current value; later
+outer assignments do not update the closure environment. Closure aliases preserve opaque runtime instance identity;
 separate evaluations produce distinct identities, and a closure never compares equal to a
-named function. Mutable `var` capture is rejected until shared-cell/by-reference semantics
-can be specified with ownership and lifetime rules. Initializers still resolve before their
+named function. Assignment through any captured snapshot is rejected as `N3035` until
+shared-cell/by-reference semantics can be specified with ownership and lifetime rules.
+Initializers still resolve before their
 new binding enters scope, so anonymous closures cannot self-reference through that binding.
-Each closure is also a return and loop-control boundary. Explicit capture lists, mutable or
-shared capture, method values, callable objects, closure layout/allocation, and ownership/ABI
-semantics remain unimplemented and must not be inferred from this slice.
+Each closure is also a return and loop-control boundary. Explicit capture lists, mutable
+capture slots, shared/by-reference capture, method values, callable objects, closure
+layout/allocation, and ownership/ABI semantics remain unimplemented and must not be inferred
+from this slice.
 
 The bootstrap surface spelling `!` denotes the semantic core's existing uninhabited bottom
 type. It is a real type rather than a runtime sentinel: no ordinary value can conform to it,
@@ -152,7 +155,7 @@ catch-all variant wildcard, so these rules extend the executable algebraic-data-
 without selecting default-arm, guard, nested-pattern, usefulness, layout, or ownership
 semantics prematurely.
 
-Matching `Int`, `Bool`, `String`, and `Unit` values are equality-comparable with `==` and
+Matching `Int`, `UInt`, `Bool`, `String`, and `Unit` values are equality-comparable with `==` and
 `!=`. Unit has exactly one bootstrap value, so two normally evaluated Unit values compare
 equal. String equality compares decoded Unicode scalar sequences after ordinary
 left-to-right operand evaluation. A nominal enum is also equality-comparable when every one of its declared variants
@@ -228,6 +231,15 @@ leaf therefore prevents static/runtime drift without making HIR or diagnostics p
 the numeric core. This is implementation evidence for the numeric design, not yet a
 stable language-wide promise about numeric widths, defaulting, conversions, or
 overflow policy for future backends.
+
+The bootstrap also executes `UInt` as a distinct unsigned 64-bit family. Unsuffixed
+literals remain `Int`; `UInt::MIN` and `UInt::MAX` expose the exact unsigned bounds,
+same-family arithmetic and ordering are checked, and no implicit `Int`/`UInt`
+conversion exists. `UInt::from(Int)` rejects negative inputs and
+`Int::from_uint(UInt)` rejects values above `Int::MAX`, both as runtime `N4007`
+without wrapping or saturation. Unary negation and the current closed-arithmetic
+preflight remain `Int`-only. These rules are language semantics for the bootstrap,
+not a layout, ABI, native-backend, or generalized numeric-defaulting claim.
 
 **Research.** The project must decide, with implementation evidence:
 
@@ -395,7 +407,7 @@ and function signatures are collected before function bodies are lowered. This
 supports deterministic forward and recursive references to declared aggregate
 types plus forward function calls without consulting filesystem or declaration
 traversal order for semantic meaning. Records and enums share one type
-namespace; built-in `Int`, `Bool`, `String`, and `Unit` type names cannot be
+namespace; built-in `Int`, `UInt`, `Bool`, `String`, and `Unit` type names cannot be
 redefined. The semantic pipeline now owns an explicit per-module declaration
 scope, and function, record, enum, closure, and binding identities pair a
 compiler-session `ModuleId` with their local index. The CLI uses one implicit
@@ -467,8 +479,8 @@ require dedicated design work.
 **Decided.** The intended compiler pipeline is:
 
 ```text
-Source -> tokens -> AST -> HIR -> resolution -> type/effect inference
-       -> ownership/region analysis -> MIR -> optimization -> backend
+Source -> tokens -> AST -> name resolution -> typed HIR -> CFG/dataflow
+       -> future effect and ownership analysis -> future MIR -> backend
 ```
 
 The exact pass boundaries may change, but surface parsing must not become the
@@ -491,7 +503,7 @@ initializers do not reorder their expressions when resolved to declaration slots
 evaluates its scrutinee once and only its selected arm. `&&` and `||`
 short-circuit, and semantic dataflow models that same conditional RHS execution
 rather than granting facts from code the interpreter may skip. The entry point
-is a zero-argument top-level `main` returning `Int`, `Bool`, `String`, or `Unit`.
+is a zero-argument top-level `main` returning `Int`, `UInt`, `Bool`, `String`, or `Unit`.
 
 The interpreter propagates `return`, `break`, and `continue` as structured
 control flow through nested expressions and selected match arms. A `while`
@@ -566,7 +578,12 @@ with `N5001` rather than silently broadening their frozen enums. Schema v5 adds
 closures, immutable capture edges, callable ownership, and closure CFGs. Schema
 v6 adds the single module that owns all document-local declaration and binding
 identities; v1-v5 preserve root-module output and reject non-root module HIR
-rather than erase ownership. Document-local IDs and deterministic ordering are specified
+rather than erase ownership. Schema v7 is the first contract that represents the
+`UInt` type, unsigned constant expressions, explicit checked `Int`/`UInt`
+conversions, and the by-value mode of closure captures including mutable-source snapshots;
+v1-v6 reject UInt-bearing HIR and v5/v6 reject mutable-source snapshot captures with
+`N5001` rather than silently broadening
+their frozen enums. Document-local IDs and deterministic ordering are specified
 independently of Rust HIR and CFG layouts. Rejected source or an inspection
 invariant failure produces diagnostics and no partial document. Compiler debug
 text is not this protocol.

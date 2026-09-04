@@ -268,7 +268,7 @@ pub struct Function {
     pub span: Span,
 }
 
-/// One immutable lexical binding captured by value when a closure is created.
+/// One lexical binding captured by value when a closure is created.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Capture {
     /// Resolved declaration identity and metadata.
@@ -288,7 +288,7 @@ pub struct Closure {
     pub parameters: Vec<Binding>,
     /// Explicit resolved return type.
     pub return_type: Type,
-    /// Immutable environment inputs in first-lexical-use order.
+    /// By-value environment inputs in first-lexical-use order.
     pub captures: Vec<Capture>,
     /// Body evaluated at the closure call boundary.
     pub body: Block,

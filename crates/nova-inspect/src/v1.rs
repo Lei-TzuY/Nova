@@ -102,7 +102,7 @@ pub struct Type {
 pub enum TypeKind {
     /// Surface `Int`.
     Int,
-    /// Surface `UInt`.
+    /// Surface `UInt`; emitted only by schema v7 and later.
     #[serde(rename = "uint")]
     UInt,
     /// Surface `Bool`.
@@ -115,7 +115,7 @@ pub enum TypeKind {
     Enum,
     /// Surface `Unit` type.
     Unit,
-    /// Internal non-continuing type.
+    /// Surface `!`, encoded as the non-continuing `never` type kind.
     Never,
     /// Callable signature.
     Function,
@@ -331,7 +331,7 @@ pub struct RecordFieldInitializer {
 pub enum ExpressionKind {
     /// Integer literal.
     Integer,
-    /// Unsigned integer literal.
+    /// Unsigned integer literal; emitted only by schema v7 and later.
     UnsignedInteger,
     /// String literal; emitted only by schema v4 and later.
     String,
@@ -355,7 +355,8 @@ pub enum ExpressionKind {
     Unary,
     /// Infix operation.
     Binary,
-    /// Explicit checked conversion between numeric families.
+    /// Explicit checked conversion between numeric families; emitted only by schema v7
+    /// and later.
     NumericConversion,
     /// Function invocation.
     Call,
