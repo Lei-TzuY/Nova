@@ -17,7 +17,8 @@ pub use analyzer::AnalysisOutput;
 /// Lowers a parsed program to HIR while resolving names and checking bootstrap types.
 #[must_use]
 pub fn analyze(program: &nova_parser::ast::Program) -> AnalysisOutput {
-    analyze_in_module(program, hir::ModuleId::ROOT)
+    let program = numeric_surface::canonicalize_int_constants(program);
+    analyzer::analyze(&program)
 }
 
 /// Lowers one parsed source as the specified compiler-session module.
