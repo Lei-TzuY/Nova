@@ -102,6 +102,8 @@ pub struct Type {
 pub enum TypeKind {
     /// Surface `Int`.
     Int,
+    /// Surface `UInt`.
+    UInt,
     /// Surface `Bool`.
     Bool,
     /// Surface `String`; emitted only by schema v4 and later.
@@ -328,6 +330,8 @@ pub struct RecordFieldInitializer {
 pub enum ExpressionKind {
     /// Integer literal.
     Integer,
+    /// Unsigned integer literal.
+    UnsignedInteger,
     /// String literal; emitted only by schema v4 and later.
     String,
     /// Boolean literal.
@@ -350,6 +354,8 @@ pub enum ExpressionKind {
     Unary,
     /// Infix operation.
     Binary,
+    /// Explicit checked conversion between numeric families.
+    NumericConversion,
     /// Function invocation.
     Call,
     /// Nested lexical block expression.

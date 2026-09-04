@@ -82,7 +82,7 @@ reference-like type. Algebraic data types and exhaustive pattern matching are
 core language directions, not library conventions.
 
 **Provisional bootstrap decisions.** The current semantic core recognizes the
-surface types `Int`, `Bool`, `String`, `Unit`, the uninhabited bottom type `!`, and declared nominal record and enum types.
+surface types `Int`, `UInt`, `Bool`, `String`, `Unit`, the uninhabited bottom type `!`, and declared nominal record and enum types.
 The sole Unit literal is `()`, and a value-less block also produces Unit. Aggregate
 identity comes from the declaration rather than shape: separately declared
 types remain different even when their fields or variants have identical names

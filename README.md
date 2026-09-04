@@ -300,7 +300,7 @@ iteration and re-evaluates that same loop's condition. Neither carries a value
 or acts as an expression. Labelled loops and value-carrying breaks are not part
 of the bootstrap subset.
 
-`Int`, `Bool`, `String`, `Unit`, and declared nominal records and enums are recognized
+`Int`, `UInt`, `Bool`, `String`, `Unit`, and declared nominal records and enums are recognized
 surface types today. `()` is the sole Unit literal, and a block with no tail also
 produces Unit. A function declared `-> Unit` may fall through such a body or use
 the explicit `return ();` form; non-Unit functions still need a compatible tail or

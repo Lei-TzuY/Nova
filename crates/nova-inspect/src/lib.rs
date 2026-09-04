@@ -484,7 +484,7 @@ impl<'a> Builder<'a> {
     }
 
     fn prepare_type_order(&mut self) -> Result<(), InspectionError> {
-        for ty in [Type::Int, Type::Bool] {
+        for ty in [Type::Int, Type::UInt, Type::Bool] {
             self.intern_type(&ty)?;
         }
         if self.allow_string {
@@ -768,6 +768,15 @@ impl<'a> Builder<'a> {
 
         let kind = match &expression.kind {
             hir::ExpressionKind::Integer(_) => v1::ExpressionKind::Integer,
+            hir::ExpressionKind::Unsigned(_) => {
+                if expression.ty != Type::UInt {
+                    return Err(InspectionError::invalid(format!(
+                        "unsigned literal expression has HIR type {} instead of UInt",
+                        expression.ty
+                    )));
+                }
+                v1::ExpressionKind::UnsignedInteger
+            }
             hir::ExpressionKind::String(_) => {
                 if expression.ty != Type::String {
                     return Err(InspectionError::invalid(format!(
@@ -1031,6 +1040,26 @@ impl<'a> Builder<'a> {
                 children.push(self.collect_expression(base, owner)?);
                 target = Some(field_id(record.index(), *field_index));
                 v1::ExpressionKind::FieldAccess
+            }
+            hir::ExpressionKind::IntToUInt { operand } => {
+                if expression.ty != Type::UInt || operand.ty != Type::Int {
+                    return Err(InspectionError::invalid(
+                        "IntToUInt HIR conversion has inconsistent types",
+                    ));
+                }
+                operator = Some("int_to_uint".to_owned());
+                children.push(self.collect_expression(operand, owner)?);
+                v1::ExpressionKind::NumericConversion
+            }
+            hir::ExpressionKind::UIntToInt { operand } => {
+                if expression.ty != Type::Int || operand.ty != Type::UInt {
+                    return Err(InspectionError::invalid(
+                        "UIntToInt HIR conversion has inconsistent types",
+                    ));
+                }
+                operator = Some("uint_to_int".to_owned());
+                children.push(self.collect_expression(operand, owner)?);
+                v1::ExpressionKind::NumericConversion
             }
             hir::ExpressionKind::Unary {
                 operator: resolved,
@@ -1473,6 +1502,7 @@ impl<'a> Builder<'a> {
                 ));
             }
             Type::Int
+            | Type::UInt
             | Type::Bool
             | Type::String
             | Type::Unit
@@ -1489,6 +1519,7 @@ impl<'a> Builder<'a> {
             .map(|(index, ty)| {
                 let (kind, declaration, parameters, return_type) = match ty {
                     Type::Int => (v1::TypeKind::Int, None, Vec::new(), None),
+                    Type::UInt => (v1::TypeKind::UInt, None, Vec::new(), None),
                     Type::Bool => (v1::TypeKind::Bool, None, Vec::new(), None),
                     Type::String => (v1::TypeKind::String, None, Vec::new(), None),
                     Type::Record(record) => (

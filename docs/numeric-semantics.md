@@ -83,6 +83,17 @@ and side-effect semantics of any other expression. Semantic canonicalization low
 second source of truth. Missing payloads and operands of the wrong type are rejected by
 normal semantic diagnostics. There are no implicit conversions.
 
-Literal suffixes, floating-point semantics, additional numeric families,
-widening/narrowing policy, and backend representation beyond this signed-64 contract
-remain future BIL-5 work and must be specified before syntax is added for them.
+Nova now has two integer families: signed 64-bit `Int` and unsigned 64-bit `UInt`.
+Unsuffixed decimal literals continue to default to `Int`; there is no implicit conversion
+between the families. `UInt::MIN` is `0`, `UInt::MAX` is `2^64 - 1`, and same-family
+`UInt` arithmetic and ordering are checked unsigned 64-bit operations. Overflow and
+underflow report runtime `N4002`; zero divisors report `N4003`. Unary negation remains
+`Int`-only.
+
+`UInt::from(Int)` is the explicit widening-domain conversion and rejects negative values
+with runtime `N4007`. `Int::from_uint(UInt)` is the explicit narrowing conversion and
+rejects values above `Int::MAX` with `N4007`. Both evaluate their operand exactly once,
+never wrap or saturate, and mixed-family arithmetic remains a type error.
+
+Literal suffixes, floating-point semantics, additional numeric families, richer defaulting,
+and backend representation beyond these 64-bit contracts remain future BIL-5 work.

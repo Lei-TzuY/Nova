@@ -503,7 +503,10 @@ impl Analyzer {
         declarations.sort_by_key(|(start, _, _)| *start);
 
         for (_, name, definition) in declarations {
-            if matches!(name.text.as_str(), "Int" | "Bool" | "String" | "Unit") {
+            if matches!(
+                name.text.as_str(),
+                "Int" | "UInt" | "Bool" | "String" | "Unit"
+            ) {
                 self.diagnostics.push(
                     Diagnostic::error("N3002", "duplicate type definition").with_primary(
                         name.span,
@@ -633,6 +636,7 @@ impl Analyzer {
             ast::TypeRefKind::Never => Type::Never,
             ast::TypeRefKind::Named(name) => match name.text.as_str() {
                 "Int" => Type::Int,
+                "UInt" => Type::UInt,
                 "Bool" => Type::Bool,
                 "String" => Type::String,
                 "Unit" => Type::Unit,
@@ -1790,6 +1794,101 @@ impl Analyzer {
             .as_deref()
             .is_some_and(|expression| expression.ty.is_error());
 
+        if enumeration.text == "UInt" {
+            let ty = if payload_never {
+                Type::Never
+            } else {
+                Type::UInt
+            };
+            return match (variant.text.as_str(), payload) {
+                ("MIN", None) => (ExpressionKind::Unsigned(0), Type::UInt),
+                ("MAX", None) => (ExpressionKind::Unsigned(u64::MAX), Type::UInt),
+                ("from", Some(operand)) => {
+                    self.require_type(&operand.ty, &Type::Int, operand.span, "UInt::from operand");
+                    if operand.ty.is_never() {
+                        (ExpressionKind::IntToUInt { operand }, Type::Never)
+                    } else if operand.ty.is_error() || operand.ty != Type::Int {
+                        self.restore_reachable_state(aggregate_entry_state);
+                        (ExpressionKind::Error, Type::Error)
+                    } else {
+                        (ExpressionKind::IntToUInt { operand }, Type::UInt)
+                    }
+                }
+                ("from", None) => {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3022", "missing numeric conversion operand")
+                            .with_primary(variant.span, "`UInt::from` requires one Int operand"),
+                    );
+                    self.restore_reachable_state(aggregate_entry_state);
+                    (ExpressionKind::Error, Type::Error)
+                }
+                ("MIN" | "MAX", Some(actual)) => {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3022", "unexpected numeric constant payload")
+                            .with_primary(
+                                actual.span,
+                                format!("`UInt::{}` does not accept a payload", variant.text),
+                            ),
+                    );
+                    self.restore_reachable_state(aggregate_entry_state);
+                    (ExpressionKind::Error, Type::Error)
+                }
+                _ => {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3021", "unknown UInt member")
+                            .with_primary(
+                                variant.span,
+                                format!("UInt has no member named `{}`", variant.text),
+                            )
+                            .with_note(
+                                "available bootstrap members are `MIN`, `MAX`, and `from(Int)`",
+                            ),
+                    );
+                    self.restore_reachable_state(aggregate_entry_state);
+                    (
+                        ExpressionKind::Error,
+                        if payload_never {
+                            Type::Never
+                        } else {
+                            Type::Error
+                        },
+                    )
+                }
+            };
+        }
+
+        if enumeration.text == "Int" && variant.text == "from_uint" {
+            return match payload {
+                Some(operand) => {
+                    self.require_type(
+                        &operand.ty,
+                        &Type::UInt,
+                        operand.span,
+                        "Int::from_uint operand",
+                    );
+                    if operand.ty.is_never() {
+                        (ExpressionKind::UIntToInt { operand }, Type::Never)
+                    } else if operand.ty.is_error() || operand.ty != Type::UInt {
+                        self.restore_reachable_state(aggregate_entry_state);
+                        (ExpressionKind::Error, Type::Error)
+                    } else {
+                        (ExpressionKind::UIntToInt { operand }, Type::Int)
+                    }
+                }
+                None => {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3022", "missing numeric conversion operand")
+                            .with_primary(
+                                variant.span,
+                                "`Int::from_uint` requires one UInt operand",
+                            ),
+                    );
+                    self.restore_reachable_state(aggregate_entry_state);
+                    (ExpressionKind::Error, Type::Error)
+                }
+            };
+        }
+
         let Some(symbol) = self.module.types.get(&enumeration.text).copied() else {
             self.diagnostics.push(
                 Diagnostic::error("N3021", "unknown enum")
@@ -2703,8 +2802,14 @@ impl Analyzer {
             | BinaryOperator::Multiply
             | BinaryOperator::Divide
             | BinaryOperator::Remainder => {
-                self.require_binary_operands(left, right, &Type::Int, span, "arithmetic operator");
-                let ty = strict_binary_result_type(&left.ty, &right.ty, &Type::Int, Type::Int);
+                let expected = if left.ty == Type::UInt || right.ty == Type::UInt {
+                    Type::UInt
+                } else {
+                    Type::Int
+                };
+                self.require_binary_operands(left, right, &expected, span, "arithmetic operator");
+                let ty =
+                    strict_binary_result_type(&left.ty, &right.ty, &expected, expected.clone());
                 if ty == Type::Int
                     && self.checked_constant_int_failure(
                         constant_int::evaluate_binary_checked(operator, left, right),
@@ -2720,8 +2825,13 @@ impl Analyzer {
             | BinaryOperator::LessEqual
             | BinaryOperator::Greater
             | BinaryOperator::GreaterEqual => {
-                self.require_binary_operands(left, right, &Type::Int, span, "comparison operator");
-                strict_binary_result_type(&left.ty, &right.ty, &Type::Int, Type::Bool)
+                let expected = if left.ty == Type::UInt || right.ty == Type::UInt {
+                    Type::UInt
+                } else {
+                    Type::Int
+                };
+                self.require_binary_operands(left, right, &expected, span, "comparison operator");
+                strict_binary_result_type(&left.ty, &right.ty, &expected, Type::Bool)
             }
             BinaryOperator::And | BinaryOperator::Or => {
                 self.check_short_circuit_binary(operator, left, right, span)
