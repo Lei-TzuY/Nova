@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   implement:
+    if: ${{ !contains(github.event.head_commit.message, '[bil34-error]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +21,17 @@ jobs:
         with:
           components: rustfmt
       - name: Apply implementation
-        run: python .github/bil34_impl.py
+        run: |
+          if ! python .github/bil34_impl.py > /tmp/bil34.log 2>&1; then
+            cat /tmp/bil34.log
+            cp /tmp/bil34.log .github/bil34-error.txt
+            git config user.name LeiZ
+            git config user.email 52287354+Lei-TzuY@users.noreply.github.com
+            git add .github/bil34-error.txt
+            git commit -m "chore: capture BIL-34 patch error [bil34-error]"
+            git push origin HEAD:conquest/bil-34-generic-functions
+            exit 1
+          fi
       - run: cargo fmt --all
       - run: cargo check --workspace --all-targets --locked
       - name: Commit implementation
