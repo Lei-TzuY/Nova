@@ -58,20 +58,20 @@ fn mutable_source_snapshot_runs_and_requires_schema_v7() {
 }
 
 #[test]
-fn assignment_through_snapshot_has_human_and_json_diagnostics() {
+fn mutable_write_capture_is_no_longer_rejected_as_snapshot_assignment() {
     let source =
         "fn main() -> Int { var value = 40; let set = fn() -> Int { value = 99; value }; set() }";
-    let human = run_stdin(&["check", "-"], source);
-    assert_eq!(human.status.code(), Some(1));
-    assert!(human.stdout.is_empty());
-    let stderr = String::from_utf8_lossy(&human.stderr);
-    assert!(stderr.contains("error[N3035]"), "{stderr}");
-    assert!(stderr.contains("captured by value"), "{stderr}");
-
-    let json = run_stdin(&["check", "-", "--message-format=json"], source);
-    assert_eq!(json.status.code(), Some(1));
-    assert!(json.stdout.is_empty());
-    let stderr = String::from_utf8_lossy(&json.stderr);
-    assert!(stderr.contains("\"code\":\"N3035\""), "{stderr}");
-    assert!(stderr.contains("lexical snapshot capture"), "{stderr}");
+    let check = run_stdin(&["check", "-"], source);
+    assert!(
+        check.status.success(),
+        "{}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+    let run = run_stdin(&["run", "-"], source);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "99\n");
 }

@@ -1,7 +1,7 @@
 use nova_lexer::lex;
 use nova_parser::parse;
 use nova_sema::control_flow::FlowNodeKind;
-use nova_sema::hir::{ExpressionKind, StatementKind, Type};
+use nova_sema::hir::{CaptureMode, ExpressionKind, StatementKind, Type};
 use nova_sema::{AnalysisOutput, analyze};
 use nova_source::{SourceFile, SourceId};
 
@@ -94,18 +94,21 @@ fn mutable_outer_reads_lower_as_creation_time_snapshot_captures() {
 }
 
 #[test]
-fn rejects_assignment_through_mutable_outer_snapshot_capture() {
+fn mutable_outer_write_upgrades_capture_to_by_reference() {
     let output = analyze_text(
         "fn main() -> Int { var value = 40; let set = fn() -> Int { value = 99; value }; set() }",
     );
-    assert!(
-        output
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "N3035"),
-        "{:?}",
-        output.diagnostics
-    );
+    assert!(output.is_success(), "{:?}", output.diagnostics);
+    let StatementKind::Binding { initializer, .. } =
+        &output.program.functions[0].body.statements[1].kind
+    else {
+        panic!("closure binding");
+    };
+    let ExpressionKind::Closure(closure) = &initializer.kind else {
+        panic!("closure initializer");
+    };
+    assert_eq!(closure.captures.len(), 1);
+    assert_eq!(closure.captures[0].mode, CaptureMode::ByReference);
 }
 
 #[test]
@@ -130,65 +133,34 @@ fn mutable_snapshot_is_read_at_creation_for_definite_initialization() {
 }
 
 #[test]
-fn rejected_snapshot_assignment_does_not_initialize_the_outer_binding() {
+fn write_capture_does_not_initialize_outer_binding_before_call() {
     let output = analyze_text(
         "fn main() -> Int { var value: Int; let set = fn() -> Unit { value = 1; }; value }",
     );
-    assert!(
-        output
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "N3035"),
-        "{:?}",
-        output.diagnostics
-    );
-    assert!(
-        output
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "N3009"),
-        "{:?}",
-        output.diagnostics
-    );
+    let uninitialized = output
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "N3009")
+        .count();
+    assert_eq!(uninitialized, 1, "{:?}", output.diagnostics);
 }
 
 #[test]
-fn rejected_snapshot_assignment_rolls_back_rhs_initialization() {
+fn by_reference_assignment_preserves_rhs_initialization() {
     let output = analyze_text(
-        "fn main() -> Int { var outer = 0; let bad = fn() -> Int { var local: Int; outer = { local = 1; 0 }; local }; 0 }",
+        "fn main() -> Int { var outer = 0; let set = fn() -> Int { var local: Int; outer = { local = 1; 0 }; local }; set() }",
     );
-    assert!(
-        output
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "N3035"),
-        "{:?}",
-        output.diagnostics
-    );
-    assert!(
-        output
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "N3009"),
-        "{:?}",
-        output.diagnostics
-    );
+    assert!(output.is_success(), "{:?}", output.diagnostics);
 }
 
 #[test]
-fn rejected_snapshot_assignment_preserves_noncontinuing_rhs_flow() {
+fn by_reference_assignment_preserves_noncontinuing_rhs_flow() {
     let output = analyze_text(
-        "fn stop() -> ! { while true {} }\n\
-         fn main() -> Int { var outer = 0; let bad = fn() -> Int { outer = stop(); 42 }; 0 }",
+        "fn stop() -> ! { while true {} }
+\
+         fn main() -> Int { var outer = 0; let set = fn() -> Int { outer = stop(); 42 }; 0 }",
     );
-    assert!(
-        output
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "N3035"),
-        "{:?}",
-        output.diagnostics
-    );
+    assert!(output.is_success(), "{:?}", output.diagnostics);
     let StatementKind::Binding { initializer, .. } =
         &output.program.functions[1].body.statements[1].kind
     else {
@@ -199,7 +171,7 @@ fn rejected_snapshot_assignment_preserves_noncontinuing_rhs_flow() {
     };
     assert_eq!(closure.body.ty, Type::Never);
     let StatementKind::Assignment { value, .. } = &closure.body.statements[0].kind else {
-        panic!("snapshot assignment");
+        panic!("by-reference assignment");
     };
     assert_eq!(value.ty, Type::Never);
 }

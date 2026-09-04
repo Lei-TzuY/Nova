@@ -860,7 +860,6 @@ impl Analyzer {
                 (StatementKind::UninitializedBinding(binding), false)
             }
             ast::StatementKind::Assignment { target, value } => {
-                let assignment_entry_state = self.capture_reachable_state();
                 let local = self.find_local_with_scope(&target.text);
                 let function_span = self
                     .module
@@ -869,32 +868,36 @@ impl Analyzer {
                     .map(|symbol| symbol.span);
                 let value = self.lower_expression(value, return_type);
                 let target_id = if let Some((scope_index, symbol)) = local {
-                    let writes_through_snapshot = self
+                    let writes_through_capture = self
                         .closure_stack
                         .last()
                         .is_some_and(|context| scope_index < context.scope_base && symbol.mutable);
-                    if writes_through_snapshot {
-                        self.diagnostics.push(
-                            Diagnostic::error("N3035", "cannot assign through a lexical snapshot capture")
-                                .with_primary(
-                                    target.span,
-                                    format!("`{}` is captured by value and cannot be assigned here", target.text),
-                                )
-                                .with_secondary(symbol.span, "mutable binding declared here")
-                                .with_note(
-                                    "reading an enclosing `var` snapshots its value when the closure is created; shared-cell mutation is not yet defined",
-                                ),
+                    if writes_through_capture {
+                        self.capture_binding_if_needed(
+                            scope_index,
+                            &target.text,
+                            target.span,
+                            &symbol,
+                            hir::CaptureMode::ByReference,
                         );
                         self.require_type(&value.ty, &symbol.ty, value.span, "assigned value");
-                        if !value.ty.is_never() {
-                            self.restore_reachable_state(assignment_entry_state);
+                        if !value.ty.is_error()
+                            && !value.ty.is_never()
+                            && expected_type_compatible(&value.ty, &symbol.ty)
+                        {
+                            self.record_initialization(symbol.id, target.span);
                         }
-                        None
+                        Some(hir::BindingReference {
+                            binding: symbol.id,
+                            binding_name: target.text.clone(),
+                            declaration_span: symbol.span,
+                        })
                     } else if !self.capture_binding_if_needed(
                         scope_index,
                         &target.text,
                         target.span,
                         &symbol,
+                        hir::CaptureMode::ByValue,
                     ) {
                         self.require_type(&value.ty, &symbol.ty, value.span, "assigned value");
                         None
@@ -1561,7 +1564,9 @@ impl Analyzer {
         self.flow = Some(parent_flow);
 
         for capture in &context.captures {
-            self.record_capture_creation_read(capture);
+            if capture.mode == hir::CaptureMode::ByValue {
+                self.record_capture_creation_read(capture);
+            }
         }
 
         let closure = hir::Closure {
@@ -2485,7 +2490,13 @@ impl Analyzer {
 
     fn lower_name(&mut self, name: &ast::Name) -> (ExpressionKind, Type) {
         if let Some((scope_index, symbol)) = self.find_local_with_scope(&name.text) {
-            if !self.capture_binding_if_needed(scope_index, &name.text, name.span, &symbol) {
+            if !self.capture_binding_if_needed(
+                scope_index,
+                &name.text,
+                name.span,
+                &symbol,
+                hir::CaptureMode::ByValue,
+            ) {
                 return (ExpressionKind::Error, Type::Error);
             }
             self.flow_advance(FlowNodeKind::Read(symbol.id), Some(name.span));
@@ -2529,6 +2540,7 @@ impl Analyzer {
         name: &str,
         use_span: Span,
         symbol: &LocalSymbol,
+        requested_mode: hir::CaptureMode,
     ) -> bool {
         let Some(scope_base) = self.closure_stack.last().map(|context| context.scope_base) else {
             return true;
@@ -2536,38 +2548,50 @@ impl Analyzer {
         if scope_index >= scope_base {
             return true;
         }
-        let is_new = self
-            .closure_stack
-            .last()
-            .is_some_and(|context| !context.captured_bindings.contains(&symbol.id));
-        if is_new {
-            let binding = hir::Binding {
-                id: symbol.id,
-                name: name.to_owned(),
-                ty: symbol.ty.clone(),
-                mutable: false,
-                span: symbol.span,
-            };
-            self.flow
-                .as_mut()
-                .expect("closure capture requires an active CFG")
-                .register_binding(&binding);
-            self.record_initialization(binding.id, use_span);
-            let context = self
-                .closure_stack
-                .last_mut()
-                .expect("a capture requires an active closure context");
-            context.captured_bindings.insert(binding.id);
-            context.captures.push(hir::Capture {
-                reference: hir::BindingReference {
-                    binding: binding.id,
-                    binding_name: binding.name,
-                    declaration_span: binding.span,
-                },
-                ty: binding.ty,
-                first_use: use_span,
-            });
+        let existing_index = self.closure_stack.last().and_then(|context| {
+            context
+                .captures
+                .iter()
+                .position(|capture| capture.reference.binding == symbol.id)
+        });
+        if let Some(index) = existing_index {
+            if requested_mode == hir::CaptureMode::ByReference {
+                self.closure_stack
+                    .last_mut()
+                    .expect("a capture requires an active closure context")
+                    .captures[index]
+                    .mode = hir::CaptureMode::ByReference;
+            }
+            return true;
         }
+
+        let binding = hir::Binding {
+            id: symbol.id,
+            name: name.to_owned(),
+            ty: symbol.ty.clone(),
+            mutable: requested_mode == hir::CaptureMode::ByReference,
+            span: symbol.span,
+        };
+        self.flow
+            .as_mut()
+            .expect("closure capture requires an active CFG")
+            .register_binding(&binding);
+        self.record_initialization(binding.id, use_span);
+        let context = self
+            .closure_stack
+            .last_mut()
+            .expect("a capture requires an active closure context");
+        context.captured_bindings.insert(binding.id);
+        context.captures.push(hir::Capture {
+            reference: hir::BindingReference {
+                binding: binding.id,
+                binding_name: binding.name,
+                declaration_span: binding.span,
+            },
+            ty: binding.ty,
+            mode: requested_mode,
+            first_use: use_span,
+        });
         true
     }
 
@@ -2604,6 +2628,7 @@ impl Analyzer {
             &capture.reference.binding_name,
             capture.first_use,
             &symbol,
+            capture.mode,
         ) {
             self.flow_advance(
                 FlowNodeKind::Read(capture.reference.binding),
