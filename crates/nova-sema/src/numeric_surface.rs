@@ -53,6 +53,7 @@ fn rewrite_expression(expression: &mut ast::Expression) {
             ("MAX", None) => Some(NumericBuiltin::IntBoundary(IntBoundary::Max)),
             ("MIN", None) => Some(NumericBuiltin::IntBoundary(IntBoundary::Min)),
             ("from", Some(payload)) => Some(NumericBuiltin::IntFromBool((**payload).clone())),
+            ("abs", Some(payload)) => Some(NumericBuiltin::IntAbs((**payload).clone())),
             ("is_negative", Some(payload)) => Some(NumericBuiltin::IntPredicate(
                 IntPredicate::Negative,
                 (**payload).clone(),
@@ -112,6 +113,10 @@ fn rewrite_expression(expression: &mut ast::Expression) {
                     left: Box::new(operand),
                     right: Box::new(int_literal(0, expression.span)),
                 }
+            }
+            NumericBuiltin::IntAbs(mut operand) => {
+                rewrite_expression(&mut operand);
+                int_abs_expression(operand, expression.span).kind
             }
             NumericBuiltin::IntPredicate(predicate, mut operand) => {
                 rewrite_expression(&mut operand);
@@ -198,6 +203,57 @@ fn rewrite_expression(expression: &mut ast::Expression) {
     }
 }
 
+fn int_abs_expression(operand: ast::Expression, span: nova_source::Span) -> ast::Expression {
+    let temporary = ast::Name {
+        text: "__nova_int_abs_operand".to_owned(),
+        span,
+    };
+    let temporary_expression = || ast::Expression {
+        kind: ExpressionKind::Name(temporary.clone()),
+        span,
+    };
+    ast::Expression {
+        kind: ExpressionKind::Block(Block {
+            statements: vec![ast::Statement {
+                kind: StatementKind::Binding {
+                    mutable: false,
+                    name: temporary.clone(),
+                    annotation: None,
+                    initializer: operand,
+                },
+                span,
+            }],
+            tail: Some(Box::new(ast::Expression {
+                kind: ExpressionKind::If {
+                    condition: Box::new(ast::Expression {
+                        kind: ExpressionKind::Binary {
+                            operator: BinaryOperator::Less,
+                            left: Box::new(temporary_expression()),
+                            right: Box::new(int_literal(0, span)),
+                        },
+                        span,
+                    }),
+                    then_branch: Block {
+                        statements: Vec::new(),
+                        tail: Some(Box::new(ast::Expression {
+                            kind: ExpressionKind::Unary {
+                                operator: UnaryOperator::Negate,
+                                operand: Box::new(temporary_expression()),
+                            },
+                            span,
+                        })),
+                        span,
+                    },
+                    else_branch: Box::new(temporary_expression()),
+                },
+                span,
+            })),
+            span,
+        }),
+        span,
+    }
+}
+
 fn int_literal(value: u64, span: nova_source::Span) -> ast::Expression {
     ast::Expression {
         kind: ExpressionKind::Integer(value),
@@ -218,6 +274,7 @@ enum NumericBuiltin {
     IntBoundary(IntBoundary),
     IntFromBool(ast::Expression),
     BoolFromInt(ast::Expression),
+    IntAbs(ast::Expression),
     IntPredicate(IntPredicate, ast::Expression),
     IntParityPredicate(IntParityPredicate, ast::Expression),
 }
