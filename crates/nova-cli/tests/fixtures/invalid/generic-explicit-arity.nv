@@ -1,0 +1,2 @@
+fn identity<T>(value: T) -> T { value }
+fn main() -> Int { identity<Int, Bool>(1); 0 }
