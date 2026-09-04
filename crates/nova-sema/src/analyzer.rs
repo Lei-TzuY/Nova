@@ -7,7 +7,7 @@ use crate::control_flow::{
 use crate::equality_rules::is_equality_comparable as type_is_equality_comparable;
 use crate::hir::{
     self, BindingId, ClosureId, EnumId, EnumType, ExpressionKind, FunctionId, FunctionType,
-    MatchArm, RecordFieldValue, RecordId, RecordType, StatementKind, Type,
+    MatchArm, ModuleId, RecordFieldValue, RecordId, RecordType, StatementKind, Type,
 };
 use crate::type_rules::{
     JoinObservation, TypeJoin, expected_type_compatible, strict_binary_result_type,
@@ -45,7 +45,17 @@ impl AnalysisOutput {
 /// Lowers a parsed program to HIR while resolving names and checking bootstrap types.
 #[must_use]
 pub fn analyze(program: &ast::Program) -> AnalysisOutput {
-    let mut analyzer = Analyzer::new();
+    analyze_in_module(program, ModuleId::ROOT)
+}
+
+/// Lowers one parsed source as the specified compiler-session module.
+///
+/// The bootstrap CLI always uses [`ModuleId::ROOT`]. This entry point establishes the
+/// identity contract needed by a future multi-source loader without assigning any import,
+/// visibility, or module-path meaning ahead of that language design.
+#[must_use]
+pub fn analyze_in_module(program: &ast::Program, module: ModuleId) -> AnalysisOutput {
+    let mut analyzer = Analyzer::new(module);
     analyzer.collect_type_definitions(program);
     analyzer.collect_function_signatures(program);
 
@@ -63,7 +73,9 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
         .functions
         .iter()
         .enumerate()
-        .map(|(index, function)| analyzer.lower_function(FunctionId::new(index), function))
+        .map(|(index, function)| {
+            analyzer.lower_function(FunctionId::in_module(module, index), function)
+        })
         .collect();
 
     if !diagnostics_have_errors(&analyzer.diagnostics) {
@@ -103,6 +115,10 @@ pub fn analyze(program: &ast::Program) -> AnalysisOutput {
         .collect();
     AnalysisOutput {
         program: hir::Program {
+            module: hir::Module {
+                id: module,
+                span: program.span,
+            },
             records,
             enums,
             functions,
@@ -218,6 +234,27 @@ struct FunctionSymbol {
     span: Span,
 }
 
+/// The declaration namespaces owned by one analyzed module.
+///
+/// Keeping these tables behind an explicit module boundary prevents the current
+/// single-file resolver from becoming an accidental process-global namespace when a
+/// future loader begins analyzing more than one source.
+struct ModuleScope {
+    id: ModuleId,
+    types: BTreeMap<String, TypeSymbol>,
+    functions: BTreeMap<String, FunctionSymbol>,
+}
+
+impl ModuleScope {
+    fn new(id: ModuleId) -> Self {
+        Self {
+            id,
+            types: BTreeMap::new(),
+            functions: BTreeMap::new(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 struct LocalSymbol {
     id: BindingId,
@@ -290,13 +327,12 @@ struct ClosureContext {
 const SIGNED_INT_MIN_MAGNITUDE: u64 = 1_u64 << 63;
 
 struct Analyzer {
+    module: ModuleScope,
     diagnostics: Vec<Diagnostic>,
     deferred_warnings: Vec<Diagnostic>,
     record_definitions: Vec<RecordDefinition>,
     enum_definitions: Vec<EnumDefinition>,
-    types: BTreeMap<String, TypeSymbol>,
     signatures: Vec<SignatureRecord>,
-    functions: BTreeMap<String, FunctionSymbol>,
     scopes: ScopeState,
     next_binding: usize,
     loop_stack: Vec<LoopContext>,
@@ -309,15 +345,14 @@ struct Analyzer {
 }
 
 impl Analyzer {
-    fn new() -> Self {
+    fn new(module: ModuleId) -> Self {
         Self {
+            module: ModuleScope::new(module),
             diagnostics: Vec::new(),
             deferred_warnings: Vec::new(),
             record_definitions: Vec::new(),
             enum_definitions: Vec::new(),
-            types: BTreeMap::new(),
             signatures: Vec::new(),
-            functions: BTreeMap::new(),
             scopes: Vec::new(),
             next_binding: 0,
             loop_stack: Vec::new(),
@@ -421,7 +456,7 @@ impl Analyzer {
             .iter()
             .enumerate()
             .map(|(index, record)| RecordDefinition {
-                id: RecordId::new(index),
+                id: RecordId::in_module(self.module.id, index),
                 name: record.name.text.clone(),
                 fields: Vec::new(),
                 span: record.span,
@@ -433,7 +468,7 @@ impl Analyzer {
             .iter()
             .enumerate()
             .map(|(index, enumeration)| EnumDefinition {
-                id: EnumId::new(index),
+                id: EnumId::in_module(self.module.id, index),
                 name: enumeration.name.text.clone(),
                 variants: Vec::new(),
                 span: enumeration.span,
@@ -448,7 +483,7 @@ impl Analyzer {
                 (
                     record.name.span.start(),
                     &record.name,
-                    TypeDefinition::Record(RecordId::new(index)),
+                    TypeDefinition::Record(RecordId::in_module(self.module.id, index)),
                 )
             })
             .chain(
@@ -460,7 +495,7 @@ impl Analyzer {
                         (
                             enumeration.name.span.start(),
                             &enumeration.name,
-                            TypeDefinition::Enum(EnumId::new(index)),
+                            TypeDefinition::Enum(EnumId::in_module(self.module.id, index)),
                         )
                     }),
             )
@@ -477,7 +512,7 @@ impl Analyzer {
                 );
                 continue;
             }
-            if let Some(previous) = self.types.get(&name.text).copied() {
+            if let Some(previous) = self.module.types.get(&name.text).copied() {
                 self.diagnostics.push(
                     Diagnostic::error("N3002", "duplicate type definition")
                         .with_primary(
@@ -487,7 +522,7 @@ impl Analyzer {
                         .with_secondary(previous.span, "first type definition is here"),
                 );
             } else {
-                self.types.insert(
+                self.module.types.insert(
                     name.text.clone(),
                     TypeSymbol {
                         definition,
@@ -558,7 +593,7 @@ impl Analyzer {
 
     fn collect_function_signatures(&mut self, program: &ast::Program) {
         for (index, function) in program.functions.iter().enumerate() {
-            let id = FunctionId::new(index);
+            let id = FunctionId::in_module(self.module.id, index);
             let parameters = function
                 .parameters
                 .iter()
@@ -570,7 +605,7 @@ impl Analyzer {
                 return_type,
             };
 
-            if let Some(previous) = self.functions.get(&function.name.text) {
+            if let Some(previous) = self.module.functions.get(&function.name.text) {
                 self.diagnostics.push(
                     Diagnostic::error("N3002", "duplicate definition")
                         .with_primary(
@@ -580,7 +615,7 @@ impl Analyzer {
                         .with_secondary(previous.span, "first definition is here"),
                 );
             } else {
-                self.functions.insert(
+                self.module.functions.insert(
                     function.name.text.clone(),
                     FunctionSymbol {
                         id,
@@ -602,7 +637,7 @@ impl Analyzer {
                 "String" => Type::String,
                 "Unit" => Type::Unit,
                 unknown => {
-                    if let Some(symbol) = self.types.get(unknown).copied() {
+                    if let Some(symbol) = self.module.types.get(unknown).copied() {
                         return match symbol.definition {
                             TypeDefinition::Record(id) => Type::Record(RecordType {
                                 id,
@@ -822,7 +857,11 @@ impl Analyzer {
             }
             ast::StatementKind::Assignment { target, value } => {
                 let local = self.find_local_with_scope(&target.text);
-                let function_span = self.functions.get(&target.text).map(|symbol| symbol.span);
+                let function_span = self
+                    .module
+                    .functions
+                    .get(&target.text)
+                    .map(|symbol| symbol.span);
                 let value = self.lower_expression(value, return_type);
                 let target_id = if let Some((scope_index, symbol)) = local {
                     if !self.capture_binding_if_needed(
@@ -1404,7 +1443,7 @@ impl Analyzer {
         body: &ast::Block,
         span: Span,
     ) -> (ExpressionKind, Type) {
-        let id = ClosureId::new(self.next_closure);
+        let id = ClosureId::in_module(self.module.id, self.next_closure);
         self.next_closure += 1;
         self.closure_control_flow.push(None);
 
@@ -1594,7 +1633,7 @@ impl Analyzer {
         _span: Span,
     ) -> (ExpressionKind, Type) {
         let aggregate_entry_state = self.capture_reachable_state();
-        let Some(symbol) = self.types.get(&name.text).copied() else {
+        let Some(symbol) = self.module.types.get(&name.text).copied() else {
             let contains_never = self.lower_rejected_record_fields(fields, return_type);
             self.diagnostics.push(
                 Diagnostic::error("N3001", "unknown type")
@@ -1751,7 +1790,7 @@ impl Analyzer {
             .as_deref()
             .is_some_and(|expression| expression.ty.is_error());
 
-        let Some(symbol) = self.types.get(&enumeration.text).copied() else {
+        let Some(symbol) = self.module.types.get(&enumeration.text).copied() else {
             self.diagnostics.push(
                 Diagnostic::error("N3021", "unknown enum")
                     .with_primary(
@@ -1950,7 +1989,11 @@ impl Analyzer {
             let mut resolved_index = None;
             let mut payload_binding = None;
 
-            let symbol = self.types.get(&arm.pattern.enumeration.text).copied();
+            let symbol = self
+                .module
+                .types
+                .get(&arm.pattern.enumeration.text)
+                .copied();
             let pattern_enum_id = match symbol {
                 Some(TypeSymbol {
                     definition: TypeDefinition::Enum(id),
@@ -2339,7 +2382,7 @@ impl Analyzer {
                 symbol.ty,
             );
         }
-        if let Some(symbol) = self.functions.get(&name.text) {
+        if let Some(symbol) = self.module.functions.get(&name.text) {
             return (
                 ExpressionKind::Function {
                     function: symbol.id,
@@ -2937,7 +2980,7 @@ impl Analyzer {
     }
 
     fn new_binding(&mut self, name: &ast::Name, ty: Type, mutable: bool) -> hir::Binding {
-        let id = BindingId::new(self.next_binding);
+        let id = BindingId::in_module(self.module.id, self.next_binding);
         self.next_binding += 1;
         let binding = hir::Binding {
             id,

@@ -1030,7 +1030,7 @@ no roadmap item is being silently approximated.
 
 ## Phase 3 — Executable language subset
 
-**Status: twenty-six vertical slices implemented; execution surface remains small.**
+**Status: twenty-seven vertical slices implemented; execution surface remains small.**
 
 Implemented in the first Phase 3 slice:
 
@@ -1420,11 +1420,29 @@ Implemented in the twenty-sixth Phase 3 slice:
 - parser, semantic, CFG, interpreter, inspection, CLI, lexical-shadowing, nested-capture,
   malformed-HIR, and recursion-budget regressions lock the vertical slice end to end.
 
+Implemented in the twenty-seventh Phase 3 slice:
+
+- every HIR program owns an explicit compiler-session `ModuleId`, and function, record,
+  enum, closure, and binding identities pair that module with their deterministic local index;
+- the resolver's type and function tables are owned by a per-module scope instead of an
+  accidental analyzer-global flat namespace, while the CLI retains one implicit root module;
+- `analyze_in_module` lets a future loader assign identity without inferring paths, imports,
+  visibility, dependency edges, or filesystem meaning ahead of their language contract;
+- function and closure CFGs require all owners, flow bindings, and binding events to remain in
+  one module, preserving reachability and definite-initialization facts without cross-module aliasing;
+- the interpreter rejects same-index function, aggregate, closure, and local identities from a
+  foreign module as `N4005` before declaration-table lookup, while consistently assigned modules execute normally;
+- semantic-inspection v6 adds the source's module and exhaustive declaration/local ownership
+  lists; v1-v5 keep root-module documents unchanged and fail closed for non-root HIR; and
+- semantic, runtime, inspection-schema, malformed-HIR, determinism, and CLI regressions lock
+  the identity boundary without adding module/import syntax or making package, linker, ABI,
+  ownership, or multi-file claims.
+
 Next Phase 3 slices should deepen executable semantics without bypassing Phase 2
 contracts:
 
-- make name resolution module-ready before adding import syntax, so declaration identity and
-  diagnostics do not depend permanently on a single flat source namespace;
+- design an inspectable multi-source module graph and path/visibility contract before adding
+  import syntax; do not infer semantic identity from filesystem enumeration;
 - consider labelled loops, value-producing loop expressions, or value-carrying
   `break` only after their target identity, type-join, and CFG/dataflow contracts
   are explicit rather than extending the current nearest-`while` rule ad hoc;

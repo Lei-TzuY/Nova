@@ -449,7 +449,7 @@ fn warnings_are_nonfatal_for_check_run_and_inspect() {
     assert!(run_stderr.contains("\"severity\":\"warning\""));
     assert!(run_stderr.contains("\"code\":\"N3033\""));
 
-    for version in ["1", "2", "3", "4"] {
+    for version in ["1", "2", "3", "4", "5", "6"] {
         let inspected = nova(&[
             "inspect",
             path,
@@ -463,8 +463,13 @@ fn warnings_are_nonfatal_for_check_run_and_inspect() {
         assert_eq!(document.contains("\"control_flow\":"), version != "1");
         assert_eq!(
             document.contains("\"match_patterns\":"),
-            matches!(version, "3" | "4")
+            matches!(version, "3" | "4" | "5" | "6")
         );
+        assert_eq!(
+            document.contains("\"closures\":"),
+            matches!(version, "5" | "6")
+        );
+        assert_eq!(document.contains("\"module\":"), version == "6");
         let stderr = String::from_utf8_lossy(&inspected.stderr);
         assert!(stderr.contains("warning[N3033]"));
         assert_eq!(stderr.matches("warning[N3033]").count(), 1);
@@ -638,7 +643,7 @@ fn inspect_schema_v3_represents_payload_discard_without_reinterpreting_v1_or_v2(
         assert!(stderr.contains("select schema v3"), "{stderr}");
     }
 
-    for version in ["3", "4"] {
+    for version in ["3", "4", "5", "6"] {
         let output = nova(&[
             "inspect",
             path,
@@ -699,16 +704,24 @@ fn string_scalars_run_and_require_inspection_schema_v4() {
         assert!(stderr.contains("select schema v4"), "{stderr}");
     }
 
-    let output = nova(&["inspect", path, "--format=json", "--schema-version=4"]);
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let stdout = String::from_utf8(output.stdout).expect("v4 output is UTF-8");
-    assert!(stdout.contains("\"schema_version\": 4"));
-    assert!(stdout.contains("\"kind\": \"string\""));
-    assert!(stdout.contains("\"display\": \"String\""));
+    for version in ["4", "5", "6"] {
+        let output = nova(&[
+            "inspect",
+            path,
+            "--format=json",
+            "--schema-version",
+            version,
+        ]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8(output.stdout).expect("inspection output is UTF-8");
+        assert!(stdout.contains(&format!("\"schema_version\": {version}")));
+        assert!(stdout.contains("\"kind\": \"string\""));
+        assert!(stdout.contains("\"display\": \"String\""));
+    }
 }
 
 #[test]
@@ -760,6 +773,18 @@ fn closures_run_and_require_inspection_schema_v5() {
     assert!(stdout.contains("\"kind\": \"closure\""));
     assert!(stdout.contains("\"binding\": \"binding:0\""));
     assert!(stdout.contains("\"closure_control_flow\":"));
+
+    let output = nova(&["inspect", path, "--format=json", "--schema-version=6"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).expect("v6 output is UTF-8");
+    assert!(stdout.contains("\"schema_version\": 6"));
+    assert!(stdout.contains("\"id\": \"module:0\""));
+    assert!(stdout.contains("\"implicit_root\": true"));
+    assert!(stdout.contains("\"closures\": ["));
 }
 
 #[test]
@@ -782,7 +807,7 @@ fn string_lexical_failures_have_structured_cli_diagnostics() {
 #[test]
 fn inspect_rejects_invalid_source_without_partial_output() {
     let path = fixture("invalid/unknown-name.nv");
-    for version in ["1", "2", "3", "4"] {
+    for version in ["1", "2", "3", "4", "5", "6"] {
         let output = nova(&[
             "inspect",
             path.to_str().expect("fixture path is UTF-8"),

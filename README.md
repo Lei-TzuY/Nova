@@ -25,10 +25,12 @@ interpreter slices. The toolchain is written in Rust and can:
   initialized bindings, typed delayed `var` initialization, narrow assignments,
   expressions, blocks, calls, `if` expressions, pre-test `while` loops, bare Unit
   returns, and statement-only `break`/`continue`;
-- lower accepted syntax into a resolved, typed HIR with stable function, closure,
-  binding, record, and enum identities, explicit closure capture metadata, plus verified callable CFGs;
-- resolve top-level functions and nominal types, parameters, lexical local
-  bindings, record-field and enum-variant name/slot identities, and match payload bindings;
+- lower accepted syntax into a resolved, typed HIR whose function, closure,
+  binding, record, and enum identities are qualified by an explicit owning module,
+  with closure capture metadata plus verified callable CFGs;
+- resolve top-level functions and nominal types through an explicit per-module
+  namespace, plus parameters, lexical local bindings, record-field and enum-variant
+  name/slot identities, and match payload bindings;
 - check bootstrap `Int`, `Bool`, `String`, `Unit`, the uninhabited `!` bottom type, and nominal aggregate types, function
   signatures, local inference and annotations, calls, operators, block tails, branches,
   returns, loop conditions, loop-control legality, record construction/projection,
@@ -46,7 +48,8 @@ interpreter slices. The toolchain is written in Rust and can:
   plus explicitly selected v2 documents that add the verified CFG and v3 documents
   that additionally expose explicit match payload modes without reinterpreting v1/v2 fields,
   v4 documents that extend the program projection with String type/literal categories,
-  and v5 documents that add closure definitions, captures, callable ownership, and verified closure CFGs.
+  v5 documents that add closure definitions, captures, callable ownership, and verified closure CFGs,
+  and v6 documents that expose single-module ownership without inventing import semantics.
 
 `nova check` performs lexical, syntactic, name-resolution, bootstrap type, and
 definite-assignment validation. `nova run` performs those same checks and then
@@ -90,8 +93,10 @@ behavior,
 [v2 CFG extension](docs/semantic-introspection-v2.md), and
 [v3 pattern extension](docs/semantic-introspection-v3.md), and
 [v4 String extension](docs/semantic-introspection-v4.md), and
-[v5 closure extension](docs/semantic-introspection-v5.md) for the machine-readable
+[v5 closure extension](docs/semantic-introspection-v5.md), and
+[v6 module-identity extension](docs/semantic-introspection-v6.md) for the machine-readable
 tooling boundary,
+[the module-ready identity contract](docs/modules.md),
 [the bootstrap control-flow contract](docs/control-flow.md) for CFG verification
 and definite-initialization dataflow, and
 [the language constitution](docs/language-constitution.md) for decisions that
@@ -106,6 +111,13 @@ initializer is checked before its new binding enters scope, preventing
 accidental self-reference. Duplicate names in the same lexical scope are
 rejected; nested lexical blocks may shadow outer bindings in this slice.
 Function parameters and a function body's outermost bindings share one scope.
+
+The current CLI places each source in one implicit root module. Semantic HIR identities
+are nevertheless `(ModuleId, local index)` pairs, and name collection is owned by an
+explicit per-module scope. `analyze_in_module` lets a future loader assign another
+session-local module identity without deriving meaning from a filename. CFG, interpreter,
+and inspection boundaries reject cross-module same-index identity drift. This foundation
+does not add module/import syntax, visibility, multi-file linking, or package semantics.
 
 Explicit function types use `fn(T1, T2) -> U` and may nest recursively in any type
 position. Named top-level functions and explicitly typed anonymous functions share those
@@ -456,6 +468,7 @@ cargo run -p nova-cli -- ast examples/basics.nv
 cargo run -p nova-cli -- inspect examples/enums.nv --format json
 cargo run -p nova-cli -- inspect examples/enums.nv --format json --schema-version 2
 cargo run -p nova-cli -- inspect examples/strings.nv --format json --schema-version 4
+cargo run -p nova-cli -- inspect examples/closures.nv --format json --schema-version 6
 printf 'fn main() -> Int { 42 }\n' | cargo run -p nova-cli -- check - --source-name scratch/main.nv
 ```
 
@@ -474,7 +487,7 @@ The installed binary is named `nova`:
 nova check [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 nova run [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 nova ast [--source-name name] [--message-format human|json] [--] <file|->
-nova inspect --format json [--schema-version 1|2|3|4] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
+nova inspect --format json [--schema-version 1|2|3|4|5|6] [--source-name name] [--message-format human|json] [--fail-on-warnings] [--] <file|->
 ```
 
 Each command accepts exactly one source operand. A filesystem path retains its written
@@ -497,7 +510,7 @@ even when `nova check` or `nova run` would reject that program later.
 writes no partial document when source diagnostics or an inspection invariant
 failure occurs. Non-fatal warnings are written to standard error without changing
 status `0`, runtime output, or a successful inspection document. Schema v1 remains
-the default; v2, v3, and v4 must be requested explicitly. With `--fail-on-warnings`, semantic
+the default; v2 through v6 must be requested explicitly. With `--fail-on-warnings`, semantic
 warnings instead produce status `1` while retaining warning severity; `run` and `inspect`
 suppress their ordinary standard output. The option is invalid with `ast`, which does not
 perform semantic analysis.

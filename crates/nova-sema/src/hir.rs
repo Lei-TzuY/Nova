@@ -4,23 +4,68 @@ use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_source::Span;
 use std::fmt;
 
-/// Stable source-order identifier for one top-level record in a HIR program.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct RecordId(usize);
+/// Stable compiler-session identity for one Nova module.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ModuleId(u32);
 
-impl RecordId {
-    /// Creates an identifier from its source-order index among records.
+impl ModuleId {
+    /// Identity assigned to the bootstrap compiler's implicit root module.
+    pub const ROOT: Self = Self(0);
+
+    /// Creates an identity from its compiler-session integer.
     #[must_use]
-    pub const fn new(index: usize) -> Self {
-        Self(index)
+    pub const fn new(raw: u32) -> Self {
+        Self(raw)
     }
 
-    /// Returns the source-order index among records.
+    /// Returns the compiler-session integer representation.
     #[must_use]
-    pub const fn index(self) -> usize {
+    pub const fn raw(self) -> u32 {
         self.0
     }
 }
+
+macro_rules! module_scoped_id {
+    ($(#[$attribute:meta])* $name:ident) => {
+        $(#[$attribute])*
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        pub struct $name {
+            module: ModuleId,
+            index: usize,
+        }
+
+        impl $name {
+            /// Creates an identity in the implicit root module.
+            #[must_use]
+            pub const fn new(index: usize) -> Self {
+                Self::in_module(ModuleId::ROOT, index)
+            }
+
+            /// Creates an identity qualified by its owning module.
+            #[must_use]
+            pub const fn in_module(module: ModuleId, index: usize) -> Self {
+                Self { module, index }
+            }
+
+            /// Returns the owning module identity.
+            #[must_use]
+            pub const fn module(self) -> ModuleId {
+                self.module
+            }
+
+            /// Returns the declaration-order or traversal-order index within the module.
+            #[must_use]
+            pub const fn index(self) -> usize {
+                self.index
+            }
+        }
+    };
+}
+
+module_scoped_id!(
+    /// Stable source-order identifier for one top-level record in a HIR module.
+    RecordId
+);
 
 /// Nominal record identity carried by semantic types.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -31,23 +76,10 @@ pub struct RecordType {
     pub name: String,
 }
 
-/// Stable source-order identifier for one top-level enum in a HIR program.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct EnumId(usize);
-
-impl EnumId {
-    /// Creates an identifier from its source-order index among enums.
-    #[must_use]
-    pub const fn new(index: usize) -> Self {
-        Self(index)
-    }
-
-    /// Returns the source-order index among enums.
-    #[must_use]
-    pub const fn index(self) -> usize {
-        self.0
-    }
-}
+module_scoped_id!(
+    /// Stable source-order identifier for one top-level enum in a HIR module.
+    EnumId
+);
 
 /// Nominal enum identity carried by semantic types.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -129,63 +161,35 @@ pub struct FunctionType {
     pub return_type: Box<Type>,
 }
 
-/// Stable source-order identifier for one top-level function in a HIR program.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct FunctionId(usize);
+module_scoped_id!(
+    /// Stable source-order identifier for one top-level function in a HIR module.
+    FunctionId
+);
 
-impl FunctionId {
-    /// Creates an identifier from its source-order index.
-    #[must_use]
-    pub const fn new(index: usize) -> Self {
-        Self(index)
-    }
+module_scoped_id!(
+    /// Stable semantic-traversal identifier for one anonymous closure expression in a module.
+    ClosureId
+);
 
-    /// Returns the source-order index.
-    #[must_use]
-    pub const fn index(self) -> usize {
-        self.0
-    }
-}
+module_scoped_id!(
+    /// Stable analysis-order identifier for one local binding or parameter in a module.
+    BindingId
+);
 
-/// Stable semantic-traversal identifier for one anonymous closure expression.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ClosureId(usize);
-
-impl ClosureId {
-    /// Creates an identifier from its semantic-traversal index.
-    #[must_use]
-    pub const fn new(index: usize) -> Self {
-        Self(index)
-    }
-
-    /// Returns the semantic-traversal index among closure expressions.
-    #[must_use]
-    pub const fn index(self) -> usize {
-        self.0
-    }
-}
-
-/// Stable analysis-order identifier for one local binding or parameter.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct BindingId(usize);
-
-impl BindingId {
-    /// Creates an identifier from its analysis-order index.
-    #[must_use]
-    pub const fn new(index: usize) -> Self {
-        Self(index)
-    }
-
-    /// Returns the analysis-order index.
-    #[must_use]
-    pub const fn index(self) -> usize {
-        self.0
-    }
+/// One analyzed module and its complete source range.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Module {
+    /// Stable compiler-session module identity.
+    pub id: ModuleId,
+    /// Range covering the module's source file.
+    pub span: Span,
 }
 
 /// A complete semantically resolved source file.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Program {
+    /// Module that owns every declaration and local identity in this program.
+    pub module: Module,
     /// Records in source order among record declarations.
     pub records: Vec<Record>,
     /// Enums in source order among enum declarations.

@@ -294,3 +294,7 @@ field assignment, `for`, labelled loops, value-carrying loop control, methods,
 modules, imports, generics, traits, effects, async syntax, ownership syntax,
 unsafe blocks, or attributes. Encountering such syntax is an error, not an
 approximation.
+
+The semantic pipeline does assign the complete source to an implicit root
+`ModuleId` and qualifies HIR identities with it. That compiler boundary does not
+reserve or accept module syntax; see [the module-ready identity contract](modules.md).
