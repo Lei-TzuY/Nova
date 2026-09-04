@@ -1,0 +1,396 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nova:semantic-inspection:v6",
+  "title": "Nova semantic inspection v6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "producer",
+    "source",
+    "module",
+    "program",
+    "control_flow",
+    "match_patterns",
+    "closures",
+    "closure_control_flow"
+  ],
+  "properties": {
+    "schema": { "const": "nova.semantic-inspection" },
+    "schema_version": { "const": 6 },
+    "producer": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/producer" },
+    "source": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/source" },
+    "module": { "$ref": "#/$defs/module" },
+    "program": { "$ref": "#/$defs/program" },
+    "control_flow": {
+      "type": "array",
+      "items": { "$ref": "urn:nova:semantic-inspection:v2#/$defs/controlFlowGraph" }
+    },
+    "match_patterns": {
+      "type": "array",
+      "items": { "$ref": "urn:nova:semantic-inspection:v3#/$defs/matchPattern" }
+    },
+    "closures": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/closure" }
+    },
+    "closure_control_flow": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/closureControlFlowGraph" }
+    }
+  },
+  "$defs": {
+    "moduleId": {
+      "type": "string",
+      "pattern": "^module:[0-9]+$"
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "implicit_root",
+        "span",
+        "records",
+        "enums",
+        "functions",
+        "bindings",
+        "closures"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/moduleId" },
+        "source": { "const": "source:0" },
+        "implicit_root": { "type": "boolean" },
+        "span": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" },
+        "records": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/recordId" }
+        },
+        "enums": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/enumId" }
+        },
+        "functions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/functionId" }
+        },
+        "bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/bindingId" }
+        },
+        "closures": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/closureId" }
+        }
+      }
+    },
+    "closureId": {
+      "type": "string",
+      "pattern": "^closure:[0-9]+$"
+    },
+    "callableId": {
+      "type": "string",
+      "pattern": "^(?:function|closure):[0-9]+$"
+    },
+    "scopeId": {
+      "type": "string",
+      "pattern": "^(?:function|closure|block):[0-9]+$|^match:[0-9]+\\.arm:[0-9]+$"
+    },
+    "semanticTarget": {
+      "anyOf": [
+        { "$ref": "urn:nova:semantic-inspection:v1#/$defs/bindingId" },
+        { "$ref": "urn:nova:semantic-inspection:v1#/$defs/functionId" },
+        { "$ref": "#/$defs/closureId" },
+        { "$ref": "urn:nova:semantic-inspection:v1#/$defs/recordId" },
+        { "$ref": "urn:nova:semantic-inspection:v1#/$defs/fieldId" },
+        { "$ref": "urn:nova:semantic-inspection:v1#/$defs/variantId" },
+        { "$ref": "urn:nova:semantic-inspection:v1#/$defs/blockId" },
+        { "$ref": "urn:nova:semantic-inspection:v1#/$defs/matchId" },
+        { "type": "null" }
+      ]
+    },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span",
+        "types",
+        "records",
+        "enums",
+        "functions",
+        "bindings",
+        "blocks",
+        "statements",
+        "expressions",
+        "matches"
+      ],
+      "properties": {
+        "span": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" },
+        "types": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v4#/$defs/type" }
+        },
+        "records": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/record" }
+        },
+        "enums": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/enum" }
+        },
+        "functions": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/function" }
+        },
+        "bindings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/binding" }
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" }
+        },
+        "statements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/statement" }
+        },
+        "expressions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/expression" }
+        },
+        "matches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/match" }
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "role", "owner", "scope", "type_id", "mutable", "span"],
+      "properties": {
+        "id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/bindingId" },
+        "name": { "type": "string" },
+        "role": { "enum": ["parameter", "local", "match_payload"] },
+        "owner": { "$ref": "#/$defs/callableId" },
+        "scope": { "$ref": "#/$defs/scopeId" },
+        "type_id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/typeId" },
+        "mutable": { "type": "boolean" },
+        "span": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "type_id", "span", "statements", "tail_expression"],
+      "properties": {
+        "id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/blockId" },
+        "owner": { "$ref": "#/$defs/callableId" },
+        "type_id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/typeId" },
+        "span": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" },
+        "statements": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/statementId" }
+        },
+        "tail_expression": {
+          "anyOf": [
+            { "$ref": "urn:nova:semantic-inspection:v1#/$defs/expressionId" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "block", "kind", "binding", "target", "expressions", "blocks", "span"],
+      "properties": {
+        "id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/statementId" },
+        "owner": { "$ref": "#/$defs/callableId" },
+        "block": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/blockId" },
+        "kind": {
+          "enum": ["initialized_binding", "uninitialized_binding", "assignment", "while", "break", "continue", "return", "expression"]
+        },
+        "binding": {
+          "anyOf": [
+            { "$ref": "urn:nova:semantic-inspection:v1#/$defs/bindingId" },
+            { "type": "null" }
+          ]
+        },
+        "target": {
+          "anyOf": [
+            { "$ref": "urn:nova:semantic-inspection:v1#/$defs/bindingId" },
+            { "type": "null" }
+          ]
+        },
+        "expressions": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/expressionId" }
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/blockId" }
+        },
+        "span": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" }
+      }
+    },
+    "expression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "kind", "type_id", "target", "operator", "children", "blocks", "field_initializers", "span"],
+      "properties": {
+        "id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/expressionId" },
+        "owner": { "$ref": "#/$defs/callableId" },
+        "kind": {
+          "enum": [
+            "integer", "string", "boolean", "unit", "closure", "binding_reference",
+            "function_reference", "record_construction", "enum_construction", "field_access",
+            "unary", "binary", "call", "block", "if", "match"
+          ]
+        },
+        "type_id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/typeId" },
+        "target": { "$ref": "#/$defs/semanticTarget" },
+        "operator": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/nullableString" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/expressionId" }
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/blockId" }
+        },
+        "field_initializers": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/recordFieldInitializer" }
+        },
+        "span": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" }
+      }
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "expression", "enumeration", "exhaustive", "scrutinee", "scrutinee_type", "arms", "span"],
+      "properties": {
+        "id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/matchId" },
+        "owner": { "$ref": "#/$defs/callableId" },
+        "expression": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/expressionId" },
+        "enumeration": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/enumId" },
+        "exhaustive": { "const": true },
+        "scrutinee": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/expressionId" },
+        "scrutinee_type": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/typeId" },
+        "arms": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/matchArm" }
+        },
+        "span": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" }
+      }
+    },
+    "closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "expression", "type_id", "return_type", "parameters", "captures", "body", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/closureId" },
+        "expression": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/expressionId" },
+        "type_id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/typeId" },
+        "return_type": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/typeId" },
+        "parameters": {
+          "type": "array",
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/bindingId" }
+        },
+        "captures": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/closureCapture" }
+        },
+        "body": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/blockId" },
+        "span": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" }
+      }
+    },
+    "closureCapture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "type_id", "first_use"],
+      "properties": {
+        "binding": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/bindingId" },
+        "type_id": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/typeId" },
+        "first_use": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" }
+      }
+    },
+    "closureControlFlowId": {
+      "type": "string",
+      "pattern": "^cfg:closure:[0-9]+$"
+    },
+    "closureFlowNodeId": {
+      "type": "string",
+      "pattern": "^cfg:closure:[0-9]+\\.node:[0-9]+$"
+    },
+    "closureControlFlowGraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "closure", "entry", "bindings", "normal_exits", "nodes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/closureControlFlowId" },
+        "closure": { "$ref": "#/$defs/closureId" },
+        "entry": { "$ref": "#/$defs/closureFlowNodeId" },
+        "bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "urn:nova:semantic-inspection:v1#/$defs/bindingId" }
+        },
+        "normal_exits": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/closureFlowNodeId" }
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/closureFlowNode" }
+        }
+      }
+    },
+    "closureFlowNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "binding", "predecessors", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/closureFlowNodeId" },
+        "kind": {
+          "enum": ["entry", "branch", "join", "initialize", "read", "return", "break", "continue", "exit"]
+        },
+        "binding": {
+          "anyOf": [
+            { "$ref": "urn:nova:semantic-inspection:v1#/$defs/bindingId" },
+            { "type": "null" }
+          ]
+        },
+        "predecessors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/closureFlowEdge" }
+        },
+        "span": {
+          "anyOf": [
+            { "$ref": "urn:nova:semantic-inspection:v1#/$defs/span" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "closureFlowEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "kind"],
+      "properties": {
+        "from": { "$ref": "#/$defs/closureFlowNodeId" },
+        "kind": { "enum": ["execution", "diagnostic", "backedge"] }
+      }
+    }
+  }
+}

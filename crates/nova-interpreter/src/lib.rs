@@ -61,16 +61,36 @@ impl fmt::Display for Value {
             Self::Int(value) => write!(formatter, "{value}"),
             Self::Bool(value) => write!(formatter, "{value}"),
             Self::String(value) => formatter.write_str(value),
-            Self::Record { record, .. } => write!(formatter, "<record:{}>", record.index()),
+            Self::Record { record, .. } => write!(
+                formatter,
+                "<module:{}/record:{}>",
+                record.module().raw(),
+                record.index()
+            ),
             Self::Enum {
                 enumeration,
                 variant_index,
                 ..
-            } => write!(formatter, "<enum:{}:{variant_index}>", enumeration.index()),
-            Self::Function(id) => write!(formatter, "<function:{}>", id.index()),
+            } => write!(
+                formatter,
+                "<module:{}/enum:{}:{variant_index}>",
+                enumeration.module().raw(),
+                enumeration.index()
+            ),
+            Self::Function(id) => write!(
+                formatter,
+                "<module:{}/function:{}>",
+                id.module().raw(),
+                id.index()
+            ),
             Self::Closure {
                 instance, closure, ..
-            } => write!(formatter, "<closure:{}:{instance}>", closure.id.index()),
+            } => write!(
+                formatter,
+                "<module:{}/closure:{}:{instance}>",
+                closure.id.module().raw(),
+                closure.id.index()
+            ),
             Self::Unit => formatter.write_str("()"),
         }
     }
@@ -121,6 +141,12 @@ impl<'program> Interpreter<'program> {
     }
 
     fn execute_main(&mut self) -> Result<Value, Diagnostic> {
+        if self.program.module.span != self.program.span {
+            return Err(self.invariant(
+                self.program.span,
+                "program module span does not match the complete HIR program span",
+            ));
+        }
         let Some(main) = self
             .program
             .functions
@@ -161,6 +187,16 @@ impl<'program> Interpreter<'program> {
         function_id: FunctionId,
         arguments: Vec<Value>,
     ) -> Result<Value, Diagnostic> {
+        if function_id.module() != self.program.module.id {
+            return Err(self.invariant(
+                self.program.span,
+                format!(
+                    "resolved function belongs to module {}, but this program is module {}",
+                    function_id.module().raw(),
+                    self.program.module.id.raw()
+                ),
+            ));
+        }
         let Some(function) = self.program.functions.get(function_id.index()).cloned() else {
             return Err(self.invariant(
                 self.program.span,
@@ -238,6 +274,12 @@ impl<'program> Interpreter<'program> {
         captured_values: Vec<Value>,
         arguments: Vec<Value>,
     ) -> Result<Value, Diagnostic> {
+        if closure.id.module() != self.program.module.id {
+            return Err(self.invariant(
+                closure.span,
+                "closure belongs to a different module than the executing program",
+            ));
+        }
         if closure.parameters.len() != arguments.len() {
             return Err(self.invariant(
                 closure.span,
@@ -526,6 +568,12 @@ impl<'program> Interpreter<'program> {
             ExpressionKind::Boolean(value) => Ok(Flow::Value(Value::Bool(*value))),
             ExpressionKind::Unit => Ok(Flow::Value(Value::Unit)),
             ExpressionKind::Closure(closure) => {
+                if closure.id.module() != self.program.module.id {
+                    return Err(self.invariant(
+                        closure.span,
+                        "closure expression belongs to a different module than the executing program",
+                    ));
+                }
                 let mut identities = BTreeSet::new();
                 let mut captured_values = Vec::with_capacity(closure.captures.len());
                 for capture in &closure.captures {
@@ -631,6 +679,12 @@ impl<'program> Interpreter<'program> {
                 Ok(Flow::Value(Value::Function(*function)))
             }
             ExpressionKind::RecordLiteral { record, fields } => {
+                if record.module() != self.program.module.id {
+                    return Err(self.invariant(
+                        expression.span,
+                        "resolved record belongs to a different module than the executing program",
+                    ));
+                }
                 let Some(definition) = self.program.records.get(record.index()) else {
                     return Err(self.invariant(
                         expression.span,
@@ -885,6 +939,12 @@ impl<'program> Interpreter<'program> {
                     ));
                 }
 
+                if enumeration.module() != self.program.module.id {
+                    return Err(self.invariant(
+                        expression.span,
+                        "resolved match enum belongs to a different module than the executing program",
+                    ));
+                }
                 let Some(definition) = self.program.enums.get(enumeration.index()) else {
                     return Err(self.invariant(
                         expression.span,
@@ -1195,6 +1255,12 @@ impl<'program> Interpreter<'program> {
         reference: &BindingReference,
         span: nova_source::Span,
     ) -> Result<(), Diagnostic> {
+        if reference.binding.module() != self.program.module.id {
+            return Err(self.invariant(
+                span,
+                "resolved binding reference belongs to a different module than the executing program",
+            ));
+        }
         let Some(slot) = frame.get(&reference.binding) else {
             return Err(self.invariant(
                 span,
@@ -1226,6 +1292,12 @@ impl<'program> Interpreter<'program> {
         value: Option<Value>,
         span: nova_source::Span,
     ) -> Result<(), Diagnostic> {
+        if binding.id.module() != self.program.module.id {
+            return Err(self.invariant(
+                span,
+                "runtime binding belongs to a different module than the executing program",
+            ));
+        }
         if let Some(value) = value.as_ref() {
             if !self.value_conforms_to_type(value, &binding.ty) {
                 return Err(self.invariant(
@@ -1273,6 +1345,12 @@ impl<'program> Interpreter<'program> {
         function_name: &str,
         span: nova_source::Span,
     ) -> Result<&Function, Diagnostic> {
+        if function.module() != self.program.module.id {
+            return Err(self.invariant(
+                span,
+                "resolved function reference belongs to a different module than the executing program",
+            ));
+        }
         let Some(definition) = self.program.functions.get(function.index()) else {
             return Err(self.invariant(
                 span,
@@ -1308,6 +1386,12 @@ impl<'program> Interpreter<'program> {
         variant_name: &str,
         span: nova_source::Span,
     ) -> Result<(&nova_sema::hir::Enum, &nova_sema::hir::EnumVariant), Diagnostic> {
+        if enumeration.module() != self.program.module.id {
+            return Err(self.invariant(
+                span,
+                "resolved enum reference belongs to a different module than the executing program",
+            ));
+        }
         let Some(definition) = self.program.enums.get(enumeration.index()) else {
             return Err(self.invariant(
                 span,
@@ -1351,6 +1435,12 @@ impl<'program> Interpreter<'program> {
         field_name: &str,
         span: nova_source::Span,
     ) -> Result<&nova_sema::hir::RecordField, Diagnostic> {
+        if record.module() != self.program.module.id {
+            return Err(self.invariant(
+                span,
+                "resolved record reference belongs to a different module than the executing program",
+            ));
+        }
         let Some(definition) = self.program.records.get(record.index()) else {
             return Err(self.invariant(
                 span,
@@ -1389,7 +1479,9 @@ impl<'program> Interpreter<'program> {
 
     fn equality_types_match(&self, left: &Type, right: &Type) -> bool {
         matching_equality_types(left, right, |enum_id| {
-            self.program
+            enum_id.module() == self.program.module.id
+                && self
+                    .program
                 .enums
                 .get(enum_id.index())
                 .is_some_and(|definition| {
@@ -1403,6 +1495,9 @@ impl<'program> Interpreter<'program> {
     }
 
     fn function_signatures_match(&self, left: FunctionId, right: FunctionId) -> bool {
+        if left.module() != self.program.module.id || right.module() != self.program.module.id {
+            return false;
+        }
         let Some(left_function) = self.program.functions.get(left.index()) else {
             return false;
         };
@@ -1424,7 +1519,9 @@ impl<'program> Interpreter<'program> {
         match ty {
             Type::Int | Type::Bool | Type::String | Type::Unit => true,
             Type::Record(record) => {
-                self.program
+                record.id.module() == self.program.module.id
+                    && self
+                        .program
                     .records
                     .get(record.id.index())
                     .is_some_and(|definition| {
@@ -1432,7 +1529,9 @@ impl<'program> Interpreter<'program> {
                     })
             }
             Type::Enum(enumeration) => {
-                self.program
+                enumeration.id.module() == self.program.module.id
+                    && self
+                        .program
                     .enums
                     .get(enumeration.id.index())
                     .is_some_and(|definition| {
@@ -1462,6 +1561,9 @@ impl<'program> Interpreter<'program> {
             (Value::Record { record, fields }, Type::Record(expected))
                 if *record == expected.id =>
             {
+                if record.module() != self.program.module.id {
+                    return false;
+                }
                 let Some(definition) = self.program.records.get(record.index()) else {
                     return false;
                 };
@@ -1480,6 +1582,9 @@ impl<'program> Interpreter<'program> {
                 },
                 Type::Enum(expected),
             ) if *enumeration == expected.id => {
+                if enumeration.module() != self.program.module.id {
+                    return false;
+                }
                 let Some(definition) = self.program.enums.get(enumeration.index()) else {
                     return false;
                 };
@@ -1498,6 +1603,9 @@ impl<'program> Interpreter<'program> {
                 }
             }
             (Value::Function(id), Type::Function(expected)) => {
+                if id.module() != self.program.module.id {
+                    return false;
+                }
                 let Some(function) = self.program.functions.get(id.index()) else {
                     return false;
                 };
@@ -1516,7 +1624,8 @@ impl<'program> Interpreter<'program> {
                 },
                 Type::Function(expected),
             ) => {
-                &closure.function_type() == expected
+                closure.id.module() == self.program.module.id
+                    && &closure.function_type() == expected
                     && closure.captures.len() == captures.len()
                     && closure
                         .captures

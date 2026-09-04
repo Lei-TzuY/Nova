@@ -8,6 +8,7 @@ pub mod v2;
 pub mod v3;
 pub mod v4;
 pub mod v5;
+pub mod v6;
 
 use nova_parser::ast::{BinaryOperator, UnaryOperator};
 use nova_sema::AnalysisOutput;
@@ -87,7 +88,12 @@ pub fn build_document_v2(
     }
 
     let v1_document = build_document(&analysis.program, source)?;
-    let control_flow = project_control_flow(&analysis.control_flow, &v1_document.program, source)?;
+    let control_flow = project_control_flow(
+        &analysis.control_flow,
+        &v1_document.program,
+        analysis.program.module.id,
+        source,
+    )?;
     Ok(v2::Document {
         schema: v2::SCHEMA_NAME.to_owned(),
         schema_version: v2::SCHEMA_VERSION,
@@ -126,8 +132,12 @@ pub fn build_document_v3(
     let (program_document, match_patterns, _) = Builder::new(&analysis.program, source)
         .with_payload_discard()
         .build_parts()?;
-    let control_flow =
-        project_control_flow(&analysis.control_flow, &program_document.program, source)?;
+    let control_flow = project_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        analysis.program.module.id,
+        source,
+    )?;
     Ok(v3::Document {
         schema: v3::SCHEMA_NAME.to_owned(),
         schema_version: v3::SCHEMA_VERSION,
@@ -168,8 +178,12 @@ pub fn build_document_v4(
         .with_payload_discard()
         .with_string()
         .build_parts()?;
-    let control_flow =
-        project_control_flow(&analysis.control_flow, &program_document.program, source)?;
+    let control_flow = project_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        analysis.program.module.id,
+        source,
+    )?;
     Ok(v4::Document {
         schema: v4::SCHEMA_NAME.to_owned(),
         schema_version: v4::SCHEMA_VERSION,
@@ -211,12 +225,17 @@ pub fn build_document_v5(
         .with_string()
         .with_closures()
         .build_parts()?;
-    let control_flow =
-        project_control_flow(&analysis.control_flow, &program_document.program, source)?;
+    let control_flow = project_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        analysis.program.module.id,
+        source,
+    )?;
     let closure_control_flow = project_closure_control_flow(
         &analysis.control_flow,
         &program_document.program,
         &closures,
+        analysis.program.module.id,
         source,
     )?;
     Ok(v5::Document {
@@ -242,6 +261,95 @@ pub fn render_json_v5(
         .map_err(|error| InspectionError::invalid(format!("could not encode schema v5: {error}")))
 }
 
+/// Builds a schema-v6 document from one successful semantic analysis.
+///
+/// Version 6 exposes the module that owns every declaration, closure, and binding
+/// identity. It is intentionally still a one-source document: import resolution,
+/// visibility, module paths, and cross-module linking are not inferred here.
+pub fn build_document_v6(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<v6::Document, InspectionError> {
+    if !analysis.is_success() {
+        return Err(InspectionError::invalid(
+            "schema v6 requires a successful semantic analysis",
+        ));
+    }
+
+    let (program_document, match_patterns, closures) = Builder::new(&analysis.program, source)
+        .with_payload_discard()
+        .with_string()
+        .with_closures()
+        .with_module_identity()
+        .build_parts()?;
+    let control_flow = project_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        analysis.program.module.id,
+        source,
+    )?;
+    let closure_control_flow = project_closure_control_flow(
+        &analysis.control_flow,
+        &program_document.program,
+        &closures,
+        analysis.program.module.id,
+        source,
+    )?;
+    let module = v6::Module {
+        id: module_id(analysis.program.module.id),
+        source: program_document.source.id.clone(),
+        implicit_root: analysis.program.module.id == hir::ModuleId::ROOT,
+        span: program_document.program.span.clone(),
+        records: program_document
+            .program
+            .records
+            .iter()
+            .map(|record| record.id.clone())
+            .collect(),
+        enums: program_document
+            .program
+            .enums
+            .iter()
+            .map(|enumeration| enumeration.id.clone())
+            .collect(),
+        functions: program_document
+            .program
+            .functions
+            .iter()
+            .map(|function| function.id.clone())
+            .collect(),
+        bindings: program_document
+            .program
+            .bindings
+            .iter()
+            .map(|binding| binding.id.clone())
+            .collect(),
+        closures: closures.iter().map(|closure| closure.id.clone()).collect(),
+    };
+    Ok(v6::Document {
+        schema: v6::SCHEMA_NAME.to_owned(),
+        schema_version: v6::SCHEMA_VERSION,
+        producer: program_document.producer,
+        source: program_document.source,
+        module,
+        program: program_document.program,
+        control_flow,
+        match_patterns,
+        closures,
+        closure_control_flow,
+    })
+}
+
+/// Renders one successful analysis as deterministic, pretty-printed schema-v6 JSON.
+pub fn render_json_v6(
+    analysis: &AnalysisOutput,
+    source: &SourceFile,
+) -> Result<String, InspectionError> {
+    let document = build_document_v6(analysis, source)?;
+    serde_json::to_string_pretty(&document)
+        .map_err(|error| InspectionError::invalid(format!("could not encode schema v6: {error}")))
+}
+
 struct Builder<'a> {
     program: &'a hir::Program,
     source: &'a SourceFile,
@@ -256,6 +364,7 @@ struct Builder<'a> {
     allow_payload_discard: bool,
     allow_string: bool,
     allow_closures: bool,
+    allow_module_identity: bool,
     active_scopes: Vec<String>,
     active_capture_bindings: Vec<BTreeSet<hir::BindingId>>,
     active_capture_uses: Vec<BTreeSet<hir::BindingId>>,
@@ -278,6 +387,7 @@ impl<'a> Builder<'a> {
             allow_payload_discard: false,
             allow_string: false,
             allow_closures: false,
+            allow_module_identity: false,
             active_scopes: Vec::new(),
             active_capture_bindings: Vec::new(),
             active_capture_uses: Vec::new(),
@@ -300,6 +410,11 @@ impl<'a> Builder<'a> {
         self
     }
 
+    fn with_module_identity(mut self) -> Self {
+        self.allow_module_identity = true;
+        self
+    }
+
     fn build(self) -> Result<v1::Document, InspectionError> {
         self.build_parts().map(|(document, _, _)| document)
     }
@@ -308,6 +423,16 @@ impl<'a> Builder<'a> {
         mut self,
     ) -> Result<(v1::Document, Vec<v3::MatchPattern>, Vec<v5::Closure>), InspectionError> {
         let program_span = self.span(self.program.span)?;
+        if self.program.module.span != self.program.span {
+            return Err(InspectionError::invalid(
+                "program module span does not match the complete program span",
+            ));
+        }
+        if !self.allow_module_identity && self.program.module.id != hir::ModuleId::ROOT {
+            return Err(InspectionError::invalid(
+                "semantic-inspection schema v1-v5 cannot represent a non-root module; select schema v6",
+            ));
+        }
         if self.program.span.start() != 0 || self.program.span.end() != self.source.len() {
             return Err(InspectionError::invalid(format!(
                 "program span must cover source bytes 0..{}, found {}..{}",
@@ -666,10 +791,14 @@ impl<'a> Builder<'a> {
                     ));
                 }
                 let closure_index = self.closures.len();
-                if closure.id.index() != closure_index {
+                if closure.id.module() != self.program.module.id
+                    || closure.id.index() != closure_index
+                {
                     return Err(InspectionError::invalid(format!(
-                        "closure identities must follow semantic traversal order: expected closure:{closure_index}, found closure:{}",
-                        closure.id.index()
+                        "closure identities must belong to module:{} and follow semantic traversal order: expected closure:{closure_index}, found module:{}/closure:{}",
+                        self.program.module.id.raw(),
+                        closure.id.module().raw(),
+                        closure.id.index(),
                     )));
                 }
                 self.closures.push(None);
@@ -1089,10 +1218,12 @@ impl<'a> Builder<'a> {
         scope: &str,
     ) -> Result<String, InspectionError> {
         let expected = self.bindings.len();
-        if binding.id.index() != expected {
+        if binding.id.module() != self.program.module.id || binding.id.index() != expected {
             return Err(InspectionError::invalid(format!(
-                "binding identities must be contiguous in semantic order: expected binding:{expected}, found binding:{}",
-                binding.id.index()
+                "binding identities must belong to module:{} and be contiguous in semantic order: expected binding:{expected}, found module:{}/binding:{}",
+                self.program.module.id.raw(),
+                binding.id.module().raw(),
+                binding.id.index(),
             )));
         }
         if matches!(
@@ -1151,6 +1282,14 @@ impl<'a> Builder<'a> {
         id: hir::BindingId,
         owner: &str,
     ) -> Result<v1::Binding, InspectionError> {
+        if id.module() != self.program.module.id {
+            return Err(InspectionError::invalid(format!(
+                "reference to binding:{} belongs to module:{}, not program module:{}",
+                id.index(),
+                id.module().raw(),
+                self.program.module.id.raw()
+            )));
+        }
         let binding = self.bindings.get(id.index()).cloned().ok_or_else(|| {
             InspectionError::invalid(format!("reference to unknown {}", binding_id(id.index())))
         })?;
@@ -1198,18 +1337,42 @@ impl<'a> Builder<'a> {
     }
 
     fn require_record(&self, id: hir::RecordId) -> Result<&hir::Record, InspectionError> {
+        if id.module() != self.program.module.id {
+            return Err(InspectionError::invalid(format!(
+                "reference to record:{} belongs to module:{}, not program module:{}",
+                id.index(),
+                id.module().raw(),
+                self.program.module.id.raw()
+            )));
+        }
         self.program.records.get(id.index()).ok_or_else(|| {
             InspectionError::invalid(format!("reference to unknown {}", record_id(id.index())))
         })
     }
 
     fn require_enum(&self, id: hir::EnumId) -> Result<&hir::Enum, InspectionError> {
+        if id.module() != self.program.module.id {
+            return Err(InspectionError::invalid(format!(
+                "reference to enum:{} belongs to module:{}, not program module:{}",
+                id.index(),
+                id.module().raw(),
+                self.program.module.id.raw()
+            )));
+        }
         self.program.enums.get(id.index()).ok_or_else(|| {
             InspectionError::invalid(format!("reference to unknown {}", enum_id(id.index())))
         })
     }
 
     fn require_function(&self, id: hir::FunctionId) -> Result<&hir::Function, InspectionError> {
+        if id.module() != self.program.module.id {
+            return Err(InspectionError::invalid(format!(
+                "reference to function:{} belongs to module:{}, not program module:{}",
+                id.index(),
+                id.module().raw(),
+                self.program.module.id.raw()
+            )));
+        }
         self.program.functions.get(id.index()).ok_or_else(|| {
             InspectionError::invalid(format!("reference to unknown {}", function_id(id.index())))
         })
@@ -1220,23 +1383,23 @@ impl<'a> Builder<'a> {
         actual: hir::RecordId,
         expected: usize,
     ) -> Result<(), InspectionError> {
-        if actual.index() == expected {
+        if actual.module() == self.program.module.id && actual.index() == expected {
             Ok(())
         } else {
             Err(InspectionError::invalid(format!(
-                "record identity at slot {expected} is record:{}",
-                actual.index()
+                "record identity at slot {expected} is module:{}/record:{}",
+                actual.module().raw(), actual.index()
             )))
         }
     }
 
     fn require_enum_id(&self, actual: hir::EnumId, expected: usize) -> Result<(), InspectionError> {
-        if actual.index() == expected {
+        if actual.module() == self.program.module.id && actual.index() == expected {
             Ok(())
         } else {
             Err(InspectionError::invalid(format!(
-                "enum identity at slot {expected} is enum:{}",
-                actual.index()
+                "enum identity at slot {expected} is module:{}/enum:{}",
+                actual.module().raw(), actual.index()
             )))
         }
     }
@@ -1246,12 +1409,12 @@ impl<'a> Builder<'a> {
         actual: hir::FunctionId,
         expected: usize,
     ) -> Result<(), InspectionError> {
-        if actual.index() == expected {
+        if actual.module() == self.program.module.id && actual.index() == expected {
             Ok(())
         } else {
             Err(InspectionError::invalid(format!(
-                "function identity at slot {expected} is function:{}",
-                actual.index()
+                "function identity at slot {expected} is module:{}/function:{}",
+                actual.module().raw(), actual.index()
             )))
         }
     }
@@ -1385,6 +1548,7 @@ impl<'a> Builder<'a> {
 fn project_control_flow(
     control_flow: &ControlFlowProgram,
     program: &v1::Program,
+    module: hir::ModuleId,
     source: &SourceFile,
 ) -> Result<Vec<v2::ControlFlowGraph>, InspectionError> {
     if control_flow.functions().len() != program.functions.len() {
@@ -1405,7 +1569,7 @@ fn project_control_flow(
         .iter()
         .enumerate()
         .map(|(index, graph)| {
-            project_function_control_flow(graph, index, program, &bindings_by_id, source)
+            project_function_control_flow(graph, index, program, &bindings_by_id, module, source)
         })
         .collect()
 }
@@ -1414,6 +1578,7 @@ fn project_closure_control_flow(
     control_flow: &ControlFlowProgram,
     program: &v1::Program,
     closures: &[v5::Closure],
+    module: hir::ModuleId,
     source: &SourceFile,
 ) -> Result<Vec<v5::ClosureControlFlowGraph>, InspectionError> {
     if control_flow.closures().len() != closures.len() {
@@ -1439,6 +1604,7 @@ fn project_closure_control_flow(
                 program,
                 closures,
                 &bindings_by_id,
+                module,
                 source,
             )
         })
@@ -1451,12 +1617,16 @@ fn project_one_closure_control_flow(
     program: &v1::Program,
     closures: &[v5::Closure],
     bindings_by_id: &BTreeMap<&str, &v1::Binding>,
+    module: hir::ModuleId,
     source: &SourceFile,
 ) -> Result<v5::ClosureControlFlowGraph, InspectionError> {
     let closure = closures.get(index).ok_or_else(|| {
         InspectionError::invalid(format!("closure CFG at slot {index} has no closure fact"))
     })?;
-    if graph.closure().index() != index || closure.id != closure_id(index) {
+    if graph.closure().module() != module
+        || graph.closure().index() != index
+        || closure.id != closure_id(index)
+    {
         return Err(InspectionError::invalid(format!(
             "closure CFG identity at slot {index} does not match {}",
             closure.id
@@ -1483,6 +1653,14 @@ fn project_one_closure_control_flow(
     }
     let mut binding_ids = Vec::with_capacity(graph.bindings().len());
     for (flow_binding, expected) in graph.bindings().iter().zip(expected_bindings) {
+        if flow_binding.id.module() != module {
+            return Err(InspectionError::invalid(format!(
+                "{} CFG contains a binding from module:{} instead of module:{}",
+                closure.id,
+                flow_binding.id.module().raw(),
+                module.raw()
+            )));
+        }
         let id = binding_id(flow_binding.id.index());
         if id != expected.id
             || flow_binding.name != expected.name
@@ -1548,6 +1726,7 @@ fn project_one_closure_control_flow(
             &binding_ids,
             bindings_by_id,
             &allowed_captures,
+            module,
         )?;
         let mut incoming = node.predecessors.iter().collect::<Vec<_>>();
         incoming.sort_by_key(|edge| (edge.from.index(), flow_edge_rank(edge.kind)));
@@ -1624,12 +1803,16 @@ fn project_function_control_flow(
     index: usize,
     program: &v1::Program,
     bindings_by_id: &BTreeMap<&str, &v1::Binding>,
+    module: hir::ModuleId,
     source: &SourceFile,
 ) -> Result<v2::ControlFlowGraph, InspectionError> {
     let function = program.functions.get(index).ok_or_else(|| {
         InspectionError::invalid(format!("CFG at slot {index} has no corresponding function"))
     })?;
-    if graph.function().index() != index || function.id != function_id(index) {
+    if graph.function().module() != module
+        || graph.function().index() != index
+        || function.id != function_id(index)
+    {
         return Err(InspectionError::invalid(format!(
             "CFG identity at slot {index} does not match {}",
             function.id
@@ -1651,6 +1834,14 @@ fn project_function_control_flow(
     }
     let mut binding_ids = Vec::with_capacity(graph.bindings().len());
     for (flow_binding, expected) in graph.bindings().iter().zip(expected_bindings) {
+        if flow_binding.id.module() != module {
+            return Err(InspectionError::invalid(format!(
+                "{} CFG contains a binding from module:{} instead of module:{}",
+                function.id,
+                flow_binding.id.module().raw(),
+                module.raw()
+            )));
+        }
         let id = binding_id(flow_binding.id.index());
         if id != expected.id
             || flow_binding.name != expected.name
@@ -1718,6 +1909,7 @@ fn project_function_control_flow(
             &binding_ids,
             bindings_by_id,
             &allowed_cross_owner,
+            module,
         )?;
         let mut incoming = node.predecessors.iter().collect::<Vec<_>>();
         incoming.sort_by_key(|edge| (edge.from.index(), flow_edge_rank(edge.kind)));
@@ -1795,7 +1987,17 @@ fn project_flow_node_kind(
     flow_bindings: &[String],
     bindings_by_id: &BTreeMap<&str, &v1::Binding>,
     allowed_cross_owner: &BTreeSet<String>,
+    module: hir::ModuleId,
 ) -> Result<(v2::FlowNodeKind, Option<String>), InspectionError> {
+    if let FlowNodeKind::Initialize(binding) | FlowNodeKind::Read(binding) = kind {
+        if binding.module() != module {
+            return Err(InspectionError::invalid(format!(
+                "CFG binding event belongs to module:{} instead of module:{}",
+                binding.module().raw(),
+                module.raw()
+            )));
+        }
+    }
     let (kind, binding) = match kind {
         FlowNodeKind::Entry => (v2::FlowNodeKind::Entry, None),
         FlowNodeKind::Branch => (v2::FlowNodeKind::Branch, None),
@@ -1906,6 +2108,10 @@ fn binary_operator(operator: BinaryOperator) -> &'static str {
 
 fn type_id(index: usize) -> String {
     format!("type:{index}")
+}
+
+fn module_id(id: hir::ModuleId) -> String {
+    format!("module:{}", id.raw())
 }
 
 fn record_id(index: usize) -> String {

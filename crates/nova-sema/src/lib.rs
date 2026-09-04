@@ -11,4 +11,4 @@ mod type_rules;
 
 pub mod hir;
 
-pub use analyzer::{AnalysisOutput, analyze};
+pub use analyzer::{AnalysisOutput, analyze, analyze_in_module};

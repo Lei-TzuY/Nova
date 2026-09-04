@@ -64,6 +64,8 @@ continuation.
 
 Before a graph becomes part of `AnalysisOutput`, the verifier rejects it unless:
 
+- the callable owner, every flow binding, and every binding read/initialize event
+  carry the same `ModuleId`, so a foreign same-index binding cannot alter dataflow;
 - entry and predecessor identities are in range;
 - the designated graph entry is the unique `Entry`-kind node, keeping the solver's
   empty-lattice root aligned with the graph model;

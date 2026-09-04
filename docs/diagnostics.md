@@ -153,6 +153,22 @@ ownership, lifetime, and shared-cell rules, the compiler does not guess whether 
 capture should mean a creation-time snapshot, a private mutable copy, or shared by-reference
 state.
 
+## Module-identity invariant failures
+
+Module-ready HIR adds no source diagnostic because there is no module or import syntax.
+It strengthens existing trust-boundary diagnostics instead:
+
+- `N3999` rejects an internally inconsistent CFG whose callable, binding table, or
+  binding events cross a module boundary;
+- `N4005` rejects executable HIR that supplies a foreign-module function, record,
+  enum, closure, or binding identity even when its local index exists; and
+- `N5001` rejects semantic inspection when HIR/CFG module ownership is inconsistent,
+  or when v1-v5 are asked to erase a non-root module that only v6 can represent.
+
+These are compiler-invariant failures, not recoverable Nova program errors. Human and
+JSON renderers retain their existing structured behavior and no partial runtime or
+inspection result is produced.
+
 ## Deliberate limits
 
 Apart from the whole-program `--fail-on-warnings` exit policy, Nova has no warning

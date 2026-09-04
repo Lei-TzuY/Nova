@@ -395,7 +395,13 @@ and function signatures are collected before function bodies are lowered. This
 supports deterministic forward and recursive references to declared aggregate
 types plus forward function calls without consulting filesystem or declaration
 traversal order for semantic meaning. Records and enums share one type
-namespace; built-in `Int` and `Bool` type names cannot be redefined.
+namespace; built-in `Int`, `Bool`, `String`, and `Unit` type names cannot be
+redefined. The semantic pipeline now owns an explicit per-module declaration
+scope, and function, record, enum, closure, and binding identities pair a
+compiler-session `ModuleId` with their local index. The CLI uses one implicit
+root module; `analyze_in_module` exists for future loaders but assigns no path,
+import, visibility, or filesystem meaning. HIR consumers reject same-index
+identities from another module before table lookup.
 
 **Research.** File-to-module mapping, visibility defaults, namespace separation,
 cyclic module handling, package manifests, lockfiles, and registry trust policy
@@ -556,16 +562,20 @@ events, structured transfers, normal exits, and execution/diagnostic/backedge
 classes. Schema v3 adds explicit enum-pattern payload modes without reinterpreting
 the older program projection. Schema v4 is the first contract whose program type
 and expression categories include `string`; v1-v3 reject String-bearing programs
-with `N5001` rather than silently broadening their frozen enums. Document-local IDs and deterministic ordering are specified
+with `N5001` rather than silently broadening their frozen enums. Schema v5 adds
+closures, immutable capture edges, callable ownership, and closure CFGs. Schema
+v6 adds the single module that owns all document-local declaration and binding
+identities; v1-v5 preserve root-module output and reject non-root module HIR
+rather than erase ownership. Document-local IDs and deterministic ordering are specified
 independently of Rust HIR and CFG layouts. Rejected source or an inspection
 invariant failure produces diagnostics and no partial document. Compiler debug
 text is not this protocol.
 
-Effects, ownership facts, module graphs, transformations, and incremental keys
+Effects, ownership facts, multi-module graphs, transformations, and incremental keys
 cannot appear until the corresponding compiler semantics exist. All schemas
 are provisional before Nova 1.0 and are versioned independently from the
 language, diagnostics, packages, and future IRs. V1 remains the default and the
-CLI never selects v2, v3, or v4 implicitly.
+CLI never selects a later schema implicitly.
 
 ## 13. Compatibility and versioning
 

@@ -263,7 +263,10 @@ impl FunctionFlowBuilder {
     }
 
     pub(crate) fn new_closure(closure: ClosureId, span: Span) -> Self {
-        Self::new(FunctionId::new(closure.index()), span)
+        Self::new(
+            FunctionId::in_module(closure.module(), closure.index()),
+            span,
+        )
     }
 
     pub(crate) const fn cursor(&self) -> FlowNodeId {
@@ -281,6 +284,15 @@ impl FunctionFlowBuilder {
     }
 
     pub(crate) fn register_binding(&mut self, binding: &Binding) {
+        if binding.id.module() != self.function.module() {
+            self.build_error.get_or_insert_with(|| {
+                FlowError::invalid(
+                    binding.span,
+                    "control-flow binding belongs to a different module",
+                )
+            });
+            return;
+        }
         self.bindings
             .entry(binding.id)
             .or_insert_with(|| FlowBinding {
@@ -394,6 +406,12 @@ impl FunctionFlowBuilder {
         closure: ClosureId,
         normal_exit: Option<FlowNodeId>,
     ) -> Result<ClosureControlFlow, FlowError> {
+        if closure.module() != self.function.module() || closure.index() != self.function.index() {
+            return Err(FlowError::invalid(
+                self.span,
+                "closure CFG owner does not match its module-qualified closure identity",
+            ));
+        }
         self.finish(normal_exit)
             .map(|graph| ClosureControlFlow { closure, graph })
     }
@@ -631,6 +649,28 @@ fn intersect_predecessors(
 }
 
 fn verify(graph: &FunctionControlFlow, fallback_span: Span) -> Result<(), FlowError> {
+    if let Some(binding) = graph
+        .bindings
+        .iter()
+        .find(|binding| binding.id.module() != graph.function.module())
+    {
+        return Err(FlowError::invalid(
+            binding.span,
+            "control-flow binding belongs to a different module than its callable",
+        ));
+    }
+    if let Some(node) = graph.nodes.iter().find(|node| {
+        matches!(
+            node.kind,
+            FlowNodeKind::Initialize(binding) | FlowNodeKind::Read(binding)
+                if binding.module() != graph.function.module()
+        )
+    }) {
+        return Err(FlowError::invalid(
+            node.span.unwrap_or(fallback_span),
+            "control-flow binding event belongs to a different module than its callable",
+        ));
+    }
     if graph.entry.index() >= graph.nodes.len() {
         return Err(FlowError::invalid(
             fallback_span,
