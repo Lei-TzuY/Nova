@@ -1795,11 +1795,6 @@ impl Analyzer {
             .is_some_and(|expression| expression.ty.is_error());
 
         if enumeration.text == "UInt" {
-            let ty = if payload_never {
-                Type::Never
-            } else {
-                Type::UInt
-            };
             return match (variant.text.as_str(), payload) {
                 ("MIN", None) => (ExpressionKind::Unsigned(0), Type::UInt),
                 ("MAX", None) => (ExpressionKind::Unsigned(u64::MAX), Type::UInt),
