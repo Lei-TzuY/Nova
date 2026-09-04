@@ -3,7 +3,7 @@
 Status: **normative for the syntax accepted by the bootstrap frontend**
 
 This document describes only implemented syntax. It does not reserve syntax for
-planned ownership, effects, concurrency, generics, macros, modules, FFI, or
+planned ownership, effects, concurrency, macros, modules, FFI, or
 backends.
 
 ## Lexical rules
@@ -57,7 +57,7 @@ nested block comment. An unterminated block comment is an error.
 
 ```ebnf
 program             = { declaration } , end_of_file ;
-declaration         = record_declaration | enum_declaration | function ;
+declaration         = record_declaration | enum_declaration | function_decl ;
 
 record_declaration  = "record" , identifier , "{" , [ record_fields ] , "}" ;
 record_fields       = record_field , { "," , record_field } , [ "," ] ;
@@ -67,8 +67,8 @@ enum_declaration    = "enum" , identifier , "{" , enum_variants , "}" ;
 enum_variants       = enum_variant , { "," , enum_variant } , [ "," ] ;
 enum_variant        = identifier , [ "(" , type_ref , ")" ] ;
 
-function            = "fn" , identifier , "(" , [ parameters ] , ")" ,
-                      "->" , type_ref , block ;
+function_decl       = "fn" , identifier , [ type_parameters ] , "(" , [ parameters ] , ")" , "->" , type_ref , block ;
+type_parameters     = "<" , identifier , { "," , identifier } , [ "," ] , ">" ;
 parameters          = parameter , { "," , parameter } , [ "," ] ;
 parameter           = identifier , ":" , type_ref ;
 type_ref            = identifier | "!" | function_type ;

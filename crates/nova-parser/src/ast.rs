@@ -64,6 +64,8 @@ pub struct RecordField {
 pub struct Function {
     /// Declared function name.
     pub name: Name,
+    /// Declared generic type parameters in source order.
+    pub type_parameters: Vec<Name>,
     /// Explicitly typed parameters.
     pub parameters: Vec<Parameter>,
     /// Explicit return type.

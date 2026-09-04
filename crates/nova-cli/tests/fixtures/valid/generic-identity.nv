@@ -1,0 +1,5 @@
+fn identity<T>(value: T) -> T { value }
+
+fn main() -> Int {
+    if identity(true) { identity(42) } else { 0 }
+}

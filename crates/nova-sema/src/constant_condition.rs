@@ -1513,7 +1513,7 @@ fn is_closed_total_value_checked_with_bindings<'a>(
             }),
             None => Ok(false),
         },
-        Type::UInt => Ok(false),
+        Type::UInt | Type::TypeParameter(_) => Ok(false),
         Type::Bool => Ok(evaluate_checked_with_bindings(expression, bindings)?.is_some()),
         Type::String => Ok(string_value_checked_with_bindings(expression, bindings)?.is_some()),
         Type::Unit => Ok(unit_value_checked_with_bindings(expression, bindings)?.is_some()),

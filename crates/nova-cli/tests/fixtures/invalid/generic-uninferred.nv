@@ -1,0 +1,2 @@
+fn unused<T>() -> Unit { () }
+fn main() -> Unit { unused() }

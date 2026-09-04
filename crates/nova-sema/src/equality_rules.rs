@@ -16,7 +16,7 @@ pub fn is_equality_comparable(
     match ty {
         Type::Int | Type::UInt | Type::Bool | Type::String | Type::Unit | Type::Function(_) => true,
         Type::Enum(enumeration) => enum_is_payload_free(enumeration.id),
-        Type::Record(_) | Type::Never | Type::Error => false,
+        Type::Record(_) | Type::TypeParameter(_) | Type::Never | Type::Error => false,
     }
 }
 

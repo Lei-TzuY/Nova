@@ -232,7 +232,11 @@ impl<'source> Parser<'source> {
     fn parse_function(&mut self) -> Option<Function> {
         let start = self.expect(TokenKind::Fn, "to start a function")?.span;
         let name = self.parse_name("after `fn`")?;
-        self.expect(TokenKind::LeftParen, "after the function name")?;
+        let type_parameters = self.parse_type_parameters()?;
+        self.expect(
+            TokenKind::LeftParen,
+            "after the function name or type parameters",
+        )?;
         let parameters = self.parse_parameters()?;
         self.expect(TokenKind::RightParen, "after the parameter list")?;
         self.expect(TokenKind::Arrow, "before the explicit return type")?;
@@ -242,11 +246,39 @@ impl<'source> Parser<'source> {
 
         Some(Function {
             name,
+            type_parameters,
             parameters,
             return_type,
             body,
             span,
         })
+    }
+
+    fn parse_type_parameters(&mut self) -> Option<Vec<Name>> {
+        if self.consume(TokenKind::Less).is_none() {
+            return Some(Vec::new());
+        }
+        let mut parameters = Vec::new();
+        if self.at(TokenKind::Greater) {
+            self.diagnostics.push(
+                Diagnostic::error("N2001", "expected a type parameter").with_primary(
+                    self.current().span,
+                    "a generic function must declare at least one type parameter",
+                ),
+            );
+        } else {
+            loop {
+                parameters.push(self.parse_name("as a type parameter")?);
+                if self.consume(TokenKind::Comma).is_none() {
+                    break;
+                }
+                if self.at(TokenKind::Greater) {
+                    break;
+                }
+            }
+        }
+        self.expect(TokenKind::Greater, "to close the type parameter list")?;
+        Some(parameters)
     }
 
     fn parse_parameters(&mut self) -> Option<Vec<Parameter>> {

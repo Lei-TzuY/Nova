@@ -214,6 +214,7 @@ struct TypeSymbol {
 
 #[derive(Clone, Debug)]
 struct SignatureRecord {
+    type_parameters: Vec<String>,
     parameters: Vec<Type>,
     return_type: Type,
 }
@@ -597,13 +598,49 @@ impl Analyzer {
     fn collect_function_signatures(&mut self, program: &ast::Program) {
         for (index, function) in program.functions.iter().enumerate() {
             let id = FunctionId::in_module(self.module.id, index);
+            let mut type_parameters = BTreeSet::new();
+            let mut ordered_type_parameters = Vec::with_capacity(function.type_parameters.len());
+            for parameter in &function.type_parameters {
+                let reserved = matches!(
+                    parameter.text.as_str(),
+                    "Int" | "UInt" | "Bool" | "String" | "Unit"
+                ) || self.module.types.contains_key(&parameter.text);
+                if reserved {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3036", "invalid generic type parameter").with_primary(
+                            parameter.span,
+                            format!(
+                                "type parameter `{}` conflicts with an existing type name",
+                                parameter.text
+                            ),
+                        ),
+                    );
+                } else if !type_parameters.insert(parameter.text.clone()) {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3036", "duplicate generic type parameter")
+                            .with_primary(
+                                parameter.span,
+                                format!(
+                                    "type parameter `{}` is declared more than once",
+                                    parameter.text
+                                ),
+                            ),
+                    );
+                } else {
+                    ordered_type_parameters.push(parameter.text.clone());
+                }
+            }
             let parameters = function
                 .parameters
                 .iter()
-                .map(|parameter| self.resolve_type_ref(&parameter.ty))
+                .map(|parameter| {
+                    self.resolve_type_ref_with_parameters(&parameter.ty, &type_parameters)
+                })
                 .collect::<Vec<_>>();
-            let return_type = self.resolve_type_ref(&function.return_type);
+            let return_type =
+                self.resolve_type_ref_with_parameters(&function.return_type, &type_parameters);
             let record = SignatureRecord {
+                type_parameters: ordered_type_parameters,
                 parameters,
                 return_type,
             };
@@ -632,8 +669,19 @@ impl Analyzer {
     }
 
     fn resolve_type_ref(&mut self, reference: &ast::TypeRef) -> Type {
+        self.resolve_type_ref_with_parameters(reference, &BTreeSet::new())
+    }
+
+    fn resolve_type_ref_with_parameters(
+        &mut self,
+        reference: &ast::TypeRef,
+        type_parameters: &BTreeSet<String>,
+    ) -> Type {
         match &reference.kind {
             ast::TypeRefKind::Never => Type::Never,
+            ast::TypeRefKind::Named(name) if type_parameters.contains(&name.text) => {
+                Type::TypeParameter(name.text.clone())
+            }
             ast::TypeRefKind::Named(name) => match name.text.as_str() {
                 "Int" => Type::Int,
                 "UInt" => Type::UInt,
@@ -669,9 +717,13 @@ impl Analyzer {
             } => Type::Function(FunctionType {
                 parameters: parameters
                     .iter()
-                    .map(|parameter| self.resolve_type_ref(parameter))
+                    .map(|parameter| {
+                        self.resolve_type_ref_with_parameters(parameter, type_parameters)
+                    })
                     .collect(),
-                return_type: Box::new(self.resolve_type_ref(return_type)),
+                return_type: Box::new(
+                    self.resolve_type_ref_with_parameters(return_type, type_parameters),
+                ),
             }),
         }
     }
@@ -2984,6 +3036,88 @@ impl Analyzer {
         })
     }
 
+    fn infer_generic_argument(
+        &mut self,
+        actual: &Type,
+        expected: &Type,
+        type_parameters: &BTreeSet<String>,
+        substitutions: &mut BTreeMap<String, Type>,
+        span: Span,
+    ) -> bool {
+        if actual.is_error() || actual.is_never() {
+            return true;
+        }
+        match expected {
+            Type::TypeParameter(name) if type_parameters.contains(name) => {
+                if let Some(previous) = substitutions.get(name) {
+                    if previous != actual {
+                        self.diagnostics.push(
+                            Diagnostic::error("N3037", "conflicting generic type inference")
+                                .with_primary(
+                                    span,
+                                    format!(
+                                        "type parameter `{name}` was inferred as both {previous} and {actual}"
+                                    ),
+                                ),
+                        );
+                        return false;
+                    }
+                } else {
+                    substitutions.insert(name.clone(), actual.clone());
+                }
+                true
+            }
+            Type::Function(expected_fn) => {
+                let Type::Function(actual_fn) = actual else {
+                    return false;
+                };
+                if actual_fn.parameters.len() != expected_fn.parameters.len() {
+                    return false;
+                }
+                let parameters_match = actual_fn
+                    .parameters
+                    .iter()
+                    .zip(&expected_fn.parameters)
+                    .all(|(actual, expected)| {
+                        self.infer_generic_argument(
+                            actual,
+                            expected,
+                            type_parameters,
+                            substitutions,
+                            span,
+                        )
+                    });
+                parameters_match
+                    && self.infer_generic_argument(
+                        &actual_fn.return_type,
+                        &expected_fn.return_type,
+                        type_parameters,
+                        substitutions,
+                        span,
+                    )
+            }
+            _ => expected_type_compatible(actual, expected),
+        }
+    }
+
+    fn substitute_generic_type(ty: &Type, substitutions: &BTreeMap<String, Type>) -> Option<Type> {
+        match ty {
+            Type::TypeParameter(name) => substitutions.get(name).cloned(),
+            Type::Function(signature) => Some(Type::Function(FunctionType {
+                parameters: signature
+                    .parameters
+                    .iter()
+                    .map(|ty| Self::substitute_generic_type(ty, substitutions))
+                    .collect::<Option<Vec<_>>>()?,
+                return_type: Box::new(Self::substitute_generic_type(
+                    &signature.return_type,
+                    substitutions,
+                )?),
+            })),
+            other => Some(other.clone()),
+        }
+    }
+
     fn check_call(
         &mut self,
         callee: &hir::Expression,
@@ -3017,6 +3151,16 @@ impl Analyzer {
             };
         };
 
+        let generic_parameters = match &callee.kind {
+            ExpressionKind::Function { function, .. } => self
+                .signatures
+                .get(function.index())
+                .map(|record| record.type_parameters.clone())
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        let generic_set = generic_parameters.iter().cloned().collect::<BTreeSet<_>>();
+
         let arity_matches = arguments.len() == signature.parameters.len();
         if !arity_matches {
             self.diagnostics.push(
@@ -3031,28 +3175,72 @@ impl Analyzer {
             );
         }
 
+        let mut substitutions = BTreeMap::new();
         let mut argument_types_match = true;
         for (index, (argument, expected)) in arguments
             .iter()
             .zip(signature.parameters.iter())
             .enumerate()
         {
-            let type_matches = expected_type_compatible(&argument.ty, expected);
-            self.require_type(
+            if generic_set.is_empty() {
+                let type_matches = expected_type_compatible(&argument.ty, expected);
+                self.require_type(
+                    &argument.ty,
+                    expected,
+                    argument.span,
+                    &format!("argument {}", index + 1),
+                );
+                argument_types_match &= type_matches;
+            } else if !self.infer_generic_argument(
                 &argument.ty,
                 expected,
+                &generic_set,
+                &mut substitutions,
                 argument.span,
-                &format!("argument {}", index + 1),
+            ) {
+                if !argument.ty.is_error() && !argument.ty.is_never() {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3004", "type mismatch").with_primary(
+                            argument.span,
+                            format!(
+                                "argument {} does not match generic parameter type {expected}",
+                                index + 1
+                            ),
+                        ),
+                    );
+                }
+                argument_types_match = false;
+            }
+        }
+
+        let missing = generic_parameters
+            .iter()
+            .filter(|name| !substitutions.contains_key(*name))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !missing.is_empty() && !arguments_never && !arguments_error && arity_matches {
+            self.diagnostics.push(
+                Diagnostic::error("N3038", "cannot infer generic type parameter")
+                    .with_primary(
+                        span,
+                        format!("cannot infer type parameter(s): {}", missing.join(", ")),
+                    )
+                    .with_note(
+                        "explicit type arguments are not implemented in this bootstrap slice",
+                    ),
             );
-            argument_types_match &= type_matches;
+            argument_types_match = false;
         }
 
         if arguments_never {
             Type::Never
         } else if arguments_error || !arity_matches || !argument_types_match {
             Type::Error
-        } else {
+        } else if generic_set.is_empty() {
             *signature.return_type
+        } else {
+            Self::substitute_generic_type(&signature.return_type, &substitutions)
+                .unwrap_or(Type::Error)
         }
     }
 
