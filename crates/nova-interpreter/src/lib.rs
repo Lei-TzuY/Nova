@@ -764,6 +764,12 @@ impl<'program> Interpreter<'program> {
                 variant_index,
                 payload,
             } => {
+                if enumeration.module() != self.program.module.id {
+                    return Err(self.invariant(
+                        expression.span,
+                        "resolved enum constructor belongs to a different module than the executing program",
+                    ));
+                }
                 let payload = if let Some(payload) = payload {
                     match self.eval_expression(payload, frame)? {
                         Flow::Value(value) => Some(Box::new(value)),
@@ -809,6 +815,12 @@ impl<'program> Interpreter<'program> {
                 field_name,
                 field_index,
             } => {
+                if record.module() != self.program.module.id {
+                    return Err(self.invariant(
+                        expression.span,
+                        "resolved field belongs to a different module than the executing program",
+                    ));
+                }
                 let base = match self.eval_expression(base, frame)? {
                     Flow::Value(value) => value,
                     flow => return Ok(flow),
@@ -913,6 +925,12 @@ impl<'program> Interpreter<'program> {
                 enumeration,
                 arms,
             } => {
+                if enumeration.module() != self.program.module.id {
+                    return Err(self.invariant(
+                        expression.span,
+                        "resolved match enum belongs to a different module than the executing program",
+                    ));
+                }
                 let scrutinee = match self.eval_expression(scrutinee, frame)? {
                     Flow::Value(value) => value,
                     flow => return Ok(flow),
@@ -939,12 +957,6 @@ impl<'program> Interpreter<'program> {
                     ));
                 }
 
-                if enumeration.module() != self.program.module.id {
-                    return Err(self.invariant(
-                        expression.span,
-                        "resolved match enum belongs to a different module than the executing program",
-                    ));
-                }
                 let Some(definition) = self.program.enums.get(enumeration.index()) else {
                     return Err(self.invariant(
                         expression.span,

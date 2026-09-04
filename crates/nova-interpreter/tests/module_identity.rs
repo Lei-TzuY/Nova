@@ -68,10 +68,11 @@ fn forged_function_module_cannot_retarget_the_same_local_index() {
 fn forged_record_and_binding_modules_fail_before_index_lookup() {
     let mut record_analysis = accepted(
         "record First { value: Int } record Second { value: Int }\n\
-         fn main() -> Int { let item = new First { value: 42 }; item.value }",
+         fn zero() -> Int { 0 }\n\
+         fn main() -> Int { let item = new First { value: 1 / zero() }; item.value }",
     );
     let StatementKind::Binding { initializer, .. } =
-        &mut record_analysis.program.functions[0].body.statements[0].kind
+        &mut record_analysis.program.functions[1].body.statements[0].kind
     else {
         panic!("expected record binding");
     };
@@ -79,7 +80,8 @@ fn forged_record_and_binding_modules_fail_before_index_lookup() {
         panic!("expected record construction");
     };
     *record = RecordId::in_module(ModuleId::new(9), 1);
-    let error = execute(&record_analysis.program).expect_err("cross-module record must fail closed");
+    let error = execute(&record_analysis.program)
+        .expect_err("cross-module record must fail before its failing field initializer");
     assert_eq!(error.code, "N4005");
 
     let mut binding = accepted("fn main() -> Int { let first = 42; let second = 0; first }");
