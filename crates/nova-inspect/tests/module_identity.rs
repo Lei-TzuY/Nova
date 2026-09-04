@@ -1,6 +1,4 @@
-use nova_inspect::{
-    build_document, build_document_v5, build_document_v6, render_json_v6,
-};
+use nova_inspect::{build_document, build_document_v5, build_document_v6, render_json_v6};
 use nova_lexer::lex;
 use nova_parser::parse;
 use nova_sema::hir::{ExpressionKind, FunctionId, ModuleId};
@@ -84,8 +82,8 @@ fn v6_rejects_cross_module_reference_and_module_span_drift() {
 
     let (source, mut analysis) = analyzed("fn main() -> Int { 42 }", module);
     analysis.program.module.span = Span::empty(source.id(), source.len());
-    let error = build_document_v6(&analysis, &source)
-        .expect_err("module span drift must fail closed");
+    let error =
+        build_document_v6(&analysis, &source).expect_err("module span drift must fail closed");
     assert!(error.message().contains("module span"), "{error}");
 }
 

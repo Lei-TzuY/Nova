@@ -1482,15 +1482,15 @@ impl<'program> Interpreter<'program> {
             enum_id.module() == self.program.module.id
                 && self
                     .program
-                .enums
-                .get(enum_id.index())
-                .is_some_and(|definition| {
-                    definition.id == enum_id
-                        && definition
-                            .variants
-                            .iter()
-                            .all(|variant| variant.payload.is_none())
-                })
+                    .enums
+                    .get(enum_id.index())
+                    .is_some_and(|definition| {
+                        definition.id == enum_id
+                            && definition
+                                .variants
+                                .iter()
+                                .all(|variant| variant.payload.is_none())
+                    })
         })
     }
 
@@ -1522,21 +1522,21 @@ impl<'program> Interpreter<'program> {
                 record.id.module() == self.program.module.id
                     && self
                         .program
-                    .records
-                    .get(record.id.index())
-                    .is_some_and(|definition| {
-                        definition.id == record.id && definition.name == record.name
-                    })
+                        .records
+                        .get(record.id.index())
+                        .is_some_and(|definition| {
+                            definition.id == record.id && definition.name == record.name
+                        })
             }
             Type::Enum(enumeration) => {
                 enumeration.id.module() == self.program.module.id
                     && self
                         .program
-                    .enums
-                    .get(enumeration.id.index())
-                    .is_some_and(|definition| {
-                        definition.id == enumeration.id && definition.name == enumeration.name
-                    })
+                        .enums
+                        .get(enumeration.id.index())
+                        .is_some_and(|definition| {
+                            definition.id == enumeration.id && definition.name == enumeration.name
+                        })
             }
             Type::Function(signature) => {
                 signature

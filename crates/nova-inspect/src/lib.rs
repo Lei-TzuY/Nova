@@ -1388,7 +1388,8 @@ impl<'a> Builder<'a> {
         } else {
             Err(InspectionError::invalid(format!(
                 "record identity at slot {expected} is module:{}/record:{}",
-                actual.module().raw(), actual.index()
+                actual.module().raw(),
+                actual.index()
             )))
         }
     }
@@ -1399,7 +1400,8 @@ impl<'a> Builder<'a> {
         } else {
             Err(InspectionError::invalid(format!(
                 "enum identity at slot {expected} is module:{}/enum:{}",
-                actual.module().raw(), actual.index()
+                actual.module().raw(),
+                actual.index()
             )))
         }
     }
@@ -1414,7 +1416,8 @@ impl<'a> Builder<'a> {
         } else {
             Err(InspectionError::invalid(format!(
                 "function identity at slot {expected} is module:{}/function:{}",
-                actual.module().raw(), actual.index()
+                actual.module().raw(),
+                actual.index()
             )))
         }
     }

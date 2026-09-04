@@ -465,7 +465,10 @@ fn warnings_are_nonfatal_for_check_run_and_inspect() {
             document.contains("\"match_patterns\":"),
             matches!(version, "3" | "4" | "5" | "6")
         );
-        assert_eq!(document.contains("\"closures\":"), matches!(version, "5" | "6"));
+        assert_eq!(
+            document.contains("\"closures\":"),
+            matches!(version, "5" | "6")
+        );
         assert_eq!(document.contains("\"module\":"), version == "6");
         let stderr = String::from_utf8_lossy(&inspected.stderr);
         assert!(stderr.contains("warning[N3033]"));
