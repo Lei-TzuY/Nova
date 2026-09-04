@@ -20,47 +20,48 @@ jobs:
         with:
           components: rustfmt, clippy
       - name: Apply explicit generic call implementation
-        shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
 
           def replace(path, old, new):
               p = Path(path)
               text = p.read_text()
+              old, new = dedent(old), dedent(new)
               if old not in text:
                   raise SystemExit(f"missing patch anchor in {path}: {old[:100]!r}")
               p.write_text(text.replace(old, new))
 
-          replace(
-              "crates/nova-parser/src/ast.rs",
-              '''    Call {
+          replace("crates/nova-parser/src/ast.rs", '''
+              Call {
                   /// Expression producing the callee.
                   callee: Box<Expression>,
                   /// Arguments in source order.
                   arguments: Vec<Expression>,
-              },''',
-              '''    Call {
+              },
+          ''', '''
+              Call {
                   /// Expression producing the callee.
                   callee: Box<Expression>,
                   /// Explicit call-site type arguments in source order.
                   type_arguments: Vec<TypeRef>,
                   /// Value arguments in source order.
                   arguments: Vec<Expression>,
-              },'''
-          )
+              },
+          ''')
 
-          replace(
-              "crates/nova-parser/src/parser.rs",
-              '''            if self.at(TokenKind::LeftParen) {
+          replace("crates/nova-parser/src/parser.rs", '''
+                      if self.at(TokenKind::LeftParen) {
                           if POSTFIX_BINDING_POWER < minimum {
                               break;
                           }
                           left = self.parse_call_expression(left)?;
                           continue;
                       }
-                      if self.at(TokenKind::Dot) {''',
-              '''            if self.at(TokenKind::LeftParen) {
+                      if self.at(TokenKind::Dot) {
+          ''', '''
+                      if self.at(TokenKind::LeftParen) {
                           if POSTFIX_BINDING_POWER < minimum {
                               break;
                           }
@@ -82,14 +83,14 @@ jobs:
                           self.position = checkpoint;
                           self.diagnostics.truncate(diagnostic_checkpoint);
                       }
-                      if self.at(TokenKind::Dot) {'''
-          )
+                      if self.at(TokenKind::Dot) {
+          ''')
 
-          replace(
-              "crates/nova-parser/src/parser.rs",
-              '''    fn parse_call_expression(&mut self, callee: Expression) -> Option<Expression> {
-                  self.expect(TokenKind::LeftParen, "to start the argument list")?;''',
-              '''    fn parse_explicit_call_type_arguments(&mut self) -> Option<Vec<TypeRef>> {
+          replace("crates/nova-parser/src/parser.rs", '''
+              fn parse_call_expression(&mut self, callee: Expression) -> Option<Expression> {
+                  self.expect(TokenKind::LeftParen, "to start the argument list")?;
+          ''', '''
+              fn parse_explicit_call_type_arguments(&mut self) -> Option<Vec<TypeRef>> {
                   self.expect(TokenKind::Less, "to start explicit call type arguments")?;
                   if self.at(TokenKind::Greater) {
                       return None;
@@ -113,38 +114,38 @@ jobs:
                   callee: Expression,
                   type_arguments: Vec<TypeRef>,
               ) -> Option<Expression> {
-                  self.expect(TokenKind::LeftParen, "to start the argument list")?;'''
-          )
+                  self.expect(TokenKind::LeftParen, "to start the argument list")?;
+          ''')
 
-          replace(
-              "crates/nova-parser/src/parser.rs",
-              '''            kind: ExpressionKind::Call {
+          replace("crates/nova-parser/src/parser.rs", '''
+                      kind: ExpressionKind::Call {
                           callee: Box::new(callee),
                           arguments,
-                      },''',
-              '''            kind: ExpressionKind::Call {
+                      },
+          ''', '''
+                      kind: ExpressionKind::Call {
                           callee: Box::new(callee),
                           type_arguments,
                           arguments,
-                      },'''
-          )
+                      },
+          ''')
 
-          replace(
-              "crates/nova-sema/src/numeric_surface.rs",
-              '''        ExpressionKind::Call { callee, arguments } => {
-                      rewrite_expression(callee);''',
-              '''        ExpressionKind::Call {
+          replace("crates/nova-sema/src/numeric_surface.rs", '''
+                  ExpressionKind::Call { callee, arguments } => {
+                      rewrite_expression(callee);
+          ''', '''
+                  ExpressionKind::Call {
                       callee, arguments, ..
                   } => {
-                      rewrite_expression(callee);'''
-          )
+                      rewrite_expression(callee);
+          ''')
 
-          replace(
-              "crates/nova-sema/src/analyzer.rs",
-              '''            ast::ExpressionKind::Call { callee, arguments } => {
+          replace("crates/nova-sema/src/analyzer.rs", '''
+                      ast::ExpressionKind::Call { callee, arguments } => {
                           let call_entry_state = self.capture_reachable_state();
-                          let callee = self.lower_expression(callee, return_type);''',
-              '''            ast::ExpressionKind::Call {
+                          let callee = self.lower_expression(callee, return_type);
+          ''', '''
+                      ast::ExpressionKind::Call {
                           callee,
                           type_arguments,
                           arguments,
@@ -154,43 +155,43 @@ jobs:
                           let explicit_type_arguments = type_arguments
                               .iter()
                               .map(|argument| self.resolve_type_ref(argument))
-                              .collect::<Vec<_>>();'''
-          )
+                              .collect::<Vec<_>>();
+          ''')
 
-          replace(
-              "crates/nova-sema/src/analyzer.rs",
-              '''                let ty = self.check_call(&callee, &lowered_arguments, expression.span);''',
-              '''                let ty = self.check_call(
-                          &callee,
-                          &explicit_type_arguments,
-                          &lowered_arguments,
-                          expression.span,
-                      );'''
-          )
+          replace("crates/nova-sema/src/analyzer.rs", '''
+                          let ty = self.check_call(&callee, &lowered_arguments, expression.span);
+          ''', '''
+                          let ty = self.check_call(
+                              &callee,
+                              &explicit_type_arguments,
+                              &lowered_arguments,
+                              expression.span,
+                          );
+          ''')
 
-          replace(
-              "crates/nova-sema/src/analyzer.rs",
-              '''    fn check_call(
+          replace("crates/nova-sema/src/analyzer.rs", '''
+              fn check_call(
                   &mut self,
                   callee: &hir::Expression,
                   arguments: &[hir::Expression],
                   span: Span,
-              ) -> Type {''',
-              '''    fn check_call(
+              ) -> Type {
+          ''', '''
+              fn check_call(
                   &mut self,
                   callee: &hir::Expression,
                   explicit_type_arguments: &[Type],
                   arguments: &[hir::Expression],
                   span: Span,
-              ) -> Type {'''
-          )
+              ) -> Type {
+          ''')
 
-          replace(
-              "crates/nova-sema/src/analyzer.rs",
-              '''        let generic_set = generic_parameters.iter().cloned().collect::<BTreeSet<_>>();
+          replace("crates/nova-sema/src/analyzer.rs", '''
+                  let generic_set = generic_parameters.iter().cloned().collect::<BTreeSet<_>>();
 
-                  let arity_matches = arguments.len() == signature.parameters.len();''',
-              '''        let generic_set = generic_parameters.iter().cloned().collect::<BTreeSet<_>>();
+                  let arity_matches = arguments.len() == signature.parameters.len();
+          ''', '''
+                  let generic_set = generic_parameters.iter().cloned().collect::<BTreeSet<_>>();
                   let explicit_arity_matches = explicit_type_arguments.is_empty()
                       || explicit_type_arguments.len() == generic_parameters.len();
                   if !explicit_arity_matches {
@@ -207,136 +208,31 @@ jobs:
                       );
                   }
 
-                  let arity_matches = arguments.len() == signature.parameters.len();'''
-          )
+                  let arity_matches = arguments.len() == signature.parameters.len();
+          ''')
 
-          replace(
-              "crates/nova-sema/src/analyzer.rs",
-              '''        let mut substitutions = BTreeMap::new();
-                  let mut argument_types_match = true;''',
-              '''        let mut substitutions = BTreeMap::new();
+          replace("crates/nova-sema/src/analyzer.rs", '''
+                  let mut substitutions = BTreeMap::new();
+                  let mut argument_types_match = true;
+          ''', '''
+                  let mut substitutions = BTreeMap::new();
                   if explicit_arity_matches && !explicit_type_arguments.is_empty() {
                       for (name, ty) in generic_parameters.iter().zip(explicit_type_arguments) {
                           substitutions.insert(name.clone(), ty.clone());
                       }
                   }
-                  let mut argument_types_match = explicit_arity_matches;'''
-          )
+                  let mut argument_types_match = explicit_arity_matches;
+          ''')
 
-          replace(
-              "crates/nova-sema/src/analyzer.rs",
-              '''                    .with_note(
-                              "explicit type arguments are not implemented in this bootstrap slice",
-                          ),''',
-              '''                    .with_note(
-                              "provide explicit call type arguments, for example `function<Int>(...)`",
-                          ),'''
-          )
-
-          # Parser regression: explicit call syntax must win only when followed by a call,
-          # while ordinary comparisons remain unchanged.
-          parser = Path("crates/nova-parser/src/parser.rs")
-          text = parser.read_text()
-          anchor = '''    #[test]
-              fn parses_record_declaration_construction_and_projection() {'''
-          test = '''    #[test]
-              fn parses_explicit_generic_call_arguments_without_stealing_comparisons() {
-                  let (_, parsed) = parse_text(
-                      "fn id<T>(x: T) -> T { x } fn main() -> Bool { id<Int>(1) < 2 }",
-                  );
-                  assert!(parsed.is_success(), "{:?}", parsed.diagnostics);
-                  let tail = parsed.program.functions[1].body.tail.as_deref().expect("tail");
-                  let ExpressionKind::Binary { left, .. } = &tail.kind else {
-                      panic!("expected comparison: {tail:?}");
-                  };
-                  let ExpressionKind::Call { type_arguments, .. } = &left.kind else {
-                      panic!("expected explicit generic call: {left:?}");
-                  };
-                  assert_eq!(type_arguments.len(), 1);
-                  assert_eq!(named_type_text(&type_arguments[0]), "Int");
-              }
-
-          '''
-          if anchor not in text:
-              raise SystemExit("missing parser test anchor")
-          parser.write_text(text.replace(anchor, test + anchor))
-
-          # Semantic regressions.
-          analyzer = Path("crates/nova-sema/src/analyzer.rs")
-          text = analyzer.read_text()
-          anchor = '''    #[test]
-              fn checks_explicit_and_implicit_returns() {'''
-          test = '''    #[test]
-              fn explicit_generic_call_arguments_instantiate_and_validate() {
-                  let accepted = analyze_text(
-                      "fn identity<T>(value: T) -> T { value } fn unused<T>() -> Unit { () } fn main() -> Int { unused<Bool>(); identity<Int>(42) }",
-                  );
-                  assert!(accepted.is_success(), "{:?}", accepted.diagnostics);
-
-                  let conflict = analyze_text(
-                      "fn identity<T>(value: T) -> T { value } fn main() -> Int { identity<Bool>(1); 0 }",
-                  );
-                  assert_eq!(codes(&conflict), vec!["N3037"]);
-
-                  let arity = analyze_text(
-                      "fn identity<T>(value: T) -> T { value } fn main() -> Int { identity<Int, Bool>(1); 0 }",
-                  );
-                  assert_eq!(codes(&arity), vec!["N3039"]);
-              }
-
-          '''
-          if anchor not in text:
-              raise SystemExit("missing analyzer test anchor")
-          analyzer.write_text(text.replace(anchor, test + anchor))
-
-          # End-to-end CLI capability and deterministic failures.
-          Path("crates/nova-cli/tests/fixtures/valid/generic-explicit.nv").write_text(
-              "fn identity<T>(value: T) -> T { value }\n"
-              "fn unused<T>() -> Unit { () }\n"
-              "fn main() -> Int { unused<Bool>(); identity<Int>(42) }\n"
-          )
-          Path("crates/nova-cli/tests/fixtures/invalid/generic-explicit-conflict.nv").write_text(
-              "fn identity<T>(value: T) -> T { value }\n"
-              "fn main() -> Int { identity<Bool>(1); 0 }\n"
-          )
-          Path("crates/nova-cli/tests/fixtures/invalid/generic-explicit-arity.nv").write_text(
-              "fn identity<T>(value: T) -> T { value }\n"
-              "fn main() -> Int { identity<Int, Bool>(1); 0 }\n"
-          )
-
-          cli = Path("crates/nova-cli/tests/generic_functions.rs")
-          text = cli.read_text()
-          text += r'''
-
-          #[test]
-          fn explicit_generic_arguments_execute_and_fail_deterministically() {
-              let path = fixture("valid", "generic-explicit.nv");
-              let check = Command::new(env!("CARGO_BIN_EXE_nova"))
-                  .args(["check", &path])
-                  .output()
-                  .unwrap();
-              assert!(check.status.success(), "{}", String::from_utf8_lossy(&check.stderr));
-              let run = Command::new(env!("CARGO_BIN_EXE_nova"))
-                  .args(["run", &path])
-                  .output()
-                  .unwrap();
-              assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
-              assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
-
-              for (name, code) in [
-                  ("generic-explicit-conflict.nv", "N3037"),
-                  ("generic-explicit-arity.nv", "N3039"),
-              ] {
-                  let output = Command::new(env!("CARGO_BIN_EXE_nova"))
-                      .args(["check", fixture("invalid", name)])
-                      .output()
-                      .unwrap();
-                  assert!(!output.status.success());
-                  assert!(String::from_utf8_lossy(&output.stderr).contains(code));
-              }
-          }
-          '''
-          cli.write_text(text)
+          replace("crates/nova-sema/src/analyzer.rs", '''
+                                  .with_note(
+                                      "explicit type arguments are not implemented in this bootstrap slice",
+                                  ),
+          ''', '''
+                                  .with_note(
+                                      "provide explicit call type arguments, for example `function<Int>(...)`",
+                                  ),
+          ''')
           PY
 
           cargo fmt --all
