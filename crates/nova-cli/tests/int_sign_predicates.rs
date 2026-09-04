@@ -20,8 +20,7 @@ fn run_stdin(arguments: &[&str], source: &str) -> Output {
 
 #[test]
 fn int_sign_predicates_execute_through_the_complete_pipeline() {
-    let source =
-        "fn main() -> Bool { Int::is_negative(Int::MIN) && Int::is_zero(0) && Int::is_positive(Int::MAX) }";
+    let source = "fn main() -> Bool { Int::is_negative(Int::MIN) && Int::is_zero(0) && Int::is_positive(Int::MAX) }";
 
     let check = run_stdin(&["check", "-"], source);
     assert!(
