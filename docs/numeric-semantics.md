@@ -39,6 +39,14 @@ overflow because the exact quotient is outside the `Int` range. Semantic constan
 preflight and runtime execution share the same `nova-int-semantics` truth table so the
 same operation cannot be accepted at compile time and fail differently at runtime.
 
+`Int::abs(n)` returns `n` when `n >= 0` and otherwise returns checked unary `-n`.
+Consequently `Int::abs(Int::MIN)` is an overflow rather than wrapping or saturating.
+The operand is evaluated exactly once. Semantic canonicalization lowers the operation
+through an ordinary local binding, comparison, conditional, and unary negation HIR, so
+the existing checked arithmetic and control-flow semantics remain authoritative rather
+than introducing a parallel interpreter primitive. Missing payloads and non-`Int`
+payloads are rejected by normal semantic diagnostics.
+
 ## Comparison, classification, and conversions
 
 `Int` supports `==`, `!=`, `<`, `<=`, `>`, and `>=`.
