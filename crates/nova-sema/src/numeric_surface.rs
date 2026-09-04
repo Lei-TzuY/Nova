@@ -1,12 +1,14 @@
-use nova_parser::ast::{self, ExpressionKind, StatementKind, UnaryOperator};
+use nova_parser::ast::{self, Block, ExpressionKind, StatementKind, UnaryOperator};
 
-/// Canonicalizes the bootstrap numeric associated constants before ordinary
-/// name/type resolution.
+/// Canonicalizes the bootstrap numeric surface before ordinary name/type
+/// resolution.
 ///
 /// The parser intentionally keeps `Qualifier::Member` syntax generic. `Int` is
-/// already a reserved primitive type, so these two payload-free paths cannot
-/// conflict with a user-defined enum and can be lowered to the same literal HIR
-/// used by every other signed-64 boundary value.
+/// already a reserved primitive type, so the built-in spellings handled here
+/// cannot conflict with a user-defined enum. Boundary constants lower to the
+/// same literal HIR used by source integers, while `Int::from(Bool)` lowers to a
+/// normal conditional expression so the operand is evaluated exactly once and
+/// ordinary Bool type checking remains authoritative.
 pub(crate) fn canonicalize_int_constants(program: &ast::Program) -> ast::Program {
     let mut program = program.clone();
     for function in &mut program.functions {
@@ -47,24 +49,36 @@ fn rewrite_expression(expression: &mut ast::Expression) {
             enumeration,
             variant,
             payload,
-        } if enumeration.text == "Int" && payload.is_none() => match variant.text.as_str() {
-            "MAX" => Some(IntBoundary::Max),
-            "MIN" => Some(IntBoundary::Min),
+        } if enumeration.text == "Int" => match (variant.text.as_str(), payload) {
+            ("MAX", None) => Some(IntBuiltin::Boundary(IntBoundary::Max)),
+            ("MIN", None) => Some(IntBuiltin::Boundary(IntBoundary::Min)),
+            ("from", Some(payload)) => Some(IntBuiltin::FromBool((**payload).clone())),
             _ => None,
         },
         _ => None,
     };
 
-    if let Some(boundary) = builtin {
-        expression.kind = match boundary {
-            IntBoundary::Max => ExpressionKind::Integer(i64::MAX as u64),
-            IntBoundary::Min => ExpressionKind::Unary {
+    if let Some(builtin) = builtin {
+        expression.kind = match builtin {
+            IntBuiltin::Boundary(IntBoundary::Max) => ExpressionKind::Integer(i64::MAX as u64),
+            IntBuiltin::Boundary(IntBoundary::Min) => ExpressionKind::Unary {
                 operator: UnaryOperator::Negate,
                 operand: Box::new(ast::Expression {
                     kind: ExpressionKind::Integer(1_u64 << 63),
                     span: expression.span,
                 }),
             },
+            IntBuiltin::FromBool(mut condition) => {
+                rewrite_expression(&mut condition);
+                ExpressionKind::If {
+                    condition: Box::new(condition),
+                    then_branch: int_literal_block(1, expression.span),
+                    else_branch: Box::new(ast::Expression {
+                        kind: ExpressionKind::Integer(0),
+                        span: expression.span,
+                    }),
+                }
+            }
         };
         return;
     }
@@ -117,6 +131,23 @@ fn rewrite_expression(expression: &mut ast::Expression) {
             }
         }
     }
+}
+
+fn int_literal_block(value: u64, span: nova_source::Span) -> Block {
+    Block {
+        statements: Vec::new(),
+        tail: Some(Box::new(ast::Expression {
+            kind: ExpressionKind::Integer(value),
+            span,
+        })),
+        span,
+    }
+}
+
+#[derive(Clone)]
+enum IntBuiltin {
+    Boundary(IntBoundary),
+    FromBool(ast::Expression),
 }
 
 #[derive(Clone, Copy)]
