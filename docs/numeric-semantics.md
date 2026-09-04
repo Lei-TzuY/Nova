@@ -20,11 +20,11 @@ Two payload-free associated constants expose the exact language boundaries:
 - `Int::MAX` is `9223372036854775807`.
 
 `Int` is a reserved primitive type, so these names cannot collide with a user-defined
-nominal type. Other `Int::member` spellings and payload-bearing forms such as
-`Int::MAX(1)` are not numeric constants and remain rejected by ordinary semantic
-resolution. The parser keeps qualified syntax generic; semantic analysis canonicalizes
-only these two exact built-in paths to the same typed integer representation used by
-source literals.
+nominal type. Other payload-free `Int::member` spellings and payload-bearing boundary
+forms such as `Int::MAX(1)` are not numeric constants and remain rejected by ordinary
+semantic resolution. The parser keeps qualified syntax generic; semantic analysis
+canonicalizes only the implemented built-in spellings before ordinary name/type
+resolution.
 
 ## Arithmetic
 
@@ -41,8 +41,20 @@ same operation cannot be accepted at compile time and fail differently at runtim
 
 ## Comparison and conversions
 
-`Int` supports `==`, `!=`, `<`, `<=`, `>`, and `>=`. No implicit numeric conversion exists
-because no second numeric family is implemented yet. Conversions, literal suffixes,
-floating-point semantics, widening/narrowing policy, and backend representation beyond
-this signed-64 contract remain future BIL-5 work and must be specified before syntax is
-added for them.
+`Int` supports `==`, `!=`, `<`, `<=`, `>`, and `>=`.
+
+The bootstrap language has one explicit conversion into `Int`:
+
+- `Int::from(false)` evaluates to `0`;
+- `Int::from(true)` evaluates to `1`.
+
+The conversion operand must have type `Bool`, is evaluated exactly once, and retains the
+ordinary control-flow and side-effect semantics of any other expression. Semantic
+canonicalization lowers the conversion to ordinary typed conditional HIR, so the
+interpreter does not carry a parallel conversion opcode or a second source of truth.
+A missing payload or a non-`Bool` payload is rejected by normal semantic diagnostics.
+There are no implicit conversions.
+
+Literal suffixes, floating-point semantics, additional numeric families,
+widening/narrowing policy, and backend representation beyond this signed-64 contract
+remain future BIL-5 work and must be specified before syntax is added for them.
